@@ -1,0 +1,39 @@
+# Pilotage des projets DPO : application + PostgreSQL 16.
+# 1. cp .env.example .env   puis renseigner les valeurs (voir README.md)
+# 2. docker compose up -d --build
+# 3. docker compose exec app node scripts/creer-utilisateur.mjs --courriel=... --prenom=... --nom=... --administrateur
+#
+# L'application écoute sur le port 3000 de l'hôte, en HTTP : placez-la derrière le proxy HTTPS de la banque.
+
+services:
+  base:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dpo
+      POSTGRES_USER: dpo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Renseigner POSTGRES_PASSWORD dans .env}
+    volumes:
+      - donnees-dpo:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dpo -d dpo"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Pas de port publié : la base n'est joignable que par l'application.
+
+  app:
+    build: .
+    image: pilotage-dpo:0.1.0
+    restart: unless-stopped
+    depends_on:
+      base:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://dpo:${POSTGRES_PASSWORD}@base:5432/dpo
+    ports:
+      - "3000:3000"
+
+volumes:
+  donnees-dpo:

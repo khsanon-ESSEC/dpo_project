@@ -1,0 +1,175 @@
+import type { Metadata } from "next";
+import { acces } from "@/lib/acces";
+import { exigerUtilisateur } from "@/lib/auth/session";
+import { aujourdhui, dateCourte, dateLocale, heure, jourAbrege, jourComplet } from "@/lib/dates";
+import { monEquipe } from "@/lib/donnees/equipe";
+import { Anneau, Bandeau } from "@/components/Bandeau";
+import { Icone } from "@/components/Icone";
+import { relancerEquipe } from "./actions";
+
+export const metadata: Metadata = { title: "Mon équipe" };
+
+export default async function PageEquipe({ searchParams }: { searchParams: Promise<{ filtre?: string; relance?: string }> }) {
+  const { filtre = "tous", relance } = await searchParams;
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const jour = aujourdhui();
+
+  if (!a.equipeDirecte.length) {
+    return (
+      <>
+        <Bandeau surtitre={jourComplet(jour)} titre="Mon équipe" />
+        <div className="page">
+          <p className="vide">Personne ne vous envoie de rapport pour le moment.</p>
+        </div>
+      </>
+    );
+  }
+
+  const e = await monEquipe(a);
+  const personnes = e.personnes.filter((p) => filtre === "tous" || (filtre === "sans" && !p.rapport) || (filtre === "bloc" && p.bloquees > 0));
+  const filtres = [
+    { id: "tous", libelle: `Tous · ${e.personnes.length}` },
+    { id: "sans", libelle: `Sans rapport · ${e.manquants.length}` },
+    { id: "bloc", libelle: `Avec blocage · ${e.personnes.filter((p) => p.bloquees > 0).length}` },
+  ];
+  const maxCharge = Math.max(1, ...e.charge.map(([, n]) => n));
+
+  return (
+    <>
+      <Bandeau surtitre={jourComplet(jour)} titre="Mon équipe">
+        <div className="chiffres">
+          <Anneau fait={e.recus} total={e.personnes.length} legende="rapports" label={`${e.recus} rapports reçus sur ${e.personnes.length}`} />
+          <dl style={{ margin: 0, display: "flex", flexWrap: "wrap", gap: "12px 48px" }}>
+            <div className="chiffre chiffre--veille">
+              <dt>tâches bloquées</dt>
+              <dd>{e.totaux.bloquees}</dd>
+            </div>
+            <div className="chiffre chiffre--retard">
+              <dt>en retard</dt>
+              <dd>{e.totaux.retard}</dd>
+            </div>
+            <div className="chiffre">
+              <dt>faites cette semaine</dt>
+              <dd>{e.totaux.faites}</dd>
+            </div>
+          </dl>
+        </div>
+      </Bandeau>
+      <div className="page">
+        <div className="ligne-actions">
+          <nav className="filtres" aria-label="Filtrer l'équipe">
+            {filtres.map((f) => (
+              <a key={f.id} className="filtre" href={`/equipe?filtre=${f.id}`} aria-current={filtre === f.id ? "true" : undefined}>
+                {f.libelle}
+              </a>
+            ))}
+          </nav>
+          {relance ? (
+            <span className="succes" role="status" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <Icone nom="coche" taille={18} /> Rappel envoyé
+            </span>
+          ) : e.manquants.length ? (
+            <form action={relancerEquipe}>
+              {e.manquants.map((p) => (
+                <input key={p.id} type="hidden" name="personneId" value={p.id} />
+              ))}
+              <button type="submit" className="bouton-ambre">
+                Relancer {e.manquants.length > 1 ? `les ${e.manquants.length} retardataires` : e.manquants[0].nom}
+              </button>
+            </form>
+          ) : null}
+        </div>
+
+        <section className="carte carte--liste" aria-label="Personnes">
+          <ul className="liste">
+            {personnes.map((p) => (
+              <li key={p.id}>
+                <a href={p.rapport ? `/rapports/${p.rapport.id}` : `/equipe/${p.id}`} className="rangee" style={{ minHeight: 64, gap: 16, flexWrap: "wrap" }}>
+                  <span className="mono" style={{ width: 36, height: 36, fontSize: 12 }} aria-hidden="true">
+                    {p.initiales}
+                  </span>
+                  <span className="rangee__texte" style={{ flex: "1 1 200px" }}>
+                    <span className="rangee__titre">{p.nom}</span>
+                    <span className="rangee__sous">{p.poste}</span>
+                  </span>
+                  <span style={{ flex: "0 0 150px", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className={p.rapport ? "ton-ok" : "ton-retard"}>
+                    <Icone nom={p.rapport ? "coche" : "horloge"} taille={16} />
+                    {p.rapport ? (p.rapport.envoyeLe && dateLocale(p.rapport.envoyeLe) === jour ? `Reçu à ${heure(p.rapport.envoyeLe)}` : `Reçu ${p.rapport.envoyeLe ? jourAbrege(dateLocale(p.rapport.envoyeLe)).toLowerCase() : ""}`) : "Pas encore"}
+                  </span>
+                  <span role="img" aria-label={`${p.faites} tâches faites sur ${p.total}`} style={{ flex: "0 0 140px", display: "flex", alignItems: "center", gap: 12 }}>
+                    <span className="barre" style={{ width: 88 }}>
+                      <span style={{ width: `${p.total ? Math.round((p.faites / p.total) * 100) : 0}%` }} />
+                    </span>
+                    <span className="rangee__meta">
+                      {p.faites}/{p.total}
+                    </span>
+                  </span>
+                  <span style={{ flex: "0 0 150px", fontSize: 13 }}>
+                    {p.retard ? <span className="ton-retard">{p.retard} en retard</span> : null}
+                    {p.retard && p.bloquees ? <span className="ton-discret"> · </span> : null}
+                    {p.bloquees ? <span className="ton-veille">{p.bloquees} bloquée{p.bloquees > 1 ? "s" : ""}</span> : null}
+                    {!p.retard && !p.bloquees ? <span className="ton-discret">—</span> : null}
+                  </span>
+                  <span style={{ flex: "0 0 auto", display: "flex", gap: 4 }}>
+                    {p.projets.map((m) => (
+                      <span key={m} className="etiquette-projet" style={{ width: 30 }}>
+                        {m}
+                      </span>
+                    ))}
+                  </span>
+                </a>
+              </li>
+            ))}
+            {personnes.length === 0 ? <li className="vide">Personne dans ce filtre.</li> : null}
+          </ul>
+        </section>
+
+        <div className="colonnes">
+          <section className="carte carte--liste" style={{ flex: "1 1 420px" }} aria-labelledby="t-blocages">
+            <h2 id="t-blocages" className="carte__titre">
+              Blocages · {e.blocages.length}
+            </h2>
+            <ul className="liste">
+              {e.blocages.map((b) => (
+                <li key={b.id}>
+                  <a href={`/taches/${b.id}`} className="rangee">
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--veille-point)", flex: "none" }} />
+                    <span className="rangee__texte">
+                      <span className="rangee__titre">{b.titre}</span>
+                      <span className="rangee__sous">
+                        {b.qui} · {b.projet ?? "Hors projet"}
+                      </span>
+                    </span>
+                    <span className="rangee__meta" style={{ fontSize: 12 }}>
+                      depuis le {dateCourte(b.depuis)}
+                    </span>
+                  </a>
+                </li>
+              ))}
+              {e.blocages.length === 0 ? <li className="vide">Aucun blocage.</li> : null}
+            </ul>
+          </section>
+          <section className="carte" style={{ flex: "1 1 420px" }} aria-labelledby="t-charge">
+            <h2 id="t-charge" className="carte__titre" style={{ marginBottom: 18 }}>
+              Tâches ouvertes par projet
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {e.charge.map(([nom, n]) => (
+                <div key={nom} role="img" aria-label={`${nom} : ${n} tâches ouvertes`} style={{ display: "grid", gridTemplateColumns: "minmax(0, 170px) minmax(0, 1fr) 24px", alignItems: "center", gap: 14 }}>
+                  <span style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nom}</span>
+                  <span className="barre" style={{ height: 10 }}>
+                    <span style={{ width: `${Math.round((n / maxCharge) * 100)}%` }} />
+                  </span>
+                  <span className="rangee__meta" style={{ textAlign: "right" }}>
+                    {n}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      </div>
+    </>
+  );
+}
