@@ -19,6 +19,7 @@ export default defineConfig({
       DATE_DEMO: "2026-10-30",
       APP_TZ: "America/Port-au-Prince",
       IA_FOURNISSEUR: "aucun",
+      HEURE_DEMO: "11:00",
     },
   },
 });

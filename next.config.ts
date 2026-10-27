@@ -31,6 +31,8 @@ const config: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
   serverExternalPackages: ["@node-rs/argon2"],
+  // Pièces jointes du rapport : 10 Mo par fichier (src/lib/pieces.ts), avec un peu de marge pour le formulaire.
+  experimental: { serverActions: { bodySizeLimit: "12mb" } },
   async headers() {
     return [{ source: "/:path*", headers: enTetesSecurite }];
   },

@@ -8,11 +8,15 @@ import { nomComplet, subordonnesDirects, type OrgDonnees } from "@/lib/regles";
 import {
   deplier,
   FORMULAIRE_PAR_DEFAUT,
+  HORAIRES_PAR_DEFAUT,
+  horairesDe,
   nouveauChamp,
   resoudreModele,
   validerChamps,
+  validerHoraires,
   type Champ,
   type Genre,
+  type Horaires,
   type ModeleRef,
   type Validation,
 } from "@/lib/modeles";
@@ -65,7 +69,7 @@ async function referentiel() {
 }
 
 /** Le formulaire qu'une personne remplit cette semaine (« Mon travail » déplié pour un chef). */
-export async function formulairePour(personneId: string): Promise<{ versionId: string | null; modele: { id: string; nom: string; numero: number } | null; champs: Champ[] }> {
+export async function formulairePour(personneId: string): Promise<{ versionId: string | null; modele: { id: string; nom: string; numero: number; horaires: Horaires } | null; champs: Champ[] }> {
   await assurerModeleParDefaut();
   const org = await chargerOrganisation();
   const { modeles, affectations, publiees, refs } = await referentiel();
@@ -75,18 +79,31 @@ export async function formulairePour(personneId: string): Promise<{ versionId: s
   const v = r.modeleId ? publiees.get(r.modeleId) : undefined;
   if (!m || !v) return { versionId: null, modele: null, champs: FORMULAIRE_PAR_DEFAUT };
   const individuel = r.individuelId ? publiees.get(r.individuelId)?.champs : undefined;
-  return { versionId: v.id, modele: { id: m.id, nom: m.nom, numero: v.numero }, champs: deplier(v.champs, m.genre, individuel ?? FORMULAIRE_PAR_DEFAUT) };
+  return { versionId: v.id, modele: { id: m.id, nom: m.nom, numero: v.numero, horaires: horairesDe(m.horaires) }, champs: deplier(v.champs, m.genre, individuel ?? FORMULAIRE_PAR_DEFAUT) };
 }
 
 /** Nom et numéro de la version d'un rapport (pour l'afficher). */
 export async function versionDuRapport(versionId: string | null) {
   if (!versionId) return null;
   const [v] = await db
-    .select({ numero: schema.versionsModele.numero, nom: schema.modelesRapport.nom, genre: schema.modelesRapport.genre })
+    .select({ numero: schema.versionsModele.numero, nom: schema.modelesRapport.nom, genre: schema.modelesRapport.genre, horaires: schema.modelesRapport.horaires })
     .from(schema.versionsModele)
     .innerJoin(schema.modelesRapport, eq(schema.modelesRapport.id, schema.versionsModele.modeleId))
     .where(eq(schema.versionsModele.id, versionId));
-  return v ?? null;
+  return v ? { ...v, horaires: horairesDe(v.horaires) } : null;
+}
+
+/** Heures de la semaine d'un rapport : celles de son modèle (le modèle par défaut pour un rapport d'avant les modèles). */
+export async function horairesDuRapport(r: { versionModeleId: string | null }): Promise<Horaires> {
+  return (await versionDuRapport(r.versionModeleId))?.horaires ?? HORAIRES_PAR_DEFAUT;
+}
+
+export async function modifierHoraires(id: string, brut: unknown, parId: string) {
+  const v = validerHoraires(brut);
+  if (!v.ok) return { erreur: v.erreur } as const;
+  await db.update(schema.modelesRapport).set({ horaires: v.horaires, majLe: new Date() }).where(eq(schema.modelesRapport.id, id));
+  await noter(parId, "modele_horaires", id, v.horaires);
+  return { ok: true } as const;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,13 +214,15 @@ export async function creerModele(nom: string, genre: Genre, depuisId: string | 
   const n = nom.trim().slice(0, 80);
   if (!n) return { erreur: "Donnez un nom au modèle.", id: undefined };
   let champs = champsDeDepart(genre);
+  let horaires: Horaires | null = null;
   if (depuisId) {
     const [src] = await db.select().from(schema.modelesRapport).where(eq(schema.modelesRapport.id, depuisId));
     const v = src ? (await versionsPubliees([src.id])).get(src.id) : undefined;
     if (src && v && src.genre === genre) champs = v.champs;
+    if (src?.horaires) horaires = horairesDe(src.horaires);
   }
   const id = await db.transaction(async (tx) => {
-    const [m] = await tx.insert(schema.modelesRapport).values({ nom: n, genre }).returning();
+    const [m] = await tx.insert(schema.modelesRapport).values({ nom: n, genre, horaires }).returning();
     await tx.insert(schema.versionsModele).values({ modeleId: m.id, numero: 1, champs, statut: "brouillon", creeeParId: parId });
     return m.id;
   });

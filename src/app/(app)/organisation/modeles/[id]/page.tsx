@@ -8,6 +8,8 @@ import {
   aUneVisibilite,
   CATALOGUE,
   GROUPES_CATALOGUE,
+  horairesDe,
+  JOURS_SEMAINE,
   LIBELLE_REPRISE,
   LIBELLE_RUBRIQUE,
   LIBELLE_VISIBILITE,
@@ -15,13 +17,15 @@ import {
   REPRISES,
   resumeChamp,
   rubriquesPossibles,
+  texteMoment,
   TYPES_CHAMP,
   VISIBILITES,
   type Champ,
+  type Moment,
 } from "@/lib/modeles";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
-import { abandonner, affecterAEquipe, affecterAPersonne, enregistrerChamp, modifierReglages, publier, retirer } from "../actions";
+import { abandonner, affecterAEquipe, affecterAPersonne, enregistrerChamp, modifierHorairesModele, modifierReglages, publier, retirer } from "../actions";
 import { EditeurChamps, type ChampListe, type GroupePalette } from "./EditeurChamps";
 
 export const metadata: Metadata = { title: "Modèle de rapport" };
@@ -63,6 +67,7 @@ export default async function PageModele({ params, searchParams }: { params: Pro
       ? `Version ${courante.numero} en service${courante.publieeLe ? ` depuis le ${dateCourte(dateLocale(courante.publieeLe))}` : ""}. Toute modification prépare la version ${courante.numero + 1}.`
       : "Aucune version.";
   const rubriques = sel ? rubriquesPossibles(sel.type) : [];
+  const horaires = horairesDe(m.horaires);
 
   return (
     <>
@@ -332,10 +337,28 @@ export default async function PageModele({ params, searchParams }: { params: Pro
                   <input type="checkbox" className="interrupteur" name="pourChefs" defaultChecked={m.pourChefs} />
                 </label>
               )}
-              <p className="note">Fréquence : chaque semaine, à envoyer le vendredi. Un rapport de chef est prêt dès que les rapports de son équipe arrivent.</p>
               <div>
                 <button type="submit" className="bouton-contour">
                   Enregistrer les réglages
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section className="carte" id="horaires" aria-labelledby="m-horaires" style={{ flex: "1 1 300px", minWidth: 0 }}>
+            <h2 id="m-horaires" className="carte__titre">
+              Heures de la semaine
+            </h2>
+            <p className="note" style={{ marginTop: 0 }}>
+              Rapport chaque semaine. À l&apos;heure « prêt à relire », le brouillon est complété avec les tâches de la semaine et la personne est prévenue ; après l&apos;heure limite, son chef voit les rapports qui manquent.
+            </p>
+            <form action={modifierHorairesModele.bind(null, m.id)} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <ChoixMoment cle="pret" titre="Prêt à relire" valeur={horaires.pret} />
+              <ChoixMoment cle="rappel" titre="Rappel si pas encore envoyé" valeur={horaires.rappel} facultatif />
+              <ChoixMoment cle="limite" titre="À envoyer avant" valeur={horaires.limite} facultatif />
+              <div>
+                <button type="submit" className="bouton-contour">
+                  Enregistrer les heures
                 </button>
               </div>
             </form>
@@ -369,5 +392,37 @@ export default async function PageModele({ params, searchParams }: { params: Pro
         </div>
       </div>
     </>
+  );
+}
+
+/** Un moment de la semaine : jour et heure ; « facultatif » ajoute un interrupteur pour le retirer. */
+function ChoixMoment({ cle, titre, valeur, facultatif }: { cle: string; titre: string; valeur: Moment | null; facultatif?: boolean }) {
+  const v = valeur ?? { jour: 5, heure: "16:00" };
+  return (
+    <fieldset className="moment">
+      <legend className="moment__titre">{titre}</legend>
+      {facultatif ? (
+        <label className="moment__actif">
+          <input type="checkbox" name={`${cle}_actif`} defaultChecked={!!valeur} /> Activé
+        </label>
+      ) : null}
+      <div className="moment__choix">
+        <label className="visuellement-cache" htmlFor={`h-${cle}-jour`}>
+          {titre} : jour
+        </label>
+        <select id={`h-${cle}-jour`} name={`${cle}_jour`} defaultValue={String(v.jour)}>
+          {JOURS_SEMAINE.map((j, i) => (
+            <option key={j} value={i + 1}>
+              {j.charAt(0).toUpperCase() + j.slice(1)}
+            </option>
+          ))}
+        </select>
+        <label className="visuellement-cache" htmlFor={`h-${cle}-heure`}>
+          {titre} : heure
+        </label>
+        <input id={`h-${cle}-heure`} name={`${cle}_heure`} type="time" defaultValue={v.heure} step={900} />
+      </div>
+      {valeur ? <span className="rangee__sous">Actuellement : {texteMoment(valeur)}</span> : <span className="rangee__sous">Désactivé</span>}
+    </fieldset>
   );
 }

@@ -27,6 +27,24 @@ export default async function PageListe({ params, searchParams }: { params: Prom
         : Number(b.retard) - Number(a.retard) || (a.echeance ?? "9").localeCompare(b.echeance ?? "9"),
   );
   const ouvertes = taches.filter((t) => t.statut !== "faite");
+  // Le tri choisit aussi le regroupement, pour que le changement se voie : par état (échéance),
+  // par personne, ou une seule liste du plus long au plus court (temps estimé).
+  type Groupe = { cle: string; titre: string; taches: typeof taches };
+  const groupes: Groupe[] =
+    tri === "personne"
+      ? personnes
+          .map(([pid, nom]) => ({
+            cle: pid,
+            titre: nom,
+            taches: taches.filter((t) => t.assigneId === pid).sort((a, b) => ORDRE.indexOf(a.statut) - ORDRE.indexOf(b.statut) || (a.echeance ?? "9").localeCompare(b.echeance ?? "9")),
+          }))
+          .filter((g) => g.taches.length)
+      : tri === "estimation"
+        ? [
+            { cle: "ouvertes", titre: "Tâches ouvertes, de la plus longue à la plus courte", taches: ouvertes },
+            { cle: "faites", titre: "Faites", taches: taches.filter((t) => t.statut === "faite") },
+          ].filter((g) => g.taches.length)
+        : ORDRE.map((statut) => ({ cle: statut, titre: TITRE_GROUPE[statut], taches: taches.filter((t) => t.statut === statut) })).filter((g) => g.taches.length);
   const heures = ouvertes.reduce((s, t) => s + heuresDe(t), 0);
   const lien = (q: Record<string, string | undefined>) => {
     const p = new URLSearchParams(Object.entries({ pour, tri: tri === "echeance" ? undefined : tri, ...q }).filter(([, v]) => v) as [string, string][]);
@@ -67,7 +85,7 @@ export default async function PageListe({ params, searchParams }: { params: Prom
               </a>
             ))}
           </nav>
-          <nav className="zoom" aria-label="Trier par">
+          <nav className="zoom" aria-label="Trier et regrouper par">
             {(Object.keys(TRIS) as (keyof typeof TRIS)[]).map((k) => (
               <a key={k} href={lien({ tri: k === "echeance" ? undefined : k })} aria-current={tri === k ? "true" : undefined}>
                 {TRIS[k]}
@@ -80,25 +98,27 @@ export default async function PageListe({ params, searchParams }: { params: Prom
             <thead>
               <tr>
                 <th scope="col">Tâche</th>
-                <th scope="col">Personne</th>
+                <th scope="col" aria-sort={tri === "personne" ? "ascending" : undefined}>
+                  Personne
+                </th>
                 <th scope="col" className="facultatif">
                   Début
                 </th>
-                <th scope="col">Échéance</th>
-                <th scope="col" className="nombre facultatif">
+                <th scope="col" aria-sort={tri === "echeance" ? "ascending" : undefined}>
+                  Échéance
+                </th>
+                <th scope="col" className={tri === "estimation" ? "nombre" : "nombre facultatif"} aria-sort={tri === "estimation" ? "descending" : undefined}>
                   Estimé
                 </th>
                 <th scope="col">État</th>
               </tr>
             </thead>
-            {ORDRE.map((statut) => {
-              const groupe = taches.filter((t) => t.statut === statut);
-              if (!groupe.length) return null;
+            {groupes.map(({ cle, titre, taches: groupe }) => {
               return (
-                <tbody key={statut}>
+                <tbody key={cle}>
                   <tr className="groupe">
                     <th colSpan={6} scope="rowgroup">
-                      {TITRE_GROUPE[statut]} · {groupe.length}
+                      {titre} · {groupe.length}
                     </th>
                   </tr>
                   {groupe.map((t) => {
@@ -120,7 +140,7 @@ export default async function PageListe({ params, searchParams }: { params: Prom
                         <td style={{ whiteSpace: "nowrap" }} className={t.retard ? "ton-retard" : undefined}>
                           {t.echeance ? (t.statut === "faite" ? dateCourte(t.echeance) : e.texte) : "—"}
                         </td>
-                        <td className="nombre facultatif">{t.estimationHeures ? heuresTexte(t.estimationHeures) : <span className="ton-discret">—</span>}</td>
+                        <td className={tri === "estimation" ? "nombre" : "nombre facultatif"}>{t.estimationHeures ? heuresTexte(t.estimationHeures) : <span className="ton-discret">—</span>}</td>
                         <td style={{ whiteSpace: "nowrap" }} className={t.statut === "bloquee" ? "ton-veille" : t.retard ? "ton-retard" : undefined}>
                           {t.retard ? "En retard" : LIBELLE_STATUT[t.statut]}
                         </td>

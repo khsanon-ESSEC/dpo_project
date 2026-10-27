@@ -6,6 +6,8 @@ import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet, resoudreSuperieur } from "@/lib/regles";
 import { semaineCourante, statutsRapports } from "./rapport";
 
+const TZ = process.env.APP_TZ || "America/Port-au-Prince";
+
 export type TacheListe = {
   id: string;
   titre: string;
@@ -57,17 +59,73 @@ export function trier(taches: TacheListe[], jour = aujourdhui()) {
   return [...taches].sort((a, b) => rang(a) - rang(b) || (a.echeance ?? "9999").localeCompare(b.echeance ?? "9999"));
 }
 
+/** Nombre de mises à jour de tâches faites par la personne, chaque jour ouvré de la semaine (quatre points au plus). */
 export async function activiteDeLaSemaine(personneId: string, semaine = semaineCourante()) {
+  const debut = sql`(${semaine}::date)::timestamp at time zone ${TZ}`;
+  const fin = sql`(${ajouterJours(semaine, 7)}::date)::timestamp at time zone ${TZ}`;
   const lignes = await db
-    .select({ jour: sql<string>`to_char(${schema.evenementsTache.creeLe} at time zone ${process.env.APP_TZ || "America/Port-au-Prince"}, 'YYYY-MM-DD')`, n: sql<number>`count(*)::int` })
+    .select({ jour: sql<string>`to_char(${schema.evenementsTache.creeLe} at time zone ${TZ}, 'YYYY-MM-DD')`, n: sql<number>`count(*)::int` })
     .from(schema.evenementsTache)
-    .where(and(eq(schema.evenementsTache.auteurId, personneId), sql`${schema.evenementsTache.creeLe} >= now() - interval '21 days'`))
+    .where(and(eq(schema.evenementsTache.auteurId, personneId), sql`${schema.evenementsTache.creeLe} >= ${debut}`, sql`${schema.evenementsTache.creeLe} < ${fin}`))
     .groupBy(sql`1`);
   const parJour = new Map(lignes.map((l) => [l.jour, l.n]));
   return [0, 1, 2, 3, 4].map((i) => {
     const j = ajouterJours(semaine, i);
-    return { jour: j, n: Math.min(parJour.get(j) ?? 0, 4) };
+    return { jour: j, n: Math.min(parJour.get(j) ?? 0, 4), total: parJour.get(j) ?? 0 };
   });
+}
+
+const LIBELLE_STATUT: Record<string, string> = { a_faire: "À faire", en_cours: "En cours", bloquee: "Bloquée", faite: "Faite" };
+
+export type FaitDuJour = { id: string; heure: Date; tacheId: string; titre: string; projetCode: string | null; texte: string; type: string };
+
+/**
+ * Une journée passée (ou celle d'aujourd'hui) : ce que la personne a fait sur ses tâches (créées,
+ * changées d'état, notes, blocages, échéances déplacées), et les tâches qui arrivaient à échéance ce jour-là.
+ */
+export async function journeeDe(personneId: string, jour: string) {
+  const debut = sql`(${jour}::date)::timestamp at time zone ${TZ}`;
+  const fin = sql`(${ajouterJours(jour, 1)}::date)::timestamp at time zone ${TZ}`;
+  const evenements = await db
+    .select({
+      id: schema.evenementsTache.id,
+      type: schema.evenementsTache.type,
+      avant: schema.evenementsTache.avant,
+      apres: schema.evenementsTache.apres,
+      note: schema.evenementsTache.note,
+      creeLe: schema.evenementsTache.creeLe,
+      tacheId: schema.taches.id,
+      titre: schema.taches.titre,
+      projetCode: schema.projets.code,
+    })
+    .from(schema.evenementsTache)
+    .innerJoin(schema.taches, eq(schema.taches.id, schema.evenementsTache.tacheId))
+    .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
+    .where(and(eq(schema.evenementsTache.auteurId, personneId), sql`${schema.evenementsTache.creeLe} >= ${debut}`, sql`${schema.evenementsTache.creeLe} < ${fin}`))
+    .orderBy(asc(schema.evenementsTache.creeLe));
+  const faits: FaitDuJour[] = evenements.map((e) => {
+    const t = `« ${e.titre} »`;
+    const texte =
+      e.type === "creation"
+        ? `Tâche créée : ${t}`
+        : e.type === "statut"
+          ? `${t} : ${LIBELLE_STATUT[e.avant ?? ""] ?? e.avant ?? "?"} → ${LIBELLE_STATUT[e.apres ?? ""] ?? e.apres ?? "?"}${e.apres === "bloquee" && e.note ? ` (${e.note})` : ""}`
+          : e.type === "blocage"
+            ? `${t} toujours bloquée : ${e.note ?? ""}`
+            : e.type === "echeance"
+              ? `Échéance de ${t} déplacée${e.apres ? ` au ${e.apres.split("-").reverse().join("/")}` : ""}`
+              : e.type === "note"
+                ? `Note sur ${t} : ${e.note ?? ""}`
+                : `${t} : ${e.type}`;
+    return { id: e.id, heure: e.creeLe, tacheId: e.tacheId, titre: e.titre, projetCode: e.projetCode, texte, type: e.type };
+  });
+  const echeances = await db
+    .select({ id: schema.taches.id, titre: schema.taches.titre, statut: schema.taches.statut, projetCode: schema.projets.code })
+    .from(schema.taches)
+    .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
+    .where(and(eq(schema.taches.assigneId, personneId), eq(schema.taches.echeance, jour)))
+    .orderBy(asc(schema.taches.titre));
+  return { faits, echeances: echeances.map((t) => ({ ...t, libelle: LIBELLE_STATUT[t.statut] })) };
 }
 
 export async function mesProjets(personneId: string) {

@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { exigerUtilisateur } from "@/lib/auth/session";
-import { aujourdhui, echeanceRelative, jourComplet, lettreJour } from "@/lib/dates";
-import { activiteDeLaSemaine, compter, etatMonRapport, mesProjets, tachesDe, trier } from "@/lib/donnees/semaine";
+import { redigeUnRapport } from "@/lib/regles";
+import { and, eq } from "drizzle-orm";
+import { db, schema } from "@/db";
+import { ajouterJours, aujourdhui, dateCourte, echeanceRelative, heure, jourComplet, lettreJour, lundiDe } from "@/lib/dates";
+import { activiteDeLaSemaine, compter, etatMonRapport, journeeDe, mesProjets, tachesDe, trier } from "@/lib/donnees/semaine";
 import { semaineCourante } from "@/lib/donnees/rapport";
 import { chargeDesPersonnes } from "@/lib/donnees/charge";
 import { Jauge } from "@/components/Charge";
@@ -17,16 +20,28 @@ const SANTE = {
   dans_les_temps: { texte: "Dans les temps", classe: "ton-ok" },
 } as const;
 
-export default async function PageSemaine() {
+export default async function PageSemaine({ searchParams }: { searchParams: Promise<{ jour?: string }> }) {
+  const { jour: jourDemande } = await searchParams;
   const u = await exigerUtilisateur();
   const jour = aujourdhui();
   const semaine = semaineCourante();
-  const [taches, jours, projets, rapport, maCharge] = await Promise.all([
+  // Un jour choisi dans la frise (passé ou non) : sa semaine s'affiche, et ce qui s'y est passé.
+  const choisi = jourDemande && /^\d{4}-\d{2}-\d{2}$/.test(jourDemande) && !Number.isNaN(Date.parse(jourDemande)) ? jourDemande : null;
+  const semaineVue = lundiDe(choisi ?? jour);
+  const [taches, jours, projets, rapport, maCharge, journee, rapportVu] = await Promise.all([
     tachesDe([u.id]),
-    activiteDeLaSemaine(u.id, semaine),
+    activiteDeLaSemaine(u.id, semaineVue),
     mesProjets(u.id),
     etatMonRapport(u.id),
     chargeDesPersonnes([u.id], 2),
+    choisi ? journeeDe(u.id, choisi) : null,
+    semaineVue !== semaine
+      ? db
+          .select({ id: schema.rapportsHebdo.id, statut: schema.rapportsHebdo.statut })
+          .from(schema.rapportsHebdo)
+          .where(and(eq(schema.rapportsHebdo.auteurId, u.id), eq(schema.rapportsHebdo.semaine, semaineVue)))
+          .then((r) => r[0] ?? null)
+      : null,
   ]);
   const charge = maCharge.lignes[0]?.charge;
   const c = compter(taches, jour);
@@ -55,21 +70,101 @@ export default async function PageSemaine() {
         </div>
       </Bandeau>
       <div className="page">
-        <ol className="frise" aria-label="Activité de la semaine">
-          {jours.map((j) => (
-            <li key={j.jour} aria-current={j.jour === jour ? "date" : undefined}>
-              <span className="frise__lettre" aria-hidden="true">
-                {lettreJour(j.jour)}
-              </span>
-              <span className="frise__date">{Number(j.jour.slice(8))}</span>
-              <span className="frise__points" aria-label={`${j.n} mise${j.n > 1 ? "s" : ""} à jour`}>
-                {Array.from({ length: j.n }, (_, i) => (
-                  <span key={i} />
+        <nav className="frise-semaine" aria-label="Semaines">
+          <a href={`/semaine?jour=${ajouterJours(semaineVue, -7)}`} className="bouton-icone" aria-label="Semaine précédente" title="Semaine précédente">
+            <Icone nom="chevron-gauche" taille={20} />
+          </a>
+          <ol className="frise" aria-label={`Semaine du ${dateCourte(semaineVue)} : choisissez un jour pour voir ce qui s'y est passé`}>
+            {jours.map((j) => (
+              <li key={j.jour} aria-current={j.jour === jour ? "date" : undefined} data-choisi={j.jour === choisi ? "1" : undefined}>
+                <a href={j.jour === choisi ? "/semaine" : `/semaine?jour=${j.jour}`} aria-label={`${jourComplet(j.jour)} : ${j.total} mise${j.total > 1 ? "s" : ""} à jour`} aria-pressed={j.jour === choisi}>
+                  <span className="frise__lettre" aria-hidden="true">
+                    {lettreJour(j.jour)}
+                  </span>
+                  <span className="frise__date" aria-hidden="true">
+                    {Number(j.jour.slice(8))}
+                  </span>
+                  <span className="frise__points" aria-hidden="true">
+                    {Array.from({ length: j.n }, (_, i) => (
+                      <span key={i} />
+                    ))}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ol>
+          {semaineVue < semaine ? (
+            <a href={`/semaine?jour=${ajouterJours(semaineVue, 7)}`} className="bouton-icone" aria-label="Semaine suivante" title="Semaine suivante">
+              <Icone nom="chevron-droite" taille={20} />
+            </a>
+          ) : (
+            <span className="bouton-icone" aria-hidden="true" style={{ visibility: "hidden" }} />
+          )}
+        </nav>
+        {semaineVue !== semaine ? (
+          <p className="note" style={{ margin: "-8px 0 0", display: "flex", flexWrap: "wrap", gap: "4px 16px" }}>
+            <span>Semaine du {dateCourte(semaineVue)} au {dateCourte(ajouterJours(semaineVue, 4))}.</span>
+            {rapportVu ? (
+              <a href={rapportVu.statut === "envoye" ? `/rapports/${rapportVu.id}` : "/rapport"} className="lien-discret">
+                Voir mon rapport de cette semaine →
+              </a>
+            ) : null}
+            <a href="/semaine" className="lien-discret">
+              Revenir à cette semaine →
+            </a>
+          </p>
+        ) : null}
+        {choisi && journee ? (
+          <section className="carte carte--liste" aria-labelledby="t-journee">
+            <div className="carte__entete">
+              <h2 id="t-journee" className="carte__titre">
+                {jourComplet(choisi)}
+                {choisi === jour ? " · aujourd'hui" : ""}
+              </h2>
+              <a href="/semaine" className="lien-discret">
+                Fermer
+              </a>
+            </div>
+            {journee.faits.length === 0 && journee.echeances.length === 0 ? <p className="vide">Aucune mise à jour de tâche ce jour-là, et aucune échéance.</p> : null}
+            {journee.faits.length ? (
+              <ul className="liste">
+                {journee.faits.map((f) => (
+                  <li key={f.id}>
+                    <a href={`/taches/${f.tacheId}`} className="rangee" style={{ minHeight: 52 }}>
+                      <span className="rangee__meta" style={{ flex: "0 0 64px", fontVariantNumeric: "tabular-nums" }}>
+                        {heure(f.heure)}
+                      </span>
+                      {f.projetCode ? <span className="etiquette-projet">{f.projetCode}</span> : null}
+                      <span className="rangee__texte">
+                        <span className="rangee__titre" style={{ whiteSpace: "normal" }}>
+                          {f.texte}
+                        </span>
+                      </span>
+                    </a>
+                  </li>
                 ))}
-              </span>
-            </li>
-          ))}
-        </ol>
+              </ul>
+            ) : null}
+            {journee.echeances.length ? (
+              <>
+                <h3 style={{ margin: "14px 0 4px", fontSize: 13, fontWeight: 500 }}>Échéances ce jour-là</h3>
+                <ul className="liste">
+                  {journee.echeances.map((t) => (
+                    <li key={t.id}>
+                      <a href={`/taches/${t.id}`} className="rangee" style={{ minHeight: 48 }}>
+                        {t.projetCode ? <span className="etiquette-projet">{t.projetCode}</span> : null}
+                        <span className="rangee__texte">
+                          <span className="rangee__titre">{t.titre}</span>
+                        </span>
+                        <span className={`rangee__meta ${t.statut === "faite" ? "ton-ok" : t.statut === "bloquee" ? "ton-veille" : choisi < jour ? "ton-retard" : ""}`}>{t.libelle}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </section>
+        ) : null}
         <div className="colonnes">
           <section className="carte carte--liste colonne-large" aria-labelledby="t-afaire" style={{ gap: 0 }}>
             <div className="carte__entete">
@@ -110,6 +205,7 @@ export default async function PageSemaine() {
             )}
           </section>
           <div className="colonne-etroite">
+{redigeUnRapport(u) ? (
             <section className="carte" aria-labelledby="t-rapport" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div className="carte__entete" style={{ margin: 0 }}>
                 <h2 id="t-rapport" className="carte__titre">
@@ -125,6 +221,7 @@ export default async function PageSemaine() {
                 {envoye ? "Revoir" : "Relire et envoyer"}
               </a>
             </section>
+            ) : null}
             {charge ? (
               <section className="carte" aria-labelledby="t-charge">
                 <div className="carte__entete">

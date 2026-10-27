@@ -3022,3 +3022,183 @@ a.puce:hover {
     gap: 16px;
   }
 }
+
+/* ---------- Heures de la semaine (éditeur de modèles) ---------- */
+.moment {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--surface-filet);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+  min-width: 0;
+}
+.moment__titre {
+  float: left;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.moment__actif {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.moment__actif input {
+  accent-color: var(--arc);
+}
+.moment__choix {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.moment__choix select,
+.moment__choix input {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--controle);
+  background: var(--champ);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+}
+.moment__choix select {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.moment > .rangee__sous {
+  grid-column: 1 / -1;
+}
+
+/* ---------- Pièces jointes, synthèse par projet, propositions (rapport) ---------- */
+.piece {
+  min-height: 48px;
+  padding: 6px 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  color: var(--discret);
+}
+.piece + .piece {
+  border-top: 1px solid var(--filet);
+}
+.piece__nom {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--encre);
+  font-size: 15px;
+}
+.piece__taille {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.piece__depot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.piece__depot input[type="file"] {
+  flex: 1 1 240px;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 13px;
+}
+.piece__depot .aide {
+  flex-basis: 100%;
+}
+.proposition {
+  margin: 2px 0 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  border: 1px dashed var(--filet-fort);
+  color: var(--relief-encre);
+  font-size: 13px;
+  line-height: 18px;
+}
+.proposition__texte {
+  flex: 1 1 220px;
+  min-width: 0;
+  color: var(--encre);
+}
+.proposition__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.synthese {
+  padding: 10px 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.synthese + .synthese {
+  border-top: 1px solid var(--filet);
+}
+.synthese__pied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+.synthese .retirees {
+  margin-top: 0;
+}
+.synthese__element {
+  padding: 6px 0;
+  display: block;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--encre);
+}
+.synthese__element .etiquette-auto {
+  margin-right: 6px;
+}
+
+/* ---------- Frise de la semaine : jours cliquables, semaines précédentes ---------- */
+.frise-semaine {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.frise-semaine .frise {
+  flex: 1;
+  min-width: 0;
+}
+.frise li {
+  padding: 0;
+}
+.frise li > a {
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 0 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color 160ms ease;
+}
+.frise li > a:hover {
+  background: var(--choisi);
+}
+.frise li > a:focus-visible {
+  outline: 2px solid var(--arc);
+  outline-offset: -2px;
+}
+.frise li[data-choisi] > a {
+  background: var(--choisi);
+}
+.frise li[data-choisi] .frise__date {
+  font-weight: 500;
+}

@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { ajouterJours, dateCourte, dateLocale, heure } from "@/lib/dates";
 import {
+  calendrierDuRapport,
   champDeRubrique,
+  completerBrouillon,
   dejaReprise,
   formulaireDe,
   lecteursDuRapport,
@@ -13,38 +16,58 @@ import {
   obtenirOuCreerRapport,
   reponsesDuRapport,
   semaineCourante,
+  suggestionsPourDecision,
   synchroniserReprises,
+  synchroniserSyntheses,
   vueEquipe,
 } from "@/lib/donnees/rapport";
+import { piecesDuRapport } from "@/lib/donnees/pieces";
+import { iaDisponible } from "@/lib/ia";
+import { redigeUnRapport } from "@/lib/regles";
 import { versionDuRapport } from "@/lib/donnees/modeles";
 import { tousLesProjetsActifs } from "@/lib/donnees/projets";
 import { chargerOrganisation } from "@/lib/organisation";
 import { initiales, nomComplet } from "@/lib/regles";
-import { estDecoratif, LIBELLE_VISIBILITE, type Rubrique } from "@/lib/modeles";
+import { estDecoratif, LIBELLE_VISIBILITE, texteMoment, type Rubrique } from "@/lib/modeles";
 import { ONGLETS_RAPPORT, SousOnglets } from "@/components/SousOnglets";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { ChampRapport, type ContexteRapport } from "@/components/ChampRapport";
-import { envoyer, reprendreLigne } from "./actions";
+import { completerAvecMesTaches, envoyer, reprendreLigne } from "./actions";
 
 export const metadata: Metadata = { title: "Mon rapport" };
 
 const LIBELLE_RUBRIQUE_COURT: Record<string, string> = { fait: "Fait", en_cours: "En cours", bloque: "Bloqué", prochaine: "La semaine prochaine", decision: "Décision attendue", autre: "Autre" };
 
-export default async function PageRapport({ searchParams }: { searchParams: Promise<{ envoi?: string }> }) {
-  const { envoi } = await searchParams;
+export default async function PageRapport({ searchParams }: { searchParams: Promise<{ envoi?: string; piece?: string; champ?: string }> }) {
+  const { envoi, piece, champ: champPiece } = await searchParams;
   const u = await exigerUtilisateur();
+  // Les exécutifs ne rédigent pas de rapport : ils lisent ceux de tout le monde.
+  if (!redigeUnRapport(u)) redirect("/equipe/rapports");
   const a = await acces(u);
   const semaine = semaineCourante();
   const rapport = await obtenirOuCreerRapport(u.id, semaine);
   const brouillon = rapport.statut === "brouillon";
   const f = formulaireDe(rapport);
-  const chef = f.some((c) => c.type === "reprise");
+  const { horaires, etape } = await calendrierDuRapport(rapport);
+  // À l'heure « prêt à relire », le brouillon est complété une fois avec les tâches de la semaine.
+  if (brouillon && etape !== "en_preparation" && !rapport.completeLe) await completerBrouillon(rapport);
+  const chef = f.some((c) => c.type === "reprise" || c.type === "synthese");
   if (chef && brouillon) await synchroniserReprises(rapport);
-  const [lignes, reponses, version, visibles, org] = await Promise.all([lignesDuRapport(rapport.id), reponsesDuRapport(rapport.id), versionDuRapport(rapport.versionModeleId), idsProjetsVisibles(a), chargerOrganisation()]);
+  const syntheses = chef && brouillon ? await synchroniserSyntheses(rapport) : null;
+  const [lignes, reponses, version, visibles, org, pieces] = await Promise.all([
+    lignesDuRapport(rapport.id),
+    reponsesDuRapport(rapport.id),
+    versionDuRapport(rapport.versionModeleId),
+    idsProjetsVisibles(a),
+    chargerOrganisation(),
+    piecesDuRapport(rapport.id),
+  ]);
+  const suggestions = new Map<string, number>();
+  if (brouillon) for (const c of f.filter((k) => k.rubrique === "decision" && k.partie !== "equipe")) suggestions.set(c.id, (await suggestionsPourDecision(rapport, c)).length);
   const lecteurs = await lecteursDuRapport(u.id, lignes, f);
   const projets = (await tousLesProjetsActifs()).filter((p) => visibles === "tous" || visibles.has(p.id));
-  const equipe = chef && brouillon ? await vueEquipe(rapport) : null;
+  const equipe = chef && brouillon ? { ...(await vueEquipe(rapport)), synthese: syntheses ?? undefined } : null;
   const manquants = brouillon ? await manquantsDuRapport(rapport) : [];
   const remplissables = f.filter((c) => !estDecoratif(c) && !(c.type === "reprise" && (c.reprise === "sante" || c.reprise === "charge")));
   const relues = new Set(rapport.partiesRelues);
@@ -70,7 +93,12 @@ export default async function PageRapport({ searchParams }: { searchParams: Prom
     superieur: lecteurs.superieur?.prenom ?? null,
     equipe,
     niveauTitre: f.some((c) => c.type === "intertitre") ? 3 : 2,
+    pieces,
+    erreurPiece: piece && champPiece ? { champId: champPiece, message: piece.slice(0, 600) } : null,
+    suggestions,
+    ia: iaDisponible(),
   };
+  const limite = horaires.limite ? texteMoment(horaires.limite, semaine) : null;
 
   return (
     <>
@@ -90,6 +118,12 @@ export default async function PageRapport({ searchParams }: { searchParams: Prom
             <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               <Icone nom="document" taille={16} />
               Modèle {version.nom} · version {version.numero}
+            </span>
+          ) : null}
+          {brouillon && limite ? (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }} className={etape === "en_retard" ? "ton-retard" : undefined}>
+              <Icone nom="horloge" taille={16} />
+              {etape === "en_retard" ? `En retard : à envoyer avant ${limite}` : `À envoyer avant ${limite}`}
             </span>
           ) : null}
           {brouillon ? (
@@ -192,6 +226,22 @@ export default async function PageRapport({ searchParams }: { searchParams: Prom
                 <p className="note">Personne ne reçoit encore votre rapport.</p>
               )}
               {brouillon && chef ? <p className="note" style={{ margin: 0 }}>Un seul envoi : votre travail, puis votre équipe.</p> : null}
+              {brouillon ? (
+                <p className="note" style={{ margin: 0 }}>
+                  {etape === "en_preparation"
+                    ? `Prêt à relire ${texteMoment(horaires.pret, semaine)} : le brouillon sera complété avec vos tâches de la semaine.`
+                    : rapport.completeLe
+                      ? `Complété avec vos tâches le ${dateCourte(dateLocale(rapport.completeLe))} à ${heure(rapport.completeLe)}.`
+                      : ""}
+                </p>
+              ) : null}
+              {brouillon ? (
+                <form action={completerAvecMesTaches.bind(null, rapport.id)}>
+                  <button type="submit" className="bouton-contour" style={{ width: "100%" }}>
+                    <Icone nom="reprendre" taille={16} /> Mettre à jour avec mes tâches
+                  </button>
+                </form>
+              ) : null}
               {brouillon && manquants.length ? (
                 <div className={envoi === "incomplet" ? "erreur" : "note"} role={envoi === "incomplet" ? "alert" : undefined} style={{ margin: 0 }}>
                   {envoi === "incomplet" ? "Il manque encore : " : "À remplir avant l'envoi : "}

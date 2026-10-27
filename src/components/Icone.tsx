@@ -12,6 +12,8 @@ const traces: Record<string, string> = {
   "chevron-bas": "M6 9.5l6 6 6-6",
   "chevron-haut": "M6 14.5l6-6 6 6",
   modeles: "M5 4h14v16H5zM9 8h6M9 12h6M9 16h3",
+  trombone: "M16.5 7.5 9.3 14.7a1.8 1.8 0 0 0 2.5 2.5l7.4-7.4a3.6 3.6 0 0 0-5.1-5.1l-7.6 7.6a5.4 5.4 0 0 0 7.6 7.6l6.4-6.4",
+  eclair: "M13 3 5.5 13.5H12L11 21l7.5-10.5H12z",
   ajouter: "M12 5v14M5 12h14",
   modifier: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
   cadenas: "M6.5 10.5h11v9h-11zM9 10.5V7.5a3 3 0 0 1 6 0v3",

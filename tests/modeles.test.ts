@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as M from "@/lib/modeles";
 import {
   additionnerComptes,
   champsManquants,
@@ -153,5 +154,33 @@ describe("champs obligatoires et valeurs", () => {
     expect(valeurAcceptable({ id: "s", type: "sante", libelle: "S" }, "en_retard")).toBe("en_retard");
     expect(valeurAcceptable({ id: "n", type: "nombre", libelle: "N" }, "12,5")).toBe("12.5");
     expect(valeurAcceptable({ id: "d", type: "date", libelle: "D" }, "2026-13-40")).toBeNull();
+  });
+});
+
+describe("heures de la semaine", () => {
+  const semaine = "2026-10-26";
+  it("se valident dans l'ordre : prêt, rappel, limite", () => {
+    expect(M.validerHoraires({ pret: { jour: 5, heure: "10:00" }, rappel: null, limite: { jour: 5, heure: "17:00" } }).ok).toBe(true);
+    expect(M.validerHoraires({ pret: { jour: 5, heure: "14:00" }, rappel: { jour: 5, heure: "10:00" } }).ok).toBe(false);
+    expect(M.validerHoraires({ pret: { jour: 9, heure: "10:00" } }).ok).toBe(false);
+    expect(M.validerHoraires({ pret: { jour: 5, heure: "25:00" } }).ok).toBe(false);
+    expect(M.horairesDe(null)).toEqual(M.HORAIRES_PAR_DEFAUT);
+  });
+  it("disent où en est la semaine", () => {
+    const h = M.HORAIRES_PAR_DEFAUT; // vendredi 10 h, 14 h, 17 h
+    expect(M.etapeRapport(h, semaine, { jour: "2026-10-29", minutes: 23 * 60 })).toBe("en_preparation");
+    expect(M.etapeRapport(h, semaine, { jour: "2026-10-30", minutes: 10 * 60 })).toBe("pret");
+    expect(M.etapeRapport(h, semaine, { jour: "2026-10-30", minutes: 15 * 60 })).toBe("rappel");
+    expect(M.etapeRapport(h, semaine, { jour: "2026-10-30", minutes: 17 * 60 })).toBe("en_retard");
+    expect(M.etapeRapport(h, semaine, { jour: "2026-11-02", minutes: 8 * 60 })).toBe("en_retard");
+    expect(M.etapeRapport({ pret: h.pret, rappel: null, limite: { jour: 8, heure: "09:00" } }, semaine, { jour: "2026-11-01", minutes: 0 })).toBe("pret");
+    expect(M.texteMoment({ jour: 5, heure: "16:30" }, semaine)).toBe("vendredi 30 oct. à 16 h 30");
+  });
+  it("la synthèse et la pièce jointe : la première seulement dans un modèle de chef", () => {
+    expect(M.validerChamps([{ id: "s", type: "synthese", libelle: "Synthèse" }], "individuel").ok).toBe(false);
+    const v = M.validerChamps([{ id: "p", type: "piece_jointe", libelle: "Pièces", obligatoire: true }], "individuel");
+    expect(v.ok && v.champs[0].obligatoire).toBe(true);
+    expect(M.champsManquants([{ id: "p", type: "piece_jointe", libelle: "Pièces", obligatoire: true }], { lignes: new Map(), reponses: new Map(), pieces: new Map() }).length).toBe(1);
+    expect(M.champsManquants([{ id: "p", type: "piece_jointe", libelle: "Pièces", obligatoire: true }], { lignes: new Map(), reponses: new Map(), pieces: new Map([["p", 1]]) }).length).toBe(0);
   });
 });

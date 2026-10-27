@@ -3,6 +3,7 @@ import { and, count, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { acces } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
+import { redigeUnRapport } from "@/lib/regles";
 import { seDeconnecter } from "@/app/actions-communes";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
@@ -27,8 +28,8 @@ export default async function PagePlus() {
       titre: "Suivi",
       entrees: [
         { href: "/alertes", libelle: "Alertes", sous: Number(n) ? `${n} non lue${Number(n) > 1 ? "s" : ""}` : "Rien de nouveau", icone: "notification", compte: Number(n) },
-        { href: "/rapports", libelle: "Mes rapports", sous: "Tous les rapports du vendredi que vous avez envoyés", icone: "historique" },
-        ...(equipe ? [{ href: "/projets", libelle: "Projets", sous: "Portefeuille, Gantt, tableau, calendrier", icone: "tableau-de-bord" }] : []),
+        ...(redigeUnRapport(u) ? [{ href: "/rapports", libelle: "Mes rapports", sous: "Tous les rapports du vendredi que vous avez envoyés", icone: "historique" }] : []),
+        ...(equipe && redigeUnRapport(u) ? [{ href: "/projets", libelle: "Projets", sous: "Portefeuille, Gantt, tableau, calendrier", icone: "tableau-de-bord" }] : []),
       ],
     },
     ...(equipe
@@ -36,7 +37,7 @@ export default async function PagePlus() {
           {
             titre: "Équipe",
             entrees: [
-              { href: "/equipe/rapports", libelle: "Rapports de l'équipe", sous: "Semaine par semaine, ou par personne", icone: "document" },
+              { href: "/equipe/rapports", libelle: redigeUnRapport(u) ? "Rapports de l'équipe" : "Rapports", sous: "Semaine par semaine, ou par personne", icone: "document" },
               { href: "/charge", libelle: "Charge de travail", sous: "Qui est chargé, qui a de la marge", icone: "jauge" },
             ],
           },
@@ -47,7 +48,7 @@ export default async function PagePlus() {
           {
             titre: "Direction",
             entrees: [
-              ...(a.toutVoir || a.directeur ? [{ href: "/conseil", libelle: "Rapport au conseil", sous: "Projets stratégiques du mois", icone: "banque" }] : []),
+              ...(a.toutVoir || a.directeur ? [{ href: "/conseil", libelle: "Rapports au conseil", sous: "Le rapport du mois, et les rapports ponctuels", icone: "banque" }] : []),
               ...(a.toutVoir || u.administrateur ? [{ href: "/organisation", libelle: "Organisation", sous: "Personnes, équipes, rôles", icone: "agence" }] : []),
             ],
           },

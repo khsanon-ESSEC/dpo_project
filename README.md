@@ -2,14 +2,16 @@
 
 Application web de suivi des projets de la DPO (UNIBANK) :
 
-- **Ma semaine** : les tâches de chacun, cochées au fil de la semaine.
+- **Ma semaine** : les tâches de chacun, cochées au fil de la semaine. Un clic sur un jour de la frise montre ce qui s'est passé ce jour-là ; les flèches remontent aux semaines précédentes.
 - **Rapport de la semaine** : un formulaire configuré par les administrateurs (modèles de rapport), préparé à partir des tâches, relu et envoyé au supérieur. Chaque chef de projet reçoit les lignes et les feux de son projet. Ce qui était prévu la semaine précédente se reprend en un clic (fait, en cours, reporté).
-- **Rapport de chef** : le chef d'équipe et le directeur gardent leur propre rapport (« Mon travail »), suivi d'une partie préremplie à partir des rapports qu'ils reçoivent (« Mon équipe », « Ma division ») : à décider, santé des projets, charge, fait, la semaine prochaine. Un seul envoi.
+- **Rapport de chef** : le chef d'équipe et le directeur gardent leur propre rapport (« Mon travail »), suivi d'une partie préremplie à partir des rapports qu'ils reçoivent (« Mon équipe », « Ma division ») : à décider, synthèse par projet, santé des projets, charge, fait, la semaine prochaine. Un seul envoi. Les exécutifs ne rédigent pas de rapport : ils lisent ceux de tout le monde.
+- **Heures du rapport** : chaque modèle fixe quand le rapport est prêt à relire (le brouillon est alors complété avec les tâches de la semaine), quand un rappel part, et l'heure limite ; le chef apprend ensuite quels rapports manquent.
+- **Pièces jointes** dans le rapport (PDF, images, Word, Excel, PowerPoint, CSV, texte ; 10 Mo par fichier), lues selon la règle du champ.
 - **Modèles de rapport** (administrateurs) : champs à choisir ou à glisser, ordre, propriétés de chaque champ, affectation aux équipes et aux personnes, versions.
 - **Mes rapports** : tous les rapports déjà envoyés, semaine par semaine, avec passage d'une semaine à l'autre.
-- **Mon équipe** : qui a envoyé son rapport, les blocages, les retards, avec relance ; l'historique des rapports de l'équipe (par semaine ou par personne) ; la charge de travail.
+- **Mon équipe** : qui a envoyé son rapport, les blocages, les retards, avec relance ; un directeur ou un exécutif y voit toute la structure sous lui, regroupée par équipe ; l'historique des rapports de l'équipe (par semaine ou par personne) ; la charge de travail.
 - **Projets** : portefeuille, fiches projet, indicateurs vérifiables, glissement des dates.
-- **Rapport au conseil** : rapport mensuel des projets stratégiques, au format du tableau Word de la banque.
+- **Rapports au conseil** : le rapport mensuel des projets stratégiques, au format du tableau Word de la banque (avec le logo) ; et des **rapports ponctuels**, faits à tout moment pour une demande ou un événement imprévu : un titre, la demande, les projets choisis, la période couverte. Un exécutif les approuve ; ils ne changent pas les dates du rapport mensuel.
 - **Vues d'un projet** : vue d'ensemble, liste, tableau (colonnes par état, avec glisser-déposer), Gantt (jours, semaines ou mois), calendrier des échéances, charge de l'équipe du projet. Le portefeuille a aussi une chronologie de tous les projets.
 - **Charge de travail** : les heures de tâches prévues pour chaque personne, semaine par semaine, comparées à ses heures disponibles ; repère qui est chargé ou surchargé, et l'indique au moment de confier une tâche.
 - **Organisation** : personnes, équipes, supérieurs, rôles et heures disponibles par semaine.
@@ -27,7 +29,7 @@ Application multipage (chaque écran est une page rendue par le serveur), en fra
 | Supérieur (chef d'équipe) | Automatique : des personnes lui envoient leur rapport | Les tâches et les rapports de ses subordonnés directs |
 | Chef de projet | Automatique : désigné sur la fiche projet | Tout son projet ; dans les rapports de la semaine, **seulement** les lignes et les feux de son projet, dans les champs ouverts à tous |
 | Directeur | Interrupteur dans *Organisation* | Les projets, tâches et rapports des membres de **sa direction** (toutes les personnes placées sous lui, à tous les niveaux) ; les projets stratégiques de sa direction dans le rapport au conseil |
-| Exécutif | Interrupteur dans *Organisation* (seul un exécutif peut le donner) | **Tout** ; approuve le rapport au conseil |
+| Exécutif | Interrupteur dans *Organisation* (seul un exécutif peut le donner) | **Tout** ; approuve les rapports au conseil. Ne rédige pas de rapport de la semaine |
 | Administrateur | Interrupteur dans *Organisation* | Gère les personnes, les équipes, les supérieurs, les accès et les **modèles de rapport**. Ne donne **aucun** accès supplémentaire aux rapports ni aux tâches |
 
 Les rôles se cumulent. Chaque personne a **un seul** supérieur. Si le poste de responsable d'une équipe est vacant, les rapports remontent au niveau suivant. Un brouillon de rapport n'est visible que par son auteur. Il reste toujours au moins un administrateur.
@@ -42,7 +44,10 @@ Ces règles sont écrites dans `src/lib/regles.ts` et `src/lib/modeles.ts`, et v
 
 Écran *Organisation → Modèles de rapport*, réservé aux administrateurs.
 
-- **Un modèle** est la liste des champs que la personne remplit, dans l'ordre. Types : lignes par projet, santé des projets (Dans les temps, À surveiller, En retard), charge de la semaine (Légère, Normale, Lourde, Trop lourde), texte court ou long, choix, échelle, nombre, date, intertitre, note ; pour les modèles de chef : « Mon travail » et « Repris des rapports reçus ».
+- **Un modèle** est la liste des champs que la personne remplit, dans l'ordre. Types : lignes par projet, santé des projets (Dans les temps, À surveiller, En retard), charge de la semaine (Légère, Normale, Lourde, Trop lourde), texte court ou long, choix, échelle, nombre, date, pièce jointe, intertitre, note ; pour les modèles de chef : « Mon travail », « Repris des rapports reçus » et « Synthèse par projet ».
+- **Heures de la semaine** : prêt à relire (vendredi 10 h par défaut), rappel (14 h), à envoyer avant (17 h). Les alertes sont créées à l'ouverture d'une page, une fois par semaine : aucune tâche planifiée à installer.
+- **Synthèse par projet** (rapport de chef) : quelques phrases par projet, préparées à partir de ce que l'équipe a envoyé (ou des synthèses des chefs d'équipe), à relire ; l'assistant peut les rédiger. Seul ce que les lecteurs du champ pouvaient déjà lire y entre.
+- **Décision ou aide attendue** : des propositions sont faites à partir des tâches bloquées et des échéances dépassées ; l'assistant peut les formuler.
 - **Propriétés d'un champ** : libellé, aide, obligatoire, rubrique (fait, en cours, bloqué, prévu, décision attendue, autre), préremplissage (tâches, feu de la semaine dernière, niveau de charge calculé), marquage par projet, qui le voit.
 - **Qui remplit quoi** : l'affectation nominative d'abord ; sinon, pour une personne qui reçoit des rapports, le modèle des chefs d'équipe ; sinon celui de son équipe ; sinon le modèle par défaut. Le modèle par défaut reprend les quatre parties d'avant les modèles.
 - **Versions** : toute modification prépare une nouvelle version, publiée d'un clic. Un rapport garde une copie du formulaire avec lequel il a été rempli ; on le relit toujours tel qu'il a été envoyé.
@@ -117,6 +122,7 @@ Lancer le serveur par un gestionnaire de services (systemd, par exemple) pour qu
 | `COOKIE_SECURISE` | `1` en production (cookies réservés à HTTPS) ; `0` seulement pour un essai local |
 | `APP_TZ` | Fuseau horaire de la division (`America/Port-au-Prince`) |
 | `DATE_DEMO` | Démonstration seulement : fige « aujourd'hui ». **Vide en production** |
+| `HEURE_DEMO` | Démonstration seulement : fige l'heure (« HH:MM ») pour les heures du rapport. **Vide en production** |
 | `IA_FOURNISSEUR` | `aucun`, `openai-compatible` ou `anthropic` |
 | `IA_URL`, `IA_CLE`, `IA_MODELE`, `IA_DELAI` | Connexion au fournisseur d'IA (voir plus bas) |
 
@@ -128,6 +134,8 @@ docker compose up -d --build     # les migrations s'appliquent au démarrage
 ```
 
 Mise à jour vers les modèles de rapport (migration `0002`) : les rapports déjà envoyés gardent leurs quatre parties ; le modèle par défaut « Rapport du vendredi » est créé au premier besoin avec ces quatre parties. Rien n'est perdu.
+
+Migration `0003` (rapports ponctuels, heures du rapport, pièces jointes) : ajouts seulement. Les pièces jointes sont stockées dans la base (elles sont donc dans la sauvegarde) ; si un proxy inverse précède l'application, lui permettre des requêtes de 12 Mo (`client_max_body_size 12m` pour nginx).
 
 ### Sauvegardes
 
@@ -155,7 +163,8 @@ Conserver les sauvegardes hors du serveur, et tester une restauration au moins u
 - Désactiver une personne ferme immédiatement ses sessions.
 - Chaque lecture passe par la couche d'accès (`src/lib/acces.ts`) : une page inaccessible répond « introuvable », sans dire si elle existe.
 - En-têtes de sécurité stricts (CSP sans ressource externe, interdiction d'affichage dans un cadre). Polices, logos et scripts sont servis par l'application elle-même.
-- Journal des actions sensibles (connexions, changements de rôles, envois, approbations) dans la table `journal`.
+- Journal des actions sensibles (connexions, changements de rôles, envois, approbations, pièces déposées et téléchargées) dans la table `journal`.
+- Pièces jointes : formats de bureau seulement, reconnus à l'extension **et** au contenu ; toujours servies en téléchargement (jamais affichées dans la page), seulement à qui peut lire le champ.
 - Le conteneur tourne avec un utilisateur sans privilèges.
 
 **Avant la mise en production** : revue de sécurité selon la politique de la banque, sauvegardes testées, `DATE_DEMO` vide, `COOKIE_SECURISE=1`, aucune donnée de démonstration.

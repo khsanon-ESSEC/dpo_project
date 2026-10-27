@@ -10,10 +10,13 @@
  *   de leur équipe), puis la partie préremplie à partir des rapports qu'ils reçoivent ; un seul envoi ;
  * - un champ « son supérieur seulement » est caché à la direction et aux chefs de projet ; il ne
  *   remonte que si le chef le décide ; la charge ressentie ne remonte qu'en nombres ;
- * - un rapport envoyé garde le formulaire avec lequel il a été rempli.
+ * - un rapport envoyé garde le formulaire avec lequel il a été rempli ;
+ * - rapports chaque semaine (le rapport au conseil est mensuel, ou ponctuel) ; chaque modèle fixe
+ *   ses heures : prêt à relire, rappel, à envoyer avant.
  */
+import { ajouterJours, dateCourte } from "./dates";
 
-export const TYPES_CHAMP = ["lignes", "sante", "charge", "texte", "texte_long", "choix", "echelle", "nombre", "date", "intertitre", "note", "mon_travail", "reprise"] as const;
+export const TYPES_CHAMP = ["lignes", "sante", "charge", "texte", "texte_long", "choix", "echelle", "nombre", "date", "piece_jointe", "intertitre", "note", "mon_travail", "reprise", "synthese"] as const;
 export type TypeChamp = (typeof TYPES_CHAMP)[number];
 
 /** Ce dont parle un champ : sert au préremplissage, à la reprise de la semaine dernière et au rapport du chef. */
@@ -56,6 +59,7 @@ export type Genre = "individuel" | "chef";
 export const CATALOGUE: Record<TypeChamp, { nom: string; detail: string; groupe: "chef" | "application" | "remplir" | "page" }> = {
   mon_travail: { nom: "Mon travail", detail: "Le formulaire de son équipe, pour ses propres points", groupe: "chef" },
   reprise: { nom: "Repris des rapports reçus", detail: "Lignes et réponses de l'équipe", groupe: "chef" },
+  synthese: { nom: "Synthèse par projet", detail: "Quelques phrases par projet, proposées", groupe: "chef" },
   lignes: { nom: "Lignes par projet", detail: "Préremplies avec les tâches", groupe: "application" },
   sante: { nom: "Santé des projets", detail: "Un feu par projet suivi", groupe: "application" },
   charge: { nom: "Charge de la semaine", detail: "Niveau proposé, ressenti corrigé", groupe: "application" },
@@ -65,6 +69,7 @@ export const CATALOGUE: Record<TypeChamp, { nom: string; detail: string; groupe:
   echelle: { nom: "Échelle", detail: "De 1 à 5", groupe: "remplir" },
   nombre: { nom: "Nombre", detail: "Une valeur chiffrée", groupe: "remplir" },
   date: { nom: "Date", detail: "Un jour du calendrier", groupe: "remplir" },
+  piece_jointe: { nom: "Pièce jointe", detail: "PDF, image, Word, Excel…", groupe: "remplir" },
   intertitre: { nom: "Intertitre", detail: "Sépare deux parties", groupe: "page" },
   note: { nom: "Note pour la personne", detail: "Un texte d'explication", groupe: "page" },
 };
@@ -140,7 +145,7 @@ export const rubriquesPossibles = (t: TypeChamp): readonly Rubrique[] => RUBRIQU
 
 /** Champs sans réponse (titres, notes, renvois). */
 export const estDecoratif = (c: Pick<Champ, "type">) => c.type === "intertitre" || c.type === "note" || c.type === "mon_travail";
-export const peutEtreObligatoire = (t: TypeChamp) => !["intertitre", "note", "mon_travail", "reprise"].includes(t);
+export const peutEtreObligatoire = (t: TypeChamp) => !["intertitre", "note", "mon_travail", "reprise", "synthese"].includes(t);
 export const aUneVisibilite = (t: TypeChamp) => !["intertitre", "note", "mon_travail"].includes(t);
 
 function identifiantLibre(base: string, pris: Set<string>): string {
@@ -174,6 +179,8 @@ export function nouveauChamp(type: TypeChamp, pris: Iterable<string>): Champ {
     note: { libelle: "Note", aide: "Texte affiché à la personne qui remplit le rapport." },
     mon_travail: { libelle: "Mon travail", aide: "Le formulaire de votre équipe, préparé à partir de vos propres tâches." },
     reprise: { libelle: "Repris de l'équipe", reprise: "a_decider" },
+    synthese: { libelle: "Synthèse par projet", aide: "Proposée à partir des rapports reçus ; à relire et à reformuler.", visibilite: "direction" },
+    piece_jointe: { libelle: "Pièces jointes", aide: "Un compte rendu, une capture, un tableau : 10 Mo au plus par fichier." },
   };
   const c: Champ = { id: identifiantLibre(D[type].libelle, ids), type, ...D[type] };
   if (aUneVisibilite(type) && !c.visibilite) c.visibilite = "tous";
@@ -206,7 +213,7 @@ export function validerChamps(entree: unknown, genre: Genre): Validation {
     const c: Champ = { id, type, libelle };
     const aide = court(brut.aide, 400);
     if (aide) c.aide = aide;
-    if (type === "mon_travail" || type === "reprise") {
+    if (type === "mon_travail" || type === "reprise" || type === "synthese") {
       if (genre !== "chef") return { ok: false, erreur: `« ${CATALOGUE[type].nom} » n'existe que dans un modèle de chef.` };
     }
     if (type === "mon_travail") travail += 1;
@@ -371,12 +378,15 @@ export type Remplissage = {
   reponses: Map<string, string[]>;
   /** Santé : nombre de projets à noter, par champ. */
   projetsANoter?: Map<string, number>;
+  /** Pièces jointes déposées, par champ. */
+  pieces?: Map<string, number>;
 };
 
 export function champsManquants(formulaire: Champ[], r: Remplissage): Champ[] {
   return formulaire.filter((c) => {
     if (!c.obligatoire || estDecoratif(c) || c.type === "reprise") return false;
     if (c.type === "lignes") return (r.lignes.get(c.id) ?? 0) === 0;
+    if (c.type === "piece_jointe") return (r.pieces?.get(c.id) ?? 0) === 0;
     const vals = (r.reponses.get(c.id) ?? []).filter((v) => v.trim() !== "");
     if (c.type === "sante") {
       const attendus = r.projetsANoter?.get(c.id) ?? 0;
@@ -408,6 +418,8 @@ export function valeurAcceptable(c: Champ, valeur: string): string | null {
       return v.slice(0, 300);
     case "texte_long":
       return v.slice(0, 2000);
+    case "synthese":
+      return v.slice(0, 1500);
     default:
       return null;
   }
@@ -421,4 +433,72 @@ export function resumeChamp(c: Champ): string {
   if (c.prerempli) m.push("prérempli");
   if (peutEtreObligatoire(c.type)) m.push(c.obligatoire ? "obligatoire" : "facultatif");
   return m.join(" · ");
+}
+
+// ---------------------------------------------------------------------------
+// Heures de la semaine : prêt à relire, rappel, à envoyer avant
+// ---------------------------------------------------------------------------
+
+/** Un moment de la semaine du rapport : jour 1 (lundi) à 7 (dimanche), 8 = le lundi suivant ; heure « HH:MM ». */
+export type Moment = { jour: number; heure: string };
+export type Horaires = { pret: Moment; rappel: Moment | null; limite: Moment | null };
+
+export const HORAIRES_PAR_DEFAUT: Horaires = {
+  pret: { jour: 5, heure: "10:00" },
+  rappel: { jour: 5, heure: "14:00" },
+  limite: { jour: 5, heure: "17:00" },
+};
+
+export const JOURS_SEMAINE = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche", "lundi suivant"] as const;
+
+const HEURE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+const minutesDe = (m: Moment) => (m.jour - 1) * 1440 + Number(m.heure.slice(0, 2)) * 60 + Number(m.heure.slice(3, 5));
+
+function lireMoment(brut: unknown): Moment | null {
+  if (!brut || typeof brut !== "object") return null;
+  const o = brut as Record<string, unknown>;
+  const jour = Number(o.jour);
+  const heure = typeof o.heure === "string" ? o.heure.trim() : "";
+  if (!Number.isInteger(jour) || jour < 1 || jour > 8 || !HEURE.test(heure)) return null;
+  return { jour, heure };
+}
+
+/** Horaires d'un modèle (vides ou illisibles : ceux par défaut). */
+export function horairesDe(brut: unknown): Horaires {
+  const v = validerHoraires(brut);
+  return v.ok ? v.horaires : HORAIRES_PAR_DEFAUT;
+}
+
+export function validerHoraires(brut: unknown): { ok: true; horaires: Horaires } | { ok: false; erreur: string } {
+  if (!brut || typeof brut !== "object") return { ok: false, erreur: "Horaires illisibles." };
+  const o = brut as Record<string, unknown>;
+  const pret = lireMoment(o.pret);
+  if (!pret) return { ok: false, erreur: "Indiquez quand le rapport est prêt à relire." };
+  const rappel = o.rappel ? lireMoment(o.rappel) : null;
+  const limite = o.limite ? lireMoment(o.limite) : null;
+  if (o.rappel && !rappel) return { ok: false, erreur: "Heure de rappel illisible." };
+  if (o.limite && !limite) return { ok: false, erreur: "Heure limite illisible." };
+  if (rappel && minutesDe(rappel) < minutesDe(pret)) return { ok: false, erreur: "Le rappel vient après « prêt à relire »." };
+  if (limite && minutesDe(limite) < minutesDe(rappel ?? pret)) return { ok: false, erreur: "L'heure limite vient après le rappel et « prêt à relire »." };
+  return { ok: true, horaires: { pret, rappel, limite } };
+}
+
+/** « vendredi à 17 h » ; avec la semaine : « vendredi 30 oct. à 17 h ». */
+export function texteMoment(m: Moment, semaine?: string): string {
+  const [h, mn] = m.heure.split(":");
+  const heure = `${Number(h)} h${mn === "00" ? "" : ` ${mn}`}`;
+  const jour = JOURS_SEMAINE[m.jour - 1];
+  return semaine ? `${jour === "lundi suivant" ? "lundi" : jour} ${dateCourte(ajouterJours(semaine, m.jour - 1))} à ${heure}` : `${jour} à ${heure}`;
+}
+
+/** Où en est la semaine du rapport, à un instant donné (jour AAAA-MM-JJ et minutes depuis minuit, heure locale). */
+export type EtapeRapport = "en_preparation" | "pret" | "rappel" | "en_retard";
+
+export function etapeRapport(h: Horaires, semaine: string, maintenant: { jour: string; minutes: number }): EtapeRapport {
+  const instant = (m: Moment) => `${ajouterJours(semaine, m.jour - 1)} ${String(Number(m.heure.slice(0, 2)) * 60 + Number(m.heure.slice(3, 5))).padStart(4, "0")}`;
+  const now = `${maintenant.jour} ${String(maintenant.minutes).padStart(4, "0")}`;
+  if (h.limite && now >= instant(h.limite)) return "en_retard";
+  if (h.rappel && now >= instant(h.rappel)) return "rappel";
+  if (now >= instant(h.pret)) return "pret";
+  return "en_preparation";
 }

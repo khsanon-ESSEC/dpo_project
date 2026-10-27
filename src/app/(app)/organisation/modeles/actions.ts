@@ -11,6 +11,7 @@ import {
   champsEnEdition,
   creerModele,
   enregistrerChamps,
+  modifierHoraires,
   modifierModele,
   publierBrouillon,
   retirerAffectation,
@@ -173,4 +174,18 @@ export async function retirer(modeleId: string, affectationId: string) {
   if (UUID.test(affectationId)) await retirerAffectation(affectationId, u.id);
   revalidatePath("/organisation/modeles", "layout");
   redirect(chemin(modeleId) + "#qui");
+}
+
+/** Heures de la semaine : prêt à relire, rappel, à envoyer avant (rappel et heure limite peuvent être retirés). */
+export async function modifierHorairesModele(modeleId: string, form: FormData) {
+  const u = await exigerAdmin();
+  if (!UUID.test(modeleId)) notFound();
+  const moment = (cle: string) => ({ jour: Number(form.get(`${cle}_jour`)), heure: String(form.get(`${cle}_heure`) ?? "") });
+  const r = await modifierHoraires(
+    modeleId,
+    { pret: moment("pret"), rappel: form.get("rappel_actif") === "on" ? moment("rappel") : null, limite: form.get("limite_actif") === "on" ? moment("limite") : null },
+    u.id,
+  );
+  revalidatePath("/organisation/modeles", "layout");
+  redirect(chemin(modeleId, null, "erreur" in r ? r.erreur : undefined) + "#horaires");
 }

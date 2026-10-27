@@ -11,6 +11,19 @@ export function aujourdhui(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
+/**
+ * Maintenant, en heure locale de la division : le jour (DATE_DEMO s'il est fixé) et les minutes
+ * depuis minuit (HEURE_DEMO « HH:MM » pour une démonstration, sinon l'heure réelle).
+ */
+export function maintenantLocal(): { jour: string; minutes: number } {
+  const demo = process.env.HEURE_DEMO;
+  if (demo && /^([01]\d|2[0-3]):[0-5]\d$/.test(demo)) return { jour: aujourdhui(), minutes: Number(demo.slice(0, 2)) * 60 + Number(demo.slice(3)) };
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date());
+  const h = Number(parts.find((x) => x.type === "hour")?.value ?? 0);
+  const m = Number(parts.find((x) => x.type === "minute")?.value ?? 0);
+  return { jour: aujourdhui(), minutes: h * 60 + m };
+}
+
 /** Jour (AAAA-MM-JJ) d'un instant, dans le fuseau de la division. */
 export function dateLocale(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
@@ -48,16 +61,19 @@ export function ecartJours(a: string, b: string): number {
 
 const fmt = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("fr-FR", { timeZone: "UTC", ...options });
 
-/** « 26 nov. » */
+/** Le premier du mois s'écrit « 1er ». */
+const premier = (t: string) => t.replace(/^1 /, "1er ");
+
+/** « 26 nov. », « 1er oct. » */
 export function dateCourte(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return fmt({ day: "numeric", month: "short" }).format(versDate(iso));
+  return premier(fmt({ day: "numeric", month: "short" }).format(versDate(iso)));
 }
 
-/** « 26 novembre 2026 » */
+/** « 26 novembre 2026 », « 1er octobre 2026 » */
 export function dateLongue(iso: string | null | undefined): string {
   if (!iso) return "—";
-  return fmt({ day: "numeric", month: "long", year: "numeric" }).format(versDate(iso));
+  return premier(fmt({ day: "numeric", month: "long", year: "numeric" }).format(versDate(iso)));
 }
 
 /** « octobre 2026 » */

@@ -49,6 +49,14 @@ export function voitTout(p: Pick<Roles, "executif">): boolean {
   return p.executif;
 }
 
+/**
+ * Les exécutifs ne rédigent pas de rapport de la semaine : ils n'ont personne à qui l'envoyer.
+ * Ils lisent ceux de tout le monde (décision du 27 octobre 2026).
+ */
+export function redigeUnRapport(p: Pick<Roles, "executif">): boolean {
+  return !p.executif;
+}
+
 export function peutAdministrer(p: Pick<Roles, "administrateur">): boolean {
   return p.administrateur;
 }

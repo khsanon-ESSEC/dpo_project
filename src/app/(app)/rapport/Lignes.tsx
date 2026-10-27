@@ -230,11 +230,18 @@ export function TexteReponse({
   decritPar,
   etiquette,
   type = "texte",
+  projetId = null,
+  max,
+  lignes = 3,
 }: {
   rapportId: string;
   champId: string;
   valeur: string;
   long?: boolean;
+  /** Synthèse : un texte par projet. */
+  projetId?: string | null;
+  max?: number;
+  lignes?: number;
   id: string;
   decritPar?: string;
   /** Identifiant du titre qui sert d'étiquette. */
@@ -244,11 +251,11 @@ export function TexteReponse({
   const [texte, setTexte] = useState(valeur);
   const [, demarrer] = useTransition();
   const enregistrer = (v: string) => {
-    if (v.trim() !== valeur) demarrer(() => repondre(rapportId, champId, null, v));
+    if (v.trim() !== valeur) demarrer(() => repondre(rapportId, champId, projetId, v));
   };
   const style = { width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", border: "1px solid var(--controle)", background: "var(--champ)", color: "var(--encre)", fontSize: 15, lineHeight: "22px" };
   if (long) {
-    return <textarea id={id} aria-labelledby={etiquette} aria-describedby={decritPar} rows={3} value={texte} maxLength={2000} onChange={(e) => setTexte(e.target.value)} onBlur={() => enregistrer(texte)} style={{ ...style, resize: "vertical" }} />;
+    return <textarea id={id} aria-labelledby={etiquette} aria-describedby={decritPar} rows={lignes} value={texte} maxLength={max ?? 2000} onChange={(e) => setTexte(e.target.value)} onBlur={() => enregistrer(texte)} style={{ ...style, resize: "vertical" }} />;
   }
   return (
     <input

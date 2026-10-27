@@ -3,7 +3,7 @@
 // Refuse de tourner si la base contient déjà des personnes : ne jamais l'utiliser en production.
 import postgres from "postgres";
 import { hash } from "@node-rs/argon2";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { VERSION_DONNEES_EXEMPLE } from "./version-donnees.mjs";
 
 const url = process.env.DATABASE_URL;
@@ -32,6 +32,29 @@ const jour = (decalage) => {
   return d.toISOString().slice(0, 10);
 };
 const moment = (decalage, heure) => `${jour(decalage)}T${String(heure).padStart(2, "0")}:00:00-04:00`;
+/** Un PDF d'une page, en texte simple (pièces jointes de démonstration). */
+function pdfSimple(titre, lignes) {
+  const esc = (t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[()\\]/g, (c) => `\\${c}`);
+  const flux = [`BT /F1 16 Tf 72 760 Td (${esc(titre)}) Tj ET`, ...lignes.map((l, i) => `BT /F1 11 Tf 72 ${720 - i * 18} Td (${esc(l)}) Tj ET`)].join("\n");
+  const objets = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+    `<< /Length ${Buffer.byteLength(flux)} >>\nstream\n${flux}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const positions = [];
+  objets.forEach((o, i) => {
+    positions.push(Buffer.byteLength(pdf));
+    pdf += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objets.length + 1}\n0000000000 65535 f \n${positions.map((p) => `${String(p).padStart(10, "0")} 00000 n \n`).join("")}`;
+  pdf += `trailer\n<< /Size ${objets.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf, "latin1");
+}
+
 const premierDuMois = (decalageMois) => {
   const d = new Date(Date.UTC(auj.getUTCFullYear(), auj.getUTCMonth() + decalageMois, 1));
   return d.toISOString().slice(0, 10);
@@ -235,12 +258,14 @@ await sql.begin(async (tx) => {
     QUATRE[3],
     { id: "charge", type: "charge", libelle: "Ma charge", aide: "Proposée d'après vos tâches de la semaine prochaine ; corrigez-la si ce n'est pas votre ressenti.", obligatoire: true, prerempli: true, visibilite: "superieur" },
     { id: "decision", type: "texte", libelle: "Décision ou aide attendue", aide: "Une phrase : ce qu'il vous faut, et de qui.", rubrique: "decision", visibilite: "superieur" },
+    { id: "pieces", type: "piece_jointe", libelle: "Pièces jointes", aide: "Un compte rendu, une capture, un tableau : 10 Mo au plus par fichier.", visibilite: "tous" },
   ];
   const reprise = (id, libelle, r, aide) => ({ id, type: "reprise", libelle, ...(aide ? { aide } : {}), reprise: r, visibilite: "tous" });
   const CHEF_V1 = [
     { id: "mon_travail", type: "mon_travail", libelle: "Mon travail", aide: "Le formulaire de votre équipe, préparé à partir de vos propres tâches." },
     { id: "mon_equipe", type: "intertitre", libelle: "Mon équipe", aide: "Préparé à partir des rapports reçus. Vous gardez, retirez ou reformulez ; rien ne part sans vous." },
     reprise("a_decider", "À décider ou débloquer", "a_decider", "Repris des blocages et des décisions attendues. « Remonter » met l'élément en tête du rapport de votre supérieur."),
+    { id: "synthese", type: "synthese", libelle: "Synthèse par projet", aide: "Proposée à partir des rapports reçus ; relisez-la, reformulez-la ou faites-la rédiger par l'assistant.", visibilite: "direction" },
     reprise("sante_equipe", "Santé des projets de l'équipe", "sante", "Le feu le plus préoccupant de l'équipe est proposé pour chaque projet ; vous pouvez le changer."),
     reprise("charge_equipe", "Charge de l'équipe", "charge"),
     reprise("fait_equipe", "Fait cette semaine", "fait"),
@@ -250,6 +275,7 @@ await sql.begin(async (tx) => {
     { id: "mon_travail", type: "mon_travail", libelle: "Mon travail", aide: "Le formulaire de votre équipe, préparé à partir de vos propres tâches." },
     { id: "ma_division", type: "intertitre", libelle: "Ma division", aide: "Préparée à partir des rapports des chefs d'équipe, et de ceux des personnes sans chef d'équipe." },
     reprise("a_decider", "À décider", "a_decider", "Ce que les chefs d'équipe ont choisi de remonter, et les blocages des personnes sans chef d'équipe."),
+    { id: "synthese", type: "synthese", libelle: "Synthèse de la division par projet", aide: "Les synthèses des chefs d'équipe, et ce qu'ont envoyé les personnes sans chef d'équipe.", visibilite: "direction" },
     reprise("sante_equipe", "Santé des projets de la division", "sante"),
     reprise("charge_equipe", "Charge de la division", "charge"),
     reprise("fait_equipe", "Fait cette semaine", "fait"),
@@ -274,7 +300,9 @@ await sql.begin(async (tx) => {
   await version(V.defaut1, M.defaut, 1, QUATRE, "archivee", "Les quatre parties d'origine.", "2026-01-12");
   await version(V.defaut2, M.defaut, 2, DEFAUT_V2, "publiee", "Ajoute « Santé de mes projets ».", "2026-10-05");
   await version(V.st1, M.st, 1, DEFAUT_V2, "archivee", "Comme le modèle par défaut.", "2026-10-05");
-  await version(V.st2, M.st, 2, ST_V2, "publiee", "Ajoute « Ma charge » et « Décision ou aide attendue ».", jour(0));
+  await version(V.st2, M.st, 2, ST_V2, "publiee", "Ajoute « Ma charge », « Décision ou aide attendue » et les pièces jointes.", jour(0));
+  // Solutions technologiques : rapport attendu plus tôt le vendredi.
+  await tx`update modeles_rapport set horaires = ${sql.json({ pret: { jour: 5, heure: "09:00" }, rappel: { jour: 5, heure: "13:00" }, limite: { jour: 5, heure: "16:00" } })} where id = ${M.st}`;
   await version(V.chef1, M.chef, 1, CHEF_V1, "publiee", "Son travail, puis son équipe : à décider, santé, charge, fait, la semaine prochaine.", jour(0));
   await version(V.division1, M.division, 1, DIVISION_V1, "publiee", "Son travail, puis sa division.", jour(0));
   await tx`insert into affectations_modele (modele_id, equipe_id) values (${M.st}, ${E.st})`;
@@ -307,6 +335,14 @@ await sql.begin(async (tx) => {
       } else if (x[0] === "texte") {
         const [, champ, valeur] = x;
         await tx`insert into reponses_rapport (rapport_id, champ_id, valeur) values (${id}, ${champ}, ${valeur})`;
+      } else if (x[0] === "synthese") {
+        const [, pj, valeur, champ = "synthese"] = x;
+        await tx`insert into reponses_rapport (rapport_id, champ_id, projet_id, valeur, propose) values (${id}, ${champ}, ${PJ[pj]}, ${valeur}, ${valeur})`;
+      } else if (x[0] === "piece") {
+        const [, champ, nom, contenu] = x;
+        const empreinte = createHash("sha256").update(contenu).digest("hex");
+        await tx`insert into pieces_jointes (rapport_id, champ_id, nom, type, taille, empreinte, contenu, depose_par_id, cree_le)
+          values (${id}, ${champ}, ${nom}, 'application/pdf', ${contenu.length}, ${empreinte}, ${contenu}, ${P[qui]}, ${moment(4, heure - 1)})`;
       }
     }
     return { id, lignes };
@@ -328,6 +364,7 @@ await sql.begin(async (tx) => {
     ["feu", "CR", "en_retard", "Le serveur de recette n'est toujours pas là", "sante", "dans_les_temps"],
     ["charge", "trop_lourde", "normale", "24 h sur 40 h"],
     ["texte", "decision", "Valider le report de la recette Credos au 13 novembre"],
+    ["piece", "pieces", "Demande-serveur-recette-Credos.pdf", pdfSimple("Demande de serveur de recette - Credos", ["Demande adressée à la DTI le lundi.", "Serveur attendu pour la recette du module de garanties.", "Sans serveur, la recette passe au 13 novembre."])],
   ]);
   await rapport("wb", "ml", 8, ST_V2, V.st2, [
     ["ligne", "fait", "CE", "Planning de la phase pilote"],
@@ -373,6 +410,8 @@ await sql.begin(async (tx) => {
     ["feu", "AE", "a_surveiller", "FM : dans les temps · JD : à surveiller", "sante_equipe", "a_surveiller"],
     ["feu", "UR", "a_surveiller", "MV : à surveiller", "sante_equipe", "a_surveiller"],
     ["charge", chargePO, null, "2 personne(s)", "charge_equipe"],
+    ["synthese", "AE", "Le transfert du 2e étage atteint 60 % et les registres 2017 sont numérisés. La numérisation est arrêtée depuis mercredi : le scanner du 3e étage est en panne."],
+    ["synthese", "UR", "Le plan de lancement révisé est en cours. L'audit de sécurité est à repasser avant le lancement."],
   ]);
   // Organisation et méthodes : pas de chef d'équipe, les rapports vont directement à Nadège.
   await rapport("gp", "na", 13, DEFAUT_V2, V.defaut2, [
@@ -493,6 +532,25 @@ await sql.begin(async (tx) => {
         await tx`insert into lignes_rapport (rapport_id, champ_id, partie, texte, projet_id, tache_id, ordre) values (${id}, ${partie}, ${partie}, ${texte}, ${pj ? PJ[pj] : null}, ${tacheId}, ${o})`;
       }
     }
+  }
+
+  // ---------- Un rapport ponctuel au conseil, la semaine dernière (préparé par Nadège, approuvé par Frantz) ----------
+  const RP = randomUUID();
+  await tx`insert into rapports_conseil (id, genre, titre, objet, date_rapport, depuis, cree_par_id, statut, approuve_par_id, approuve_le, cree_le)
+    values (${RP}, 'ponctuel', 'Point de situation après la panne du réseau du 21 octobre',
+            'Demande du président du conseil : effets de la panne de vingt heures sur les projets des services en ligne.',
+            ${jour(-4)}, ${premierDuMois(0)}, ${P.na}, 'approuve', ${P.ex}, ${moment(-4, 17)}, ${moment(-4, 10)})`;
+  const ETATS_PONCTUEL = {
+    UR: "La panne a interrompu deux jours de tests du module de virements ; ils reprennent cette semaine. L'audit de sécurité reste la condition du lancement.",
+    UC: "Aucun effet sur le calendrier : l'environnement de développement n'était pas touché. Le développement se poursuit.",
+    CE: "La présentation au Réseau est reportée d'une semaine ; la date de la phase pilote n'est pas encore fixée.",
+  };
+  let ordreP = 0;
+  for (const k of ["UR", "UC", "CE"]) {
+    const pr = projets.find((x) => x.k === k);
+    ordreP += 1;
+    await tx`insert into lignes_conseil (rapport_id, projet_id, ordre, etat_avancement, date_fin_dernier_rapport, nouvelle_date_fin, date_lancement)
+      values (${RP}, ${PJ[k]}, ${ordreP}, ${ETATS_PONCTUEL[k]}, ${pr.dernier?.fin ?? null}, ${pr.fin}, ${pr.lancement})`;
   }
 
   await tx`insert into journal (action, objet, details) values ('donnees_exemple', 'base', ${sql.json({ personnes: gens.length, projets: projets.length, version: VERSION_DONNEES_EXEMPLE })})`;

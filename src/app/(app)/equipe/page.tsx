@@ -19,10 +19,12 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
   const a = await acces(u);
   const jour = aujourdhui();
 
-  if (!a.equipeDirecte.length) {
+  const toute = a.directeur || a.toutVoir;
+  const titre = toute ? "Ma direction" : "Mon équipe";
+  if (!a.equipeDirecte.length && !toute) {
     return (
       <>
-        <Bandeau surtitre={jourComplet(jour)} titre="Mon équipe" />
+        <Bandeau surtitre={jourComplet(jour)} titre={titre} />
         <div className="page">
           <SousOnglets onglets={ONGLETS_EQUIPE} courant="/equipe" label="Équipe" />
           <p className="vide">Personne ne vous envoie directement de rapport. Les rapports et la charge de votre direction sont dans les onglets ci-dessus.</p>
@@ -31,9 +33,11 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
     );
   }
 
-  const [e, ch] = await Promise.all([monEquipe(a), chargeDesPersonnes(a.equipeDirecte, 2)]);
+  const e = await monEquipe(a);
+  const ch = await chargeDesPersonnes(e.personnes.map((p) => p.id), 2);
   const chargeDe = new Map(ch.lignes.map((l) => [l.id, l.charge.semaines]));
-  const personnes = e.personnes.filter((p) => filtre === "tous" || (filtre === "sans" && !p.rapport) || (filtre === "bloc" && p.bloquees > 0));
+  const garde = (p: (typeof e.personnes)[number]) => filtre === "tous" || (filtre === "sans" && !p.rapport) || (filtre === "bloc" && p.bloquees > 0);
+  const groupes = e.groupes.map((g) => ({ ...g, visibles: g.personnes.filter(garde) })).filter((g) => g.visibles.length || filtre === "tous");
   const filtres = [
     { id: "tous", libelle: `Tous · ${e.personnes.length}` },
     { id: "sans", libelle: `Sans rapport · ${e.manquants.length}` },
@@ -43,7 +47,7 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
 
   return (
     <>
-      <Bandeau surtitre={jourComplet(jour)} titre="Mon équipe">
+      <Bandeau surtitre={jourComplet(jour)} titre={titre}>
         <div className="chiffres">
           <Anneau fait={e.recus} total={e.personnes.length} legende="rapports" label={`${e.recus} rapports reçus sur ${e.personnes.length}`} />
           <dl style={{ margin: 0, display: "flex", flexWrap: "wrap", gap: "12px 48px" }}>
@@ -76,66 +80,48 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
             <span className="succes" role="status" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
               <Icone nom="coche" taille={18} /> Rappel envoyé
             </span>
-          ) : e.manquants.length ? (
+          ) : e.aRelancer.length ? (
             <form action={relancerEquipe}>
-              {e.manquants.map((p) => (
+              {e.aRelancer.map((p) => (
                 <input key={p.id} type="hidden" name="personneId" value={p.id} />
               ))}
               <button type="submit" className="bouton-ambre">
-                Relancer {e.manquants.length > 1 ? `les ${e.manquants.length} retardataires` : e.manquants[0].nom}
+                Relancer {e.aRelancer.length > 1 ? `les ${e.aRelancer.length} retardataires` : e.aRelancer[0].nom}
               </button>
             </form>
           ) : null}
         </div>
 
-        <section className="carte carte--liste" aria-label="Personnes">
-          <ul className="liste">
-            {personnes.map((p) => (
-              <li key={p.id}>
-                <a href={p.rapport ? `/rapports/${p.rapport.id}` : `/equipe/${p.id}`} className="rangee" style={{ minHeight: 64, gap: 16, flexWrap: "wrap" }}>
-                  <span className="mono" style={{ width: 36, height: 36, fontSize: 12 }} aria-hidden="true">
-                    {p.initiales}
-                  </span>
-                  <span className="rangee__texte" style={{ flex: "1 1 170px" }}>
-                    <span className="rangee__titre">{p.nom}</span>
-                    <span className="rangee__sous">{p.poste}</span>
-                  </span>
-                  <span style={{ flex: "0 0 128px", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className={p.rapport ? "ton-ok" : "ton-retard"}>
-                    <Icone nom={p.rapport ? "coche" : "horloge"} taille={16} />
-                    {p.rapport ? (p.rapport.envoyeLe && dateLocale(p.rapport.envoyeLe) === jour ? `Reçu à ${heure(p.rapport.envoyeLe)}` : `Reçu ${p.rapport.envoyeLe ? jourAbrege(dateLocale(p.rapport.envoyeLe)).toLowerCase() : ""}`) : "Pas encore"}
-                  </span>
-                  <span role="img" aria-label={`${p.faites} tâches faites sur ${p.total}`} style={{ flex: "0 0 112px", display: "flex", alignItems: "center", gap: 10 }}>
-                    <span className="barre" style={{ width: 64 }}>
-                      <span style={{ width: `${p.total ? Math.round((p.faites / p.total) * 100) : 0}%` }} />
-                    </span>
-                    <span className="rangee__meta">
-                      {p.faites}/{p.total}
-                    </span>
-                  </span>
-                  <span style={{ flex: "0 0 132px", fontSize: 13 }}>
-                    {p.retard ? <span className="ton-retard">{p.retard} en retard</span> : null}
-                    {p.retard && p.bloquees ? <span className="ton-discret"> · </span> : null}
-                    {p.bloquees ? <span className="ton-veille">{p.bloquees} bloquée{p.bloquees > 1 ? "s" : ""}</span> : null}
-                    {!p.retard && !p.bloquees ? <span className="ton-discret">—</span> : null}
-                  </span>
-                  <span style={{ flex: "0 0 168px", display: "flex", flexDirection: "column", gap: 4 }} aria-label="Charge">
-                    {(chargeDe.get(p.id) ?? []).map((w, i) => (
-                      <Niveau key={w.semaine} niveau={w.niveau} texte={`${i === 0 ? "Cette sem." : "Sem. proch."} ${nombre(w.heures)} / ${nombre(w.capacite)} h`} />
-                    ))}
-                  </span>
-                  <span style={{ flex: "0 0 auto", display: "flex", gap: 4 }}>
-                    {p.projets.map((m) => (
-                      <span key={m} className="etiquette-projet" style={{ width: 30 }}>
-                        {m}
-                      </span>
-                    ))}
-                  </span>
-                </a>
-              </li>
+        {groupes.length > 1 ? (
+          <nav className="filtres" aria-label="Équipes de la structure">
+            {groupes.map((g) => (
+              <a key={g.chefId} className="filtre" href={`#g-${g.chefId}`}>
+                {g.titre} · {g.personnes.length}
+              </a>
             ))}
-            {personnes.length === 0 ? <li className="vide">Personne dans ce filtre.</li> : null}
-          </ul>
-        </section>
+          </nav>
+        ) : null}
+        {groupes.map((g) => (
+          <section key={g.chefId} id={`g-${g.chefId}`} className="carte carte--liste" aria-labelledby={`g-${g.chefId}-t`}>
+            <div className="carte__entete">
+              <h2 id={`g-${g.chefId}-t`} className="carte__titre">
+                {g.titre}
+                <span className="ton-discret" style={{ fontWeight: 400 }}>
+                  {" "}
+                  · {g.personnes.filter((p) => p.rapport).length}/{g.personnes.length} rapports
+                </span>
+              </h2>
+              {g.sous ? <span className="rangee__sous">{g.sous}</span> : null}
+            </div>
+            <ul className="liste">
+              {g.visibles.map((p) => (
+                <LignePersonne key={p.id} p={p} semaines={chargeDe.get(p.id) ?? []} jour={jour} />
+              ))}
+              {g.visibles.length === 0 ? <li className="vide">Personne dans ce filtre.</li> : null}
+            </ul>
+          </section>
+        ))}
+        {groupes.length === 0 ? <p className="vide">Personne dans ce filtre.</p> : null}
 
         <div className="colonnes">
           <section className="carte carte--liste" style={{ flex: "1 1 420px" }} aria-labelledby="t-blocages">
@@ -183,5 +169,55 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
         </div>
       </div>
     </>
+  );
+}
+
+type Personne = Awaited<ReturnType<typeof monEquipe>>["personnes"][number];
+
+type Semaines = Awaited<ReturnType<typeof chargeDesPersonnes>>["lignes"][number]["charge"]["semaines"];
+
+function LignePersonne({ p, semaines, jour }: { p: Personne; semaines: Semaines; jour: string }) {
+  return (
+    <li>
+                <a href={p.rapport ? `/rapports/${p.rapport.id}` : `/equipe/${p.id}`} className="rangee" style={{ minHeight: 64, gap: 16, flexWrap: "wrap" }}>
+                  <span className="mono" style={{ width: 36, height: 36, fontSize: 12 }} aria-hidden="true">
+                    {p.initiales}
+                  </span>
+                  <span className="rangee__texte" style={{ flex: "1 1 170px" }}>
+                    <span className="rangee__titre">{p.nom}</span>
+                    <span className="rangee__sous">{p.poste}</span>
+                  </span>
+                  <span style={{ flex: "0 0 128px", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className={p.rapport ? "ton-ok" : "ton-retard"}>
+                    <Icone nom={p.rapport ? "coche" : "horloge"} taille={16} />
+                    {p.rapport ? (p.rapport.envoyeLe && dateLocale(p.rapport.envoyeLe) === jour ? `${p.direct ? "Reçu" : "Envoyé"} à ${heure(p.rapport.envoyeLe)}` : `${p.direct ? "Reçu" : "Envoyé"} ${p.rapport.envoyeLe ? jourAbrege(dateLocale(p.rapport.envoyeLe)).toLowerCase() : ""}`) : "Pas encore"}
+                  </span>
+                  <span role="img" aria-label={`${p.faites} tâches faites sur ${p.total}`} style={{ flex: "0 0 112px", display: "flex", alignItems: "center", gap: 10 }}>
+                    <span className="barre" style={{ width: 64 }}>
+                      <span style={{ width: `${p.total ? Math.round((p.faites / p.total) * 100) : 0}%` }} />
+                    </span>
+                    <span className="rangee__meta">
+                      {p.faites}/{p.total}
+                    </span>
+                  </span>
+                  <span style={{ flex: "0 0 132px", fontSize: 13 }}>
+                    {p.retard ? <span className="ton-retard">{p.retard} en retard</span> : null}
+                    {p.retard && p.bloquees ? <span className="ton-discret"> · </span> : null}
+                    {p.bloquees ? <span className="ton-veille">{p.bloquees} bloquée{p.bloquees > 1 ? "s" : ""}</span> : null}
+                    {!p.retard && !p.bloquees ? <span className="ton-discret">—</span> : null}
+                  </span>
+                  <span style={{ flex: "0 0 168px", display: "flex", flexDirection: "column", gap: 4 }} aria-label="Charge">
+                    {semaines.map((w, i) => (
+                      <Niveau key={w.semaine} niveau={w.niveau} texte={`${i === 0 ? "Cette sem." : "Sem. proch."} ${nombre(w.heures)} / ${nombre(w.capacite)} h`} />
+                    ))}
+                  </span>
+                  <span style={{ flex: "0 0 auto", display: "flex", gap: 4 }}>
+                    {p.projets.map((m) => (
+                      <span key={m} className="etiquette-projet" style={{ width: 30 }}>
+                        {m}
+                      </span>
+                    ))}
+                  </span>
+                </a>
+              </li>
   );
 }

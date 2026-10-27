@@ -2,7 +2,7 @@
  * Un champ du rapport, selon son type : en saisie (le brouillon), en lecture (un rapport envoyé),
  * ou en aperçu (l'éditeur de modèles). Les contrôles interactifs sont dans rapport/Lignes.tsx.
  */
-import { ajouterLigne } from "@/app/(app)/rapport/actions";
+import { ajouterLigne, deposer, redigerSynthese, retirer, suggererDecision } from "@/app/(app)/rapport/actions";
 import { BoutonRemettre, CasePartie, ChoixSegmente, CommentaireFeu, InterrupteurRemonter, LigneEditable, TexteReponse } from "@/app/(app)/rapport/Lignes";
 import { Icone } from "@/components/Icone";
 import {
@@ -18,8 +18,10 @@ import {
   texteComptes,
   type Champ,
 } from "@/lib/modeles";
-import type { AvisSante, ChargeMembre, LigneLue, ReponseLue } from "@/lib/donnees/rapport";
+import type { AvisSante, ChargeMembre, LigneLue, MatiereSynthese, ReponseLue } from "@/lib/donnees/rapport";
+import type { PieceLue } from "@/lib/donnees/pieces";
 import type { ComptesCharge } from "@/lib/modeles";
+import { ACCEPT, tailleLisible } from "@/lib/pieces";
 
 export type ContexteRapport = {
   mode: "saisie" | "lecture" | "apercu";
@@ -36,7 +38,17 @@ export type ContexteRapport = {
   equipe?: {
     sante: Map<string, AvisSante[]>;
     charge: { membres: ChargeMembre[]; equipes: { qui: string; comptes: ComptesCharge }[]; comptes: ComptesCharge };
+    /** Synthèse par projet : ce que l'équipe a envoyé, par champ. */
+    synthese?: Map<string, MatiereSynthese[]>;
   } | null;
+  /** Pièces jointes du rapport (sans contenu). */
+  pieces?: PieceLue[];
+  /** Un fichier refusé au dernier dépôt. */
+  erreurPiece?: { champId: string; message: string } | null;
+  /** « Décision ou aide attendue » : nombre de propositions possibles, par champ. */
+  suggestions?: Map<string, number>;
+  /** L'assistant d'IA est configuré. */
+  ia?: boolean;
   /** Les titres des champs sont des h3 quand le formulaire a des intertitres. */
   niveauTitre: 2 | 3;
 };
@@ -109,10 +121,12 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
       <section className="carte champ-rapport" aria-labelledby={idT}>
         <Titre c={c} x={x} id={idT} nombre={x.mode === "apercu" ? null : propres.length} ton={c.rubrique === "bloque" && propres.length ? "ton-veille" : ""} glyphe={x.mode === "apercu"} />
         <Aide c={c} id={idA} x={x} />
+        <PropositionsDecision c={c} x={x} />
         {x.mode === "apercu" ? (
           <p className="champ-rapport__corps apercu">
             {c.prerempli && c.rubrique && c.rubrique !== "autre" ? `Préparé à partir des tâches : ${LIBELLE_RUBRIQUE[c.rubrique].toLowerCase()}.` : "La personne écrit ses lignes."}
             {c.parProjet !== false ? " Chaque ligne porte son projet." : ""}
+            {c.rubrique === "decision" ? " Des propositions sont faites à partir des tâches bloquées et des échéances dépassées." : ""}
           </p>
         ) : (
           <ul className="liste champ-rapport__corps">
@@ -261,17 +275,19 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
       <section className="carte champ-rapport" aria-labelledby={idT}>
         <Titre c={c} x={x} id={idT} glyphe />
         <Aide c={c} id={idA} x={x} />
+        <PropositionsDecision c={c} x={x} />
         <div className="champ-rapport__corps">
           {x.mode === "apercu" ? (
             <p className="apercu">
               {c.type === "choix" || c.type === "echelle" ? `Une réponse parmi : ${(c.options ?? []).join(", ")}.` : `${CATALOGUE[c.type].nom}.`}
-              {c.rubrique === "decision" ? " Repris en tête du rapport du chef, avec « À décider »." : ""}
+              {c.rubrique === "decision" ? " Repris en tête du rapport du chef, avec « À décider ». Des propositions sont faites à partir des tâches bloquées et des échéances dépassées." : ""}
             </p>
           ) : saisie ? (
             c.type === "choix" || c.type === "echelle" ? (
               <ChoixSegmente rapportId={x.rapportId} champId={c.id} nom={`choix-${c.id}`} libelle={c.libelle} valeur={v} choix={(c.options ?? []).map((o) => ({ valeur: o, libelle: o }))} />
             ) : (
               <TexteReponse
+                key={v}
                 rapportId={x.rapportId}
                 champId={c.id}
                 valeur={v}
@@ -290,10 +306,183 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
     );
   }
 
+  // ---------- Pièces jointes ----------
+  if (c.type === "piece_jointe") {
+    const pieces = (x.pieces ?? []).filter((p) => p.champId === c.id);
+    return (
+      <section className="carte champ-rapport" aria-labelledby={idT}>
+        <Titre c={c} x={x} id={idT} nombre={x.mode === "apercu" ? null : pieces.length} glyphe={x.mode === "apercu"} />
+        <Aide c={c} id={idA} x={x} />
+        <div className="champ-rapport__corps" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {x.mode === "apercu" ? (
+            <p className="apercu">La personne joint des fichiers : PDF, images, Word, Excel, PowerPoint, CSV ou texte ; 10 Mo au plus chacun, dix au plus.</p>
+          ) : pieces.length ? (
+            <ul className="liste">
+              {pieces.map((p) => (
+                <li key={p.id} className="piece">
+                  <Icone nom="trombone" taille={16} />
+                  <a href={`/api/pieces/${p.id}`} className="piece__nom" download>
+                    {p.nom}
+                  </a>
+                  <span className="piece__taille">{tailleLisible(p.taille)}</span>
+                  {saisie ? (
+                    <form action={retirer.bind(null, x.rapportId, p.id)}>
+                      <button type="submit" className="bouton-mini" aria-label={`Retirer ${p.nom}`}>
+                        Retirer
+                      </button>
+                    </form>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="vide" style={{ margin: 0 }}>
+              Aucun fichier.
+            </p>
+          )}
+          {x.erreurPiece?.champId === c.id ? (
+            <p className="erreur" role="alert" style={{ margin: 0 }}>
+              {x.erreurPiece.message}
+            </p>
+          ) : null}
+          {saisie ? (
+            <form action={deposer.bind(null, x.rapportId, c.id)} className="piece__depot">
+              <label htmlFor={`fichiers-${c.id}`} className="visuellement-cache">
+                Fichiers à joindre à « {c.libelle} »
+              </label>
+              <input id={`fichiers-${c.id}`} name="fichiers" type="file" multiple accept={ACCEPT} aria-describedby={`fichiers-aide-${c.id}`} />
+              <button type="submit" className="bouton-contour">
+                <Icone nom="trombone" taille={16} /> Joindre
+              </button>
+              <span className="aide" id={`fichiers-aide-${c.id}`}>
+                PDF, images, Word, Excel, PowerPoint, CSV ou texte · 10 Mo au plus par fichier
+              </span>
+            </form>
+          ) : null}
+        </div>
+      </section>
+    );
+  }
+
+  // ---------- Synthèse par projet (rapport de chef) ----------
+  if (c.type === "synthese") return <Synthese c={c} x={x} reponses={reponses} idT={idT} idA={idA} />;
+
   // ---------- Repris des rapports reçus (rapport de chef) ----------
   if (c.type === "reprise") return <Reprise c={c} x={x} lignes={lignes} reponses={reponses} idT={idT} idA={idA} />;
   return null;
 }
+
+/** « Décision ou aide attendue » : propositions tirées des tâches bloquées et des échéances dépassées. */
+function PropositionsDecision({ c, x }: { c: Champ; x: ContexteRapport }) {
+  const n = x.suggestions?.get(c.id) ?? 0;
+  if (x.mode !== "saisie" || c.rubrique !== "decision" || c.partie === "equipe" || !n) return null;
+  return (
+    <div className="champ-rapport__corps proposition">
+      <Icone nom="etincelle" taille={16} />
+      <span className="proposition__texte">
+        {n} proposition{n > 1 ? "s" : ""} à partir de vos tâches bloquées et de vos échéances dépassées.
+      </span>
+      <span className="proposition__actions">
+        <form action={suggererDecision.bind(null, x.rapportId, c.id, false)}>
+          <button type="submit" className="bouton-mini">
+            <Icone nom="ajouter" taille={14} /> Ajouter
+          </button>
+        </form>
+        {x.ia ? (
+          <form action={suggererDecision.bind(null, x.rapportId, c.id, true)}>
+            <button type="submit" className="bouton-mini">
+              <Icone nom="etincelle" taille={14} /> Formuler avec l&apos;assistant
+            </button>
+          </form>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
+const LIBELLE_ELEMENT: Record<string, string> = { fait: "Fait", en_cours: "En cours", bloque: "À décider", decision: "À décider", prochaine: "Ensuite" };
+
+function Synthese({ c, x, reponses, idT, idA }: { c: Champ; x: ContexteRapport; reponses: ReponseLue[]; idT: string; idA: string }) {
+  const saisie = x.mode === "saisie";
+  if (x.mode === "apercu") {
+    return (
+      <section className="carte champ-rapport" aria-labelledby={idT}>
+        <Titre c={c} x={x} id={idT} glyphe />
+        <Aide c={c} id={idA} x={x} />
+        <p className="champ-rapport__corps apercu">
+          Pour chaque projet dont parlent les rapports reçus : quelques phrases préparées à partir de ce que l&apos;équipe a envoyé (ou des synthèses des chefs d&apos;équipe). Le chef les relit, les reformule ou les fait rédiger par l&apos;assistant. Seul ce que les lecteurs de ce champ pouvaient déjà lire y entre.
+        </p>
+      </section>
+    );
+  }
+  const matiere = saisie ? (x.equipe?.synthese?.get(c.id) ?? []) : [];
+  const projets = saisie
+    ? matiere.map((m) => ({ projetId: m.projetId, code: m.code, titre: m.titre, m: m as MatiereSynthese | undefined, r: reponses.find((r) => r.projetId === m.projetId) }))
+    : reponses.filter((r) => r.projetId && r.valeur.trim()).map((r) => ({ projetId: r.projetId!, code: r.projetCode ?? "—", titre: r.projetTitre ?? "", m: undefined as MatiereSynthese | undefined, r: r as ReponseLue | undefined }));
+  return (
+    <section className="carte champ-rapport" aria-labelledby={idT}>
+      <Titre c={c} x={x} id={idT} nombre={projets.length} />
+      <Aide c={c} id={idA} x={x} />
+      <div className="champ-rapport__corps" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        {projets.length === 0 ? (
+          <p className="vide" style={{ margin: 0 }}>
+            {saisie ? "Pas encore de rapport reçu qui parle d'un projet." : "Aucune synthèse."}
+          </p>
+        ) : (
+          projets.map(({ projetId, code, titre, m, r }) => {
+            const idP = `syn-${c.id}-${projetId}`;
+            const valeur = r?.valeur ?? "";
+            return (
+              <div key={projetId} className="synthese">
+                <h4 className="groupe-projet__titre" id={`${idP}-t`}>
+                  <span className="etiquette-projet">{code}</span>
+                  {titre}
+                </h4>
+                {saisie ? (
+                  <>
+                    <TexteReponse key={valeur} rapportId={x.rapportId} champId={c.id} projetId={projetId} valeur={valeur} long lignes={4} max={1500} id={idP} etiquette={`${idP}-t`} />
+                    <div className="synthese__pied">
+                      <span className="rangee__sous">
+                        {r?.proposeParIa && valeur === r.propose ? "Rédigé par l'assistant, à relire" : r?.propose && valeur === r.propose ? "Préparé à partir des rapports reçus, à relire" : valeur ? "Votre texte" : ""}
+                      </span>
+                      {x.ia ? (
+                        <form action={redigerSynthese.bind(null, x.rapportId, c.id, projetId)}>
+                          <button type="submit" className="bouton-mini">
+                            <Icone nom="etincelle" taille={14} /> Rédiger avec l&apos;assistant
+                          </button>
+                        </form>
+                      ) : null}
+                    </div>
+                    {m && m.elements.length + m.recues.length ? (
+                      <details className="retirees">
+                        <summary>Ce que l&apos;équipe a envoyé ({m.elements.length + m.recues.length})</summary>
+                        <ul className="liste">
+                          {m.recues.map((e, i) => (
+                            <li key={`r${i}`} className="synthese__element">
+                              <span className="etiquette-auto">Synthèse</span> {e.texte} <span className="ton-discret">— {e.qui}</span>
+                            </li>
+                          ))}
+                          {m.elements.map((e, i) => (
+                            <li key={i} className="synthese__element">
+                              <span className="etiquette-auto">{LIBELLE_ELEMENT[e.rubrique ?? ""] ?? "Autre"}</span> {e.texte} {e.qui ? <span className="ton-discret">— {e.qui}</span> : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    ) : null}
+                  </>
+                ) : (
+                  <p style={{ margin: 0, fontSize: 15, lineHeight: "22px", whiteSpace: "pre-line" }}>{valeur}</p>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </section>
+  );
+}
+
 
 function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRapport; lignes: LigneLue[]; reponses: ReponseLue[]; idT: string; idA: string }) {
   const saisie = x.mode === "saisie";

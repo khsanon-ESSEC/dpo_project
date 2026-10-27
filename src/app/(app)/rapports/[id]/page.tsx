@@ -4,6 +4,7 @@ import { acces, suitPersonne } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { ajouterJours, dateCourte, dateLocale, heure } from "@/lib/dates";
 import { lireRapport, rapportsVoisins } from "@/lib/donnees/rapport";
+import { piecesDuRapport } from "@/lib/donnees/pieces";
 import { chargerOrganisation } from "@/lib/organisation";
 import { semaineTexte } from "@/components/ResumeRapport";
 import { initiales, nomComplet } from "@/lib/regles";
@@ -42,6 +43,8 @@ export default async function PageRapportRecu({ params }: { params: Promise<{ id
     superieur: null,
     equipe: null,
     niveauTitre: formulaire.some((c) => c.type === "intertitre") ? 3 : 2,
+    // Pièces des seuls champs que ce lecteur voit (un chef de projet n'en voit aucune).
+    pieces: lu.complet ? (await piecesDuRapport(rapport.id)).filter((x) => formulaire.some((c) => c.id === x.champId && c.type === "piece_jointe")) : [],
   };
 
   return (

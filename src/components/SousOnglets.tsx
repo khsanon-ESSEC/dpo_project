@@ -34,3 +34,9 @@ export const ONGLETS_ORGANISATION: SousOnglet[] = [
   { href: "/organisation", libelle: "Personnes et équipes", icone: "personnes" },
   { href: "/organisation/modeles", libelle: "Modèles de rapport", icone: "modeles" },
 ];
+
+/** Section Conseil : le rapport mensuel, et les rapports ponctuels faits à tout moment. */
+export const ONGLETS_CONSEIL: SousOnglet[] = [
+  { href: "/conseil", libelle: "Rapport du mois", icone: "calendrier" },
+  { href: "/conseil/ponctuels", libelle: "Rapports ponctuels", icone: "eclair" },
+];

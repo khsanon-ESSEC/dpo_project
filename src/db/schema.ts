@@ -12,11 +12,12 @@
  *   se cochent à la main, indépendamment les uns des autres, pour n'importe qui.
  */
 import { sql } from "drizzle-orm";
-import type { Champ, Genre } from "../lib/modeles";
+import type { Champ, Genre, Horaires } from "../lib/modeles";
 import {
   type AnyPgColumn,
   bigserial,
   boolean,
+  customType,
   date,
   index,
   integer,
@@ -36,6 +37,9 @@ export const santeProjet = pgEnum("sante_projet", ["dans_les_temps", "a_surveill
 export const etatIndicateur = pgEnum("etat_indicateur", ["a_venir", "en_cours", "atteint"]);
 export const statutRapport = pgEnum("statut_rapport", ["brouillon", "envoye"]);
 export const statutConseil = pgEnum("statut_conseil", ["brouillon", "approuve", "envoye"]);
+
+/** Contenu binaire (pièces jointes) : PostgreSQL bytea, lu et écrit en Buffer. */
+const octets = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
 
 export const equipes = pgTable("equipes", {
   id: uuid().primaryKey().defaultRandom(),
@@ -163,6 +167,8 @@ export const modelesRapport = pgTable("modeles_rapport", {
   /** Le modèle des personnes qui reçoivent des rapports, sauf affectation nominative (un seul). */
   pourChefs: boolean("pour_chefs").notNull().default(false),
   actif: boolean().notNull().default(true),
+  /** Heures de la semaine : prêt à relire, rappel, à envoyer avant. Vide = horaires par défaut (src/lib/modeles.ts). */
+  horaires: jsonb().$type<Horaires>(),
   creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
   majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -220,6 +226,10 @@ export const rapportsHebdo = pgTable(
     versionModeleId: uuid("version_modele_id").references(() => versionsModele.id, { onDelete: "set null" }),
     /** Formulaire rempli, copié à la création (« Mon travail » déplié) : un rapport garde sa version. */
     formulaire: jsonb().$type<Champ[]>(),
+    /** Brouillon complété avec les tâches de la semaine à l'heure « prêt à relire » (ou à la demande). */
+    completeLe: timestamp("complete_le", { withTimezone: true }),
+    /** Lignes de tâches que l'auteur a retirées (« tâche:rubrique ») : on ne les remet pas en complétant. */
+    ecartees: text().array().notNull().default(sql`'{}'::text[]`),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
     majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -268,8 +278,10 @@ export const reponsesRapport = pgTable(
     projetId: uuid("projet_id").references(() => projets.id, { onDelete: "cascade" }),
     valeur: text().notNull().default(""),
     commentaire: text().notNull().default(""),
-    /** Ce que l'application avait proposé (feu de la semaine dernière, niveau calculé). */
+    /** Ce que l'application avait proposé (feu de la semaine dernière, niveau calculé, synthèse). */
     propose: text(),
+    /** La proposition vient de l'assistant d'IA (à relire). */
+    proposeParIa: boolean("propose_par_ia").notNull().default(false),
     majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("reponse_unique").on(t.rapportId, t.champId, sql`coalesce(${t.projetId}, '00000000-0000-0000-0000-000000000000'::uuid)`)],
@@ -289,10 +301,22 @@ export const historiqueProjet = pgTable(
   (t) => [unique("historique_projet_mois").on(t.projetId, t.mois)],
 );
 
+/**
+ * Rapports au conseil : le rapport mensuel (un par mois) et les rapports ponctuels, faits à tout moment
+ * pour une demande ou un événement imprévu, au même format.
+ */
 export const rapportsConseil = pgTable("rapports_conseil", {
   id: uuid().primaryKey().defaultRandom(),
-  /** Premier jour du mois couvert. */
-  mois: date().notNull().unique(),
+  /** « mensuel » ou « ponctuel ». */
+  genre: text().$type<"mensuel" | "ponctuel">().notNull().default("mensuel"),
+  /** Rapport mensuel : premier jour du mois couvert. Vide pour un rapport ponctuel. */
+  mois: date().unique(),
+  /** Rapport ponctuel : son titre, la demande ou l'événement qui le motive, sa date, le début de la période couverte. */
+  titre: text().notNull().default(""),
+  objet: text().notNull().default(""),
+  dateRapport: date("date_rapport"),
+  depuis: date(),
+  creeParId: uuid("cree_par_id").references(() => personnes.id, { onDelete: "set null" }),
   statut: statutConseil().notNull().default("brouillon"),
   approuveParId: uuid("approuve_par_id").references(() => personnes.id, { onDelete: "set null" }),
   approuveLe: timestamp("approuve_le", { withTimezone: true }),
@@ -320,13 +344,36 @@ export const notifications = pgTable(
   {
     id: uuid().primaryKey().defaultRandom(),
     personneId: uuid("personne_id").notNull().references(() => personnes.id, { onDelete: "cascade" }),
-    type: text().notNull(), // relance | blocage | rapport_recu
+    type: text().notNull(), // relance | blocage | rapport_recu | rapport_pret | rapport_rappel | equipe_retard
     texte: text().notNull(),
     lien: text(),
     lue: boolean().notNull().default(false),
+    /** Alerte à n'envoyer qu'une fois (ex. « rapport_pret:2026-10-26 ») ; vide pour les autres. */
+    cle: text(),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("notifications_personne_idx").on(t.personneId, t.lue)],
+  (t) => [index("notifications_personne_idx").on(t.personneId, t.lue), uniqueIndex("notifications_cle_idx").on(t.personneId, t.cle)],
+);
+
+/** Fichiers joints à un rapport (champ « Pièce jointe »). Lus seulement par qui peut lire ce champ. */
+export const piecesJointes = pgTable(
+  "pieces_jointes",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    rapportId: uuid("rapport_id")
+      .notNull()
+      .references(() => rapportsHebdo.id, { onDelete: "cascade" }),
+    champId: text("champ_id").notNull(),
+    nom: text().notNull(),
+    type: text().notNull(),
+    taille: integer().notNull(),
+    /** SHA-256 du contenu, en hexadécimal. */
+    empreinte: text().notNull(),
+    contenu: octets().notNull(),
+    deposeParId: uuid("depose_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("pieces_jointes_rapport_idx").on(t.rapportId)],
 );
 
 export const sessions = pgTable(
@@ -366,3 +413,5 @@ export type LigneRapport = typeof lignesRapport.$inferSelect;
 export type ReponseRapport = typeof reponsesRapport.$inferSelect;
 export type ModeleRapport = typeof modelesRapport.$inferSelect;
 export type VersionModele = typeof versionsModele.$inferSelect;
+export type PieceJointe = typeof piecesJointes.$inferSelect;
+export type RapportConseil = typeof rapportsConseil.$inferSelect;

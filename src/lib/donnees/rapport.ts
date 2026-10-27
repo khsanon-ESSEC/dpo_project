@@ -5,18 +5,21 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, lt, max, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { ajouterJours, aujourdhui, dateLocale, lundiDe } from "@/lib/dates";
+import { ajouterJours, aujourdhui, dateLocale, lundiDe, maintenantLocal } from "@/lib/dates";
 import { noter } from "@/lib/journal";
 import { chargerOrganisation } from "@/lib/organisation";
 import { estSuperieurDe, initiales, membresDeLaDirection, nomComplet, peutVoirRapportComplet, resoudreSuperieur, subordonnesDirects, voitTout } from "@/lib/regles";
 import { chargeDesPersonnes } from "@/lib/donnees/charge";
-import { formulairePour, versionDuRapport } from "@/lib/donnees/modeles";
+import { formulairePour, horairesDuRapport, versionDuRapport } from "@/lib/donnees/modeles";
+import { syntheseParRegles, suggestionsDecision, type ElementSynthese } from "@/lib/suggestions";
 import {
   additionnerComptes,
   champsManquants,
   comptesVides,
   estDecoratif,
+  etapeRapport,
   FORMULAIRE_PAR_DEFAUT,
+  HORAIRES_PAR_DEFAUT,
   libelleRessenti,
   libelleSante,
   lireComptes,
@@ -30,6 +33,8 @@ import {
   type Reprise,
   type Rubrique,
   type ValeurRessenti,
+  type Visibilite,
+  type VisibiliteLigne,
 } from "@/lib/modeles";
 import type { Acces } from "@/lib/acces";
 
@@ -142,6 +147,8 @@ export async function obtenirOuCreerRapport(auteurId: string, semaine = semaineC
     .limit(1);
   if (existant) return existant;
   const f = await formulairePour(auteurId);
+  // Créé après l'heure « prêt à relire » : le brouillon part déjà des tâches de toute la semaine.
+  const dejaPret = etapeRapport(f.modele?.horaires ?? HORAIRES_PAR_DEFAUT, semaine, maintenantLocal()) !== "en_preparation";
   const prevues = await brouillonParRegles(auteurId, semaine);
   const lignesDuChamp = (r: Rubrique) => f.champs.find((c) => c.type === "lignes" && c.prerempli && c.partie !== "equipe" && c.rubrique === r);
   const lignes = prevues.flatMap((l) => {
@@ -170,7 +177,7 @@ export async function obtenirOuCreerRapport(auteurId: string, semaine = semaineC
   return db.transaction(async (tx) => {
     const [r] = await tx
       .insert(schema.rapportsHebdo)
-      .values({ auteurId, semaine, versionModeleId: f.versionId, formulaire: f.champs })
+      .values({ auteurId, semaine, versionModeleId: f.versionId, formulaire: f.champs, completeLe: dejaPret ? new Date() : null })
       .onConflictDoNothing()
       .returning();
     if (!r) {
@@ -218,6 +225,7 @@ export async function reponsesDuRapport(rapportId: string) {
       valeur: schema.reponsesRapport.valeur,
       commentaire: schema.reponsesRapport.commentaire,
       propose: schema.reponsesRapport.propose,
+      proposeParIa: schema.reponsesRapport.proposeParIa,
       projetCode: schema.projets.code,
       projetTitre: schema.projets.titre,
       projetChefId: schema.projets.chefProjetId,
@@ -462,7 +470,13 @@ async function figerEquipe(rapport: typeof schema.rapportsHebdo.$inferSelect) {
 
 /** Ce qu'il faut pour vérifier les champs obligatoires. */
 async function remplissage(rapportId: string, f: Champ[]) {
-  const [lignes, reponses] = await Promise.all([lignesDuRapport(rapportId), reponsesDuRapport(rapportId)]);
+  const [lignes, reponses, pieces] = await Promise.all([
+    lignesDuRapport(rapportId),
+    reponsesDuRapport(rapportId),
+    db.select({ champId: schema.piecesJointes.champId }).from(schema.piecesJointes).where(eq(schema.piecesJointes.rapportId, rapportId)),
+  ]);
+  const nPieces = new Map<string, number>();
+  for (const x of pieces) nPieces.set(x.champId, (nPieces.get(x.champId) ?? 0) + 1);
   const nLignes = new Map<string, number>();
   for (const l of lignes) if (!l.retiree) nLignes.set(l.champId, (nLignes.get(l.champId) ?? 0) + 1);
   const rep = new Map<string, string[]>();
@@ -471,7 +485,7 @@ async function remplissage(rapportId: string, f: Champ[]) {
     rep.set(x.champId, [...(rep.get(x.champId) ?? []), x.valeur]);
     if (x.projetId) projets.set(x.champId, (projets.get(x.champId) ?? 0) + 1);
   }
-  return champsManquants(f, { lignes: nLignes, reponses: rep, projetsANoter: projets });
+  return champsManquants(f, { lignes: nLignes, reponses: rep, projetsANoter: projets, pieces: nPieces });
 }
 
 export async function manquantsDuRapport(rapport: typeof schema.rapportsHebdo.$inferSelect) {
@@ -488,6 +502,7 @@ export async function envoyerRapport(rapportId: string, auteurId: string): Promi
   const manquants = await remplissage(rapportId, f);
   if (manquants.length) return { ok: false, manquants: manquants.map((c) => c.libelle) };
   await synchroniserReprises(brouillon);
+  await synchroniserSyntheses(brouillon);
   await figerEquipe(brouillon);
   const org = await chargerOrganisation();
   const sup = resoudreSuperieur(org, auteurId);
@@ -769,3 +784,167 @@ export async function ordreSuivant(rapportId: string) {
 }
 
 export { libelleRessenti };
+
+// ---------------------------------------------------------------------------
+// « Prêt à relire » : le brouillon complété avec les tâches de la semaine
+// ---------------------------------------------------------------------------
+
+const RUBRIQUES_DE_STATUT = new Set(["fait", "en_cours", "bloque"]);
+
+/**
+ * Complète un brouillon avec ce que les tâches disent maintenant : une tâche terminée depuis passe
+ * dans « Fait » (la ligne existante est déplacée, son texte gardé), une nouvelle tâche s'ajoute, un
+ * nouveau projet reçoit son feu. Ce que la personne a retiré ne revient pas. Rien n'est supprimé.
+ */
+export async function completerBrouillon(rapport: typeof schema.rapportsHebdo.$inferSelect): Promise<number> {
+  if (rapport.statut !== "brouillon") return 0;
+  const f = formulaireDe(rapport);
+  const prevues = await brouillonParRegles(rapport.auteurId, rapport.semaine);
+  const lignes = (await lignesDuRapport(rapport.id)).filter((l) => l.origines.length === 0);
+  const ecartees = new Set(rapport.ecartees);
+  const champDe = (r: Rubrique) => f.find((c) => c.type === "lignes" && c.prerempli && c.partie !== "equipe" && c.rubrique === r);
+  let ordre = lignes.reduce((m, l) => Math.max(m, l.ordre), 0);
+  let changes = 0;
+  for (const p of prevues) {
+    const c = champDe(p.partie);
+    if (!c || ecartees.has(`${p.tacheId}:${p.partie}`)) continue;
+    const memeTache = lignes.filter((l) => l.tacheId === p.tacheId);
+    if (memeTache.some((l) => l.champId === c.id)) continue;
+    // La tâche a changé d'état : sa ligne la suit (en cours → fait, en cours → bloqué…).
+    const aDeplacer = RUBRIQUES_DE_STATUT.has(p.partie) ? memeTache.find((l) => l.partie && RUBRIQUES_DE_STATUT.has(l.partie)) : undefined;
+    if (aDeplacer) {
+      await db.update(schema.lignesRapport).set({ champId: c.id, partie: p.partie }).where(eq(schema.lignesRapport.id, aDeplacer.id));
+      aDeplacer.champId = c.id;
+      aDeplacer.partie = p.partie;
+    } else {
+      ordre += 1;
+      const [n] = await db
+        .insert(schema.lignesRapport)
+        .values({ rapportId: rapport.id, champId: c.id, partie: p.partie, texte: p.texte, projetId: c.parProjet === false ? null : p.projetId, tacheId: p.tacheId, ordre })
+        .returning();
+      lignes.push({ ...n, projetCode: null, projetTitre: null, projetChefId: null });
+    }
+    changes += 1;
+  }
+  const sante = f.filter((c) => c.type === "sante" && c.partie !== "equipe");
+  if (sante.length) {
+    const [projets, precedents, reponses] = await Promise.all([projetsANoter(rapport.auteurId, rapport.semaine), feuxPrecedents(rapport.auteurId, rapport.semaine), reponsesDuRapport(rapport.id)]);
+    for (const c of sante) {
+      for (const p of projets) {
+        if (reponses.some((x) => x.champId === c.id && x.projetId === p.id)) continue;
+        const propose = c.prerempli ? (precedents.get(p.id) ?? p.sante) : null;
+        await db.insert(schema.reponsesRapport).values({ rapportId: rapport.id, champId: c.id, projetId: p.id, valeur: propose ?? "", propose, commentaire: "" }).onConflictDoNothing();
+        changes += 1;
+      }
+    }
+  }
+  await db.update(schema.rapportsHebdo).set({ completeLe: new Date(), majLe: new Date() }).where(eq(schema.rapportsHebdo.id, rapport.id));
+  return changes;
+}
+
+/** Où en est la semaine de ce rapport (prêt à relire, rappel, en retard) et ses heures. */
+export async function calendrierDuRapport(rapport: { versionModeleId: string | null; semaine: string }) {
+  const horaires = await horairesDuRapport(rapport);
+  return { horaires, etape: etapeRapport(horaires, rapport.semaine, maintenantLocal()) };
+}
+
+// ---------------------------------------------------------------------------
+// Synthèse par projet (rapport de chef)
+// ---------------------------------------------------------------------------
+
+const RANG_VISIBILITE: Record<VisibiliteLigne, number> = { tous: 0, direction: 1, superieur: 2, auteur: 3 };
+/** Un élément peut nourrir un champ si ceux qui lisent le champ pouvaient déjà le lire. */
+const compatible = (source: VisibiliteLigne, cible: Visibilite) => RANG_VISIBILITE[source] <= RANG_VISIBILITE[cible];
+
+export type MatiereSynthese = { projetId: string; code: string; titre: string; elements: (ElementSynthese & { qui: string })[]; recues: { qui: string; texte: string }[] };
+
+/**
+ * Ce que l'équipe a envoyé, par projet, pour la synthèse d'un rapport de chef : lignes reçues (fait,
+ * en cours, à décider, ensuite), synthèses des chefs d'équipe, et ses propres lignes. Seul ce que les
+ * lecteurs du champ pouvaient déjà lire y entre : un élément réservé au chef n'en fait pas partie.
+ */
+export async function matierePourSynthese(rapport: typeof schema.rapportsHebdo.$inferSelect, champ: Champ): Promise<MatiereSynthese[]> {
+  const cible = champ.visibilite ?? "tous";
+  const org = await chargerOrganisation();
+  const recus = await rapportsRecus(rapport.auteurId, rapport.semaine);
+  const parProjet = new Map<string, { elements: (ElementSynthese & { qui: string })[]; recues: { qui: string; texte: string }[] }>();
+  const groupe = (id: string) => {
+    const g = parProjet.get(id) ?? { elements: [], recues: [] };
+    parProjet.set(id, g);
+    return g;
+  };
+  const prenom = (id: string) => org.personnes.get(id)?.prenom ?? "";
+  for (const recu of recus) {
+    const [lignes, reponses] = await Promise.all([lignesDuRapport(recu.id), reponsesDuRapport(recu.id)]);
+    for (const reprise of ["fait", "en_cours", "a_decider", "prochaine"] as Reprise[]) {
+      for (const e of elementsDe(recu, lignes, reponses, reprise)) {
+        if (!e.projetId || !compatible((e.visibilite as VisibiliteLigne | null) ?? "tous", cible)) continue;
+        groupe(e.projetId).elements.push({ rubrique: reprise === "a_decider" ? "bloque" : (e.partie ?? reprise), texte: e.texte, qui: e.auteurs.map(prenom).filter(Boolean).join(", ") });
+      }
+    }
+    const fr = formulaireDe(recu);
+    for (const x of reponses) {
+      const c = fr.find((k) => k.id === x.champId);
+      if (c?.type === "synthese" && x.projetId && x.valeur.trim() && compatible(c.visibilite ?? "tous", cible)) groupe(x.projetId).recues.push({ qui: prenom(recu.auteurId), texte: x.valeur.trim() });
+    }
+  }
+  const f = formulaireDe(rapport);
+  for (const l of await lignesDuRapport(rapport.id)) {
+    if (l.origines.length || !l.projetId || l.retiree) continue;
+    const c = f.find((k) => k.id === l.champId);
+    if (!c || c.type !== "lignes" || c.partie === "equipe" || !compatible(c.visibilite ?? "tous", cible)) continue;
+    groupe(l.projetId).elements.push({ rubrique: c.rubrique ?? l.partie, texte: l.texte, qui: prenom(rapport.auteurId) });
+  }
+  if (!parProjet.size) return [];
+  const projets = await db.select({ id: schema.projets.id, code: schema.projets.code, titre: schema.projets.titre }).from(schema.projets).where(inArray(schema.projets.id, [...parProjet.keys()]));
+  return projets
+    .map((p) => ({ projetId: p.id, code: p.code, titre: p.titre, ...parProjet.get(p.id)! }))
+    .sort((a, b) => a.code.localeCompare(b.code, "fr"));
+}
+
+/**
+ * Prépare la synthèse de chaque projet. Une synthèse que le chef n'a pas touchée suit les rapports
+ * qui arrivent ; une synthèse qu'il a écrite ou fait rédiger reste la sienne.
+ */
+export async function synchroniserSyntheses(rapport: typeof schema.rapportsHebdo.$inferSelect) {
+  if (rapport.statut !== "brouillon") return new Map<string, MatiereSynthese[]>();
+  const champs = formulaireDe(rapport).filter((c) => c.type === "synthese");
+  const sortie = new Map<string, MatiereSynthese[]>();
+  if (!champs.length) return sortie;
+  const reponses = await reponsesDuRapport(rapport.id);
+  for (const c of champs) {
+    const matiere = await matierePourSynthese(rapport, c);
+    sortie.set(c.id, matiere);
+    for (const m of matiere) {
+      const propose = syntheseParRegles(m.elements, m.recues);
+      if (!propose) continue;
+      const x = reponses.find((r) => r.champId === c.id && r.projetId === m.projetId);
+      if (!x) await db.insert(schema.reponsesRapport).values({ rapportId: rapport.id, champId: c.id, projetId: m.projetId, valeur: propose, propose }).onConflictDoNothing();
+      else if (x.valeur === (x.propose ?? "") && !x.proposeParIa && x.propose !== propose)
+        await db.update(schema.reponsesRapport).set({ valeur: propose, propose, majLe: new Date() }).where(eq(schema.reponsesRapport.id, x.id));
+    }
+  }
+  return sortie;
+}
+
+// ---------------------------------------------------------------------------
+// « Décision ou aide attendue » : propositions à partir des blocages et des échéances dépassées
+// ---------------------------------------------------------------------------
+
+export type Suggestion = { texte: string; projetId: string | null };
+
+export async function suggestionsPourDecision(rapport: typeof schema.rapportsHebdo.$inferSelect, champ: Champ): Promise<Suggestion[]> {
+  const taches = await db
+    .select({ titre: schema.taches.titre, statut: schema.taches.statut, blocage: schema.taches.blocage, echeance: schema.taches.echeance, projetId: schema.taches.projetId, projetCode: schema.projets.code })
+    .from(schema.taches)
+    .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
+    .where(and(eq(schema.taches.assigneId, rapport.auteurId), ne(schema.taches.statut, "faite")));
+  const f = formulaireDe(rapport);
+  const [lignes, reponses] = await Promise.all([lignesDuRapport(rapport.id), reponsesDuRapport(rapport.id)]);
+  const propres = lignes.filter((l) => l.origines.length === 0);
+  const bloquees = propres.filter((l) => l.partie === "bloque" && f.find((c) => c.id === l.champId)?.partie !== "equipe").map((l) => l.texte);
+  const deja = [...propres.filter((l) => l.champId === champ.id).map((l) => l.texte), ...reponses.filter((x) => x.champId === champ.id).flatMap((x) => x.valeur.split("\n"))];
+  const textes = suggestionsDecision(taches, bloquees, aujourdhui(), deja);
+  // Le projet d'une proposition : celui de la tâche dont elle parle.
+  return textes.map((t) => ({ texte: t, projetId: taches.find((x) => x.projetCode && t.startsWith(`${x.projetCode} · `) && t.includes(x.titre.trim().replace(/[.;\s]+$/, "")))?.projetId ?? null }));
+}

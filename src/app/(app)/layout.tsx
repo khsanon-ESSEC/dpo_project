@@ -3,7 +3,8 @@ import { and, count, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { acces } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
-import { initiales } from "@/lib/regles";
+import { rappelsDuMoment } from "@/lib/donnees/rappels";
+import { initiales, redigeUnRapport } from "@/lib/regles";
 import { Assistant } from "@/components/Assistant";
 import { Onglets, Rail, type ElementNav } from "@/components/Navigation";
 
@@ -11,6 +12,8 @@ export default async function LayoutApplication({ children }: { children: React.
   const u = await exigerUtilisateur();
   if (u.doitChangerMotDePasse) redirect("/mot-de-passe");
   const a = await acces(u);
+  // Heures du rapport (prêt à relire, rappel, retard de l'équipe) : alertes créées au passage, une fois par semaine.
+  await rappelsDuMoment(u.id, redigeUnRapport(u)).catch((e) => console.error("Rappels du rapport :", e));
   const [{ n: nonLues }] = await db
     .select({ n: count() })
     .from(schema.notifications)
@@ -25,9 +28,11 @@ export default async function LayoutApplication({ children }: { children: React.
   const RAPPORT: ElementNav = { href: "/rapport", libelle: "Rapport", icone: "document", actifs: ["/rapports"] };
   const EQUIPE: ElementNav = { href: "/equipe", libelle: "Équipe", icone: "clients", actifs: ["/charge"] };
   const PROJETS: ElementNav = { href: "/projets", libelle: "Projets", icone: "tableau-de-bord" };
+  // Les exécutifs ne rédigent pas de rapport : ils lisent ceux de tout le monde (Équipe → Rapports).
+  const redige = redigeUnRapport(u);
   const elements: ElementNav[] = [
     { href: "/semaine", libelle: "Semaine", icone: "calendrier" },
-    RAPPORT,
+    ...(redige ? [RAPPORT] : []),
     ...(equipe ? [EQUIPE] : []),
     PROJETS,
     ...(conseil ? [{ href: "/conseil", libelle: "Conseil", icone: "banque" }] : []),
@@ -35,12 +40,19 @@ export default async function LayoutApplication({ children }: { children: React.
     { href: "/alertes", libelle: "Alertes", icone: "notification", compte: alertes },
   ];
   // Téléphone : quatre entrées. La dernière, « Plus », mène à tout le reste (avec le nombre d'alertes non lues).
-  const telephone: ElementNav[] = [
-    { href: "/semaine", libelle: "Semaine", icone: "calendrier" },
-    RAPPORT,
-    equipe ? EQUIPE : PROJETS,
-    { href: "/plus", libelle: "Plus", icone: "menu", compte: alertes, actifs: ["/alertes", "/profil", "/conseil", "/organisation", ...(equipe ? ["/projets"] : [])] },
-  ];
+  const telephone: ElementNav[] = redige
+    ? [
+        { href: "/semaine", libelle: "Semaine", icone: "calendrier" },
+        RAPPORT,
+        equipe ? EQUIPE : PROJETS,
+        { href: "/plus", libelle: "Plus", icone: "menu", compte: alertes, actifs: ["/alertes", "/profil", "/conseil", "/organisation", ...(equipe ? ["/projets"] : [])] },
+      ]
+    : [
+        { href: "/semaine", libelle: "Semaine", icone: "calendrier" },
+        EQUIPE,
+        PROJETS,
+        { href: "/plus", libelle: "Plus", icone: "menu", compte: alertes, actifs: ["/alertes", "/profil", "/conseil", "/organisation"] },
+      ];
 
   return (
     <div className="coquille">
