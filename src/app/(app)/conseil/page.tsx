@@ -68,6 +68,7 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
         )}
         <TableauConseil
           lignes={lignes}
+          visibles={visibles}
           brouillon={brouillon}
           ia={iaDisponible()}
           entete={

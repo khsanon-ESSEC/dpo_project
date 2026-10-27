@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { acces, exigerTacheVisible, suitPersonne } from "@/lib/acces";
+import { acces, exigerTacheVisible } from "@/lib/acces";
+import { annulerTache, creerTacheGeree, modifierDefinitionTache, retablirTache, supprimerTache } from "@/lib/donnees/gestion";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
 import { retourValide } from "@/lib/retour";
@@ -67,6 +68,7 @@ export async function enregistrerTache(_: EtatTache, form: FormData): Promise<Et
   const a = await acces(u);
   const tacheId = String(form.get("tacheId") ?? "");
   const t = await exigerTacheVisible(a, tacheId);
+  if (t.annuleeLe) return { message: "Cette tâche est annulée : rétablissez-la d'abord." };
   const statut = String(form.get("statut") ?? "") as Statut;
   if (!STATUTS.includes(statut)) return { message: "Choisissez un état." };
   const blocage = String(form.get("blocage") ?? "").trim().slice(0, 1000) || null;
@@ -100,28 +102,67 @@ export async function enregistrerTache(_: EtatTache, form: FormData): Promise<Et
 
 export type EtatNouvelleTache = { message: string | null };
 
+/** Créer une tâche : on la confie à soi, aux personnes qu'on suit, ou (projet qu'on dirige) à son équipe. */
 export async function creerTache(_: EtatNouvelleTache, form: FormData): Promise<EtatNouvelleTache> {
   const u = await exigerUtilisateur();
   const a = await acces(u);
-  const titre = String(form.get("titre") ?? "").trim().slice(0, 200);
-  const projetId = String(form.get("projetId") ?? "") || null;
-  const assigneId = String(form.get("assigneId") ?? "") || u.id;
-  const echeance = lireDate(form.get("echeance"));
-  const debut = lireDate(form.get("debut"));
-  const estimationHeures = lireHeures(form.get("estimationHeures"));
-  if (!titre) return { message: "Donnez un titre à la tâche." };
-  if (debut && echeance && debut > echeance) return { message: "Le début doit précéder l'échéance." };
-  // On assigne une tâche à soi, à une personne de son équipe, ou sur un projet qu'on dirige.
-  if (!suitPersonne(a, assigneId) && !(projetId && a.projetsDiriges.has(projetId))) return { message: "Vous ne pouvez pas assigner une tâche à cette personne." };
-  const [t] = await db
-    .insert(schema.taches)
-    .values({ titre, projetId, assigneId, echeance, debut, estimationHeures, creeParId: u.id })
-    .returning({ id: schema.taches.id });
-  await db.insert(schema.evenementsTache).values({ tacheId: t.id, auteurId: u.id, type: "creation" });
-  if (assigneId !== u.id) {
-    await db.insert(schema.notifications).values({ personneId: assigneId, type: "tache", texte: `${u.prenom} ${u.nom} vous a confié « ${titre} »`, lien: `/taches/${t.id}` });
-  }
+  const r = await creerTacheGeree(a, {
+    titre: String(form.get("titre") ?? ""),
+    description: String(form.get("description") ?? ""),
+    projetId: String(form.get("projetId") ?? "") || null,
+    assigneId: String(form.get("assigneId") ?? "") || u.id,
+    echeance: lireDate(form.get("echeance")),
+    debut: lireDate(form.get("debut")),
+    estimationHeures: lireHeures(form.get("estimationHeures")),
+  });
+  if ("erreur" in r) return { message: r.erreur };
   revalidatePath("/", "layout");
+  redirect(retourValide(form.get("retour")) ?? "/semaine");
+}
+
+/** Titre, description, projet et personne d'une tâche. */
+export async function definirTache(_: EtatTache, form: FormData): Promise<EtatTache> {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const t = await exigerTacheVisible(a, String(form.get("tacheId") ?? ""));
+  if (t.annuleeLe) return { message: "Cette tâche est annulée : rétablissez-la d'abord." };
+  const r = await modifierDefinitionTache(a, t, {
+    titre: String(form.get("titre") ?? ""),
+    description: String(form.get("description") ?? ""),
+    projetId: String(form.get("projetId") ?? "") || null,
+    assigneId: String(form.get("assigneId") ?? "") || t.assigneId,
+  });
+  if ("erreur" in r) return { message: r.erreur };
+  revalidatePath("/", "layout");
+  return { message: null, ok: true };
+}
+
+export async function annuler(tacheId: string, form: FormData) {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const t = await exigerTacheVisible(a, tacheId);
+  const r = await annulerTache(a, t, String(form.get("motif") ?? ""));
+  revalidatePath("/", "layout");
+  redirect(`/taches/${tacheId}${"erreur" in r ? `?erreur=${encodeURIComponent(r.erreur)}#suppression` : ""}`);
+}
+
+export async function retablir(tacheId: string) {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const t = await exigerTacheVisible(a, tacheId);
+  await retablirTache(a, t);
+  revalidatePath("/", "layout");
+  redirect(`/taches/${tacheId}`);
+}
+
+export async function supprimer(tacheId: string, form: FormData) {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const t = await exigerTacheVisible(a, tacheId);
+  if (form.get("confirme") !== "on") redirect(`/taches/${tacheId}?erreur=${encodeURIComponent("Cochez « Oui, la supprimer » pour confirmer.")}#suppression`);
+  const r = await supprimerTache(a, t);
+  revalidatePath("/", "layout");
+  if ("erreur" in r) redirect(`/taches/${tacheId}?erreur=${encodeURIComponent(r.erreur)}#suppression`);
   redirect(retourValide(form.get("retour")) ?? "/semaine");
 }
 

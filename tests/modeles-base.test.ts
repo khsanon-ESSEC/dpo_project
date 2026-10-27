@@ -60,7 +60,7 @@ describe.skipIf(!URL_TEST)("modèles de rapport et rapport de chef", () => {
   it("chacun reçoit le modèle prévu : équipe, chef d'équipe, affectation nominative, défaut", async () => {
     const dj = await M.formulairePour(qui("daphnee.joseph").id);
     expect(dj.modele?.nom).toBe("Solutions technologiques");
-    expect(dj.champs.map((c) => c.id)).toEqual(["fait", "en_cours", "bloque", "sante", "prochaine", "charge", "decision", "pieces"]);
+    expect(dj.champs.map((c) => c.id)).toEqual(["fait", "en_cours", "bloque", "sante", "prochaine", "charge", "decision", "reunions", "pieces"]);
     const ml = await M.formulairePour(qui("marc-antoine.louis").id);
     expect(ml.modele?.nom).toBe("Rapport de chef d'équipe");
     expect(ml.champs.filter((c) => c.partie === "travail" && c.type !== "intertitre").map((c) => c.id)).toEqual(dj.champs.map((c) => c.id));
@@ -112,7 +112,7 @@ describe.skipIf(!URL_TEST)("modèles de rapport et rapport de chef", () => {
     const parNa = await R.lireRapport(await A.acces(qui("nadege.augustin")), lp.id);
     expect(parNa?.lecteur).toBe("direction");
     expect(parNa?.formulaire.map((c) => c.id)).not.toContain("charge");
-    expect(parNa?.caches).toEqual(["Ma charge", "Décision ou aide attendue"]);
+    expect(parNa?.caches).toEqual(["Ma charge", "Décision ou aide attendue", "Mes réunions de la semaine"]);
     expect(parNa?.reponses.some((x) => x.champId === "decision")).toBe(false);
   });
 

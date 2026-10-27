@@ -38,6 +38,8 @@ const traces: Record<string, string> = {
   gantt: "M4 4v16.5h16.5M7 7.5h7M10 11.5h8M8.5 15.5h6",
   jauge: "M4.5 17a7.5 7.5 0 1 1 15 0M12 17l4-5.5M3.5 20.5h17",
   personnes: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 4.5a3.5 3.5 0 0 1 0 6.5M18 14.5c1.8.8 3 2.8 3 5.5",
+  reunion: "M3.5 5.5h17v10h-9l-4.5 3.5v-3.5H3.5zM8 9.5h8M8 12.5h5",
+  bilan: "M4 4v16.5h16.5M8 16v-4M12 16V8M16 16v-6",
 };
 
 export type NomIcone = keyof typeof traces;

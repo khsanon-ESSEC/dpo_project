@@ -8,6 +8,7 @@ import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet } from "@/lib/regles";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
+import { LienPersonne } from "@/components/Liens";
 import { LigneResume, semaineTexte } from "@/components/ResumeRapport";
 import { ONGLETS_EQUIPE, SousOnglets } from "@/components/SousOnglets";
 
@@ -39,7 +40,7 @@ export default async function PageRapportsEquipe({ searchParams }: { searchParam
       <>
         <Bandeau
           surtitre="Rapports du vendredi"
-          titre={nomComplet(p)}
+          titre={<LienPersonne id={p.id}>{nomComplet(p)}</LienPersonne>}
           retour={
             <a href="/equipe/rapports" className="retour">
               <Icone nom="chevron-gauche" taille={18} /> Rapports de l&apos;équipe
@@ -134,9 +135,9 @@ export default async function PageRapportsEquipe({ searchParams }: { searchParam
                 .filter((l) => l.equipe === eq)
                 .map((l) => (
                   <li key={l.id} style={{ display: "flex", alignItems: "stretch", gap: 12 }}>
-                    <span className="mono" aria-hidden="true" style={{ marginTop: 18 }}>
+                    <a href={`/personnes/${l.id}`} className="mono" style={{ marginTop: 18 }} aria-label={`Fiche de ${l.nom}`} title={l.nom}>
                       {l.initiales}
-                    </span>
+                    </a>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       {l.rapport ? (
                         <LigneResume r={l.rapport} lien={`/rapports/${l.rapport.id}`} titre={l.nom} sous={l.poste} />
@@ -144,7 +145,7 @@ export default async function PageRapportsEquipe({ searchParams }: { searchParam
                         <div className="rangee" style={{ minHeight: 72, gap: 16 }}>
                           <span className="rangee__texte">
                             <span className="rangee__titre" style={{ fontWeight: 500 }}>
-                              {l.nom}
+                              <LienPersonne id={l.id}>{l.nom}</LienPersonne>
                             </span>
                             <span className="rangee__sous">{l.poste}</span>
                           </span>

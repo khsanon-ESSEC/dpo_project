@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { aujourdhui, dateCourte, echeanceRelative } from "@/lib/dates";
 import { heuresDe, heuresTexte } from "@/lib/charge";
 import { chargerVueProjet, cheminVue, EnTeteVue, LIBELLE_STATUT } from "../commun";
+import { LienPersonne } from "@/components/Liens";
 
 export const metadata: Metadata = { title: "Tâches du projet" };
 
@@ -131,7 +132,7 @@ export default async function PageListe({ params, searchParams }: { params: Prom
                             <span className="mono mono--petit" aria-hidden="true">
                               {t.initiales}
                             </span>
-                            {t.personne}
+                            <LienPersonne id={t.assigneId}>{t.personne}</LienPersonne>
                           </span>
                         </td>
                         <td className="facultatif" style={{ whiteSpace: "nowrap" }}>

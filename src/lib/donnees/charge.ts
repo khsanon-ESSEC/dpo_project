@@ -1,7 +1,8 @@
 import "server-only";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { aujourdhui } from "@/lib/dates";
+import { ajouterJours, aujourdhui } from "@/lib/dates";
+import { reunionsParJour } from "./reunions";
 import { chargerOrganisation } from "@/lib/organisation";
 import { chargeDUnePersonne, CAPACITE_PAR_DEFAUT, semainesAVenir, type ChargePersonne, type TacheCharge } from "@/lib/charge";
 import { initiales, nomComplet } from "@/lib/regles";
@@ -28,7 +29,7 @@ export async function tachesOuvertesDe(ids: string[]): Promise<TacheOuverte[]> {
     })
     .from(schema.taches)
     .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
-    .where(and(inArray(schema.taches.assigneId, ids), ne(schema.taches.statut, "faite")));
+    .where(and(inArray(schema.taches.assigneId, ids), ne(schema.taches.statut, "faite"), isNull(schema.taches.annuleeLe)));
 }
 
 export async function capacites(ids: string[]): Promise<Map<string, number>> {
@@ -46,6 +47,8 @@ export type LigneCharge = {
   equipe: string;
   capacite: number;
   charge: ChargePersonne;
+  /** Réunions notées à partir d'aujourd'hui (heures par jour). */
+  reunions: { jour: string; heures: number }[];
   taches: Map<string, TacheOuverte>;
 };
 
@@ -55,7 +58,7 @@ export async function chargeDesPersonnes(ids: string[], nbSemaines = NB_SEMAINES
   const semaines = semainesAVenir(jour, nbSemaines);
   const org = await chargerOrganisation();
   const actifs = ids.filter((id) => org.personnes.get(id)?.actif);
-  const [taches, caps] = await Promise.all([tachesOuvertesDe(actifs), capacites(actifs)]);
+  const [taches, caps, reunions] = await Promise.all([tachesOuvertesDe(actifs), capacites(actifs), reunionsParJour(actifs, jour, ajouterJours(semaines.at(-1)!, 6))]);
   const lignes: LigneCharge[] = actifs.map((id) => {
     const p = org.personnes.get(id)!;
     const siennes = taches.filter((t) => t.assigneId === id);
@@ -68,7 +71,8 @@ export async function chargeDesPersonnes(ids: string[], nbSemaines = NB_SEMAINES
       equipeId: p.equipeId,
       equipe: p.equipeId ? (org.equipes.get(p.equipeId)?.nom ?? "") : "Sans équipe",
       capacite,
-      charge: chargeDUnePersonne(siennes, semaines, capacite, jour),
+      charge: chargeDUnePersonne(siennes, semaines, capacite, jour, reunions.get(id) ?? []),
+      reunions: reunions.get(id) ?? [],
       taches: new Map(siennes.map((t) => [t.id, t])),
     };
   });
@@ -83,7 +87,7 @@ export async function chargeDuProjet(projetId: string, chefProjetId: string | nu
   const assignes = await db
     .selectDistinct({ id: schema.taches.assigneId })
     .from(schema.taches)
-    .where(and(eq(schema.taches.projetId, projetId), ne(schema.taches.statut, "faite")));
+    .where(and(eq(schema.taches.projetId, projetId), ne(schema.taches.statut, "faite"), isNull(schema.taches.annuleeLe)));
   const ids = [...new Set([...(chefProjetId ? [chefProjetId] : []), ...assignes.map((a) => a.id)])];
   const { jour, semaines, lignes } = await chargeDesPersonnes(ids, nbSemaines);
   return {
@@ -94,7 +98,7 @@ export async function chargeDuProjet(projetId: string, chefProjetId: string | nu
       return {
         ...l,
         chefDeProjet: l.id === chefProjetId,
-        projet: chargeDUnePersonne(surProjet, semaines, l.capacite, jour),
+        projet: chargeDUnePersonne(surProjet, semaines, l.capacite, jour, l.reunions),
         nbTachesProjet: surProjet.length,
       };
     }),

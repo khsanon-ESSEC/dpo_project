@@ -85,7 +85,7 @@ export default async function PageChargeProjet({ params }: { params: Promise<{ i
                           </span>
                         </a>
                       ) : (
-                        <span className="personne-charge">
+                        <a className="personne-charge" href={`/personnes/${m.id}`}>
                           <span className="mono" aria-hidden="true">
                             {m.initiales}
                           </span>
@@ -93,7 +93,7 @@ export default async function PageChargeProjet({ params }: { params: Promise<{ i
                             <span className="rangee__titre">{m.nom}</span>
                             <span className="rangee__sous">{m.chefDeProjet ? "Chef de projet" : `${m.nbTachesProjet} tâche${m.nbTachesProjet > 1 ? "s" : ""} ouverte${m.nbTachesProjet > 1 ? "s" : ""}`}</span>
                           </span>
-                        </span>
+                        </a>
                       )}
                     </th>
                     {m.projet.semaines.map((w, i) => {

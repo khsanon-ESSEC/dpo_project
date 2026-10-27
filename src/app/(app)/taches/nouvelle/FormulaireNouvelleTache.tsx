@@ -16,6 +16,8 @@ const NIVEAU: Record<string, { texte: string; classe: string }> = {
 export function FormulaireNouvelleTache({
   projets,
   personnes,
+  base,
+  parProjet,
   indications,
   projetParDefaut,
   pourParDefaut,
@@ -24,6 +26,10 @@ export function FormulaireNouvelleTache({
 }: {
   projets: { id: string; code: string; titre: string }[];
   personnes: { id: string; nom: string }[];
+  /** Personnes qu'on peut choisir pour une tâche hors projet (soi, les personnes suivies). */
+  base: string[];
+  /** Pour chaque projet qu'on dirige : son équipe, à qui on peut aussi confier ses tâches. */
+  parProjet: Record<string, string[]>;
   indications: Record<string, Indication>;
   projetParDefaut: string;
   pourParDefaut: string;
@@ -33,11 +39,15 @@ export function FormulaireNouvelleTache({
   const [etat, action, enCours] = useActionState<EtatNouvelleTache, FormData>(creerTache, { message: null });
   const [pour, setPour] = useState(pourParDefaut || personnes[0]?.id || "");
   const [echeance, setEcheance] = useState("");
+  const [projet, setProjet] = useState(projetParDefaut);
+  const permis = new Set([...base, ...(parProjet[projet] ?? [])]);
+  const choix = personnes.filter((p) => permis.has(p.id));
+  const pourValide = permis.has(pour) ? pour : (choix[0]?.id ?? "");
 
   // Charge de la personne choisie, la semaine de l'échéance (ou cette semaine).
   const semaine = lundiDe(echeance || aujourdhui);
-  const ind = indications[pour]?.semaines.find((s) => s.semaine === semaine);
-  const nom = personnes.find((p) => p.id === pour)?.nom ?? "";
+  const ind = indications[pourValide]?.semaines.find((s) => s.semaine === semaine);
+  const nom = personnes.find((p) => p.id === pourValide)?.nom ?? "";
   const n = ind ? NIVEAU[ind.niveau] : null;
 
   return (
@@ -53,8 +63,12 @@ export function FormulaireNouvelleTache({
         <input id="titre" name="titre" required maxLength={200} />
       </div>
       <div className="champ">
+        <label htmlFor="description">Précisions (facultatif)</label>
+        <textarea id="description" name="description" rows={2} maxLength={4000} />
+      </div>
+      <div className="champ">
         <label htmlFor="projetId">Projet</label>
-        <select id="projetId" name="projetId" defaultValue={projetParDefaut}>
+        <select id="projetId" name="projetId" value={projet} onChange={(e) => setProjet(e.target.value)}>
           <option value="">Hors projet</option>
           {projets.map((p) => (
             <option key={p.id} value={p.id}>
@@ -66,8 +80,8 @@ export function FormulaireNouvelleTache({
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <div className="champ">
           <label htmlFor="assigneId">Pour</label>
-          <select id="assigneId" name="assigneId" value={pour} onChange={(e) => setPour(e.target.value)}>
-            {personnes.map((p) => (
+          <select id="assigneId" name="assigneId" value={pourValide} onChange={(e) => setPour(e.target.value)}>
+            {choix.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nom}
               </option>

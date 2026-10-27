@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { acces } from "@/lib/acces";
+import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
-import { aujourdhui, dateCourte, moisAnnee } from "@/lib/dates";
+import { aujourdhui, dateCourte, dateLocale, moisAnnee } from "@/lib/dates";
 import { portefeuille } from "@/lib/donnees/projets";
+import { demandesDeProjet } from "@/lib/donnees/gestion";
+import { peutDecider } from "@/lib/projets";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { Chronologie } from "./Chronologie";
@@ -20,14 +22,20 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
   const vue = v === "chronologie" ? "chronologie" : "cartes";
   const u = await exigerUtilisateur();
   const a = await acces(u);
-  const tous = await portefeuille(a);
-  const projets = tous.filter((p) => filtre === "tous" || (filtre === "strat" && p.strategique) || (filtre === "glisse" && p.glissementSemaines > 0));
+  const archives = filtre === "archives";
+  const [tous, nArchives, demandes] = await Promise.all([portefeuille(a, { archives }), archives ? Promise.resolve(null) : portefeuille(a, { archives: true }).then((l) => l.length), demandesDeProjet(a, await idsProjetsVisibles(a))]);
+  const projets = tous.filter((p) => filtre === "tous" || archives || (filtre === "strat" && p.strategique) || (filtre === "glisse" && p.glissementSemaines > 0));
+  const decideur = peutDecider(a);
+  const enAttente = demandes.filter((d) => d.statut === "requete");
+  const miennes = demandes.filter((d) => d.demandeurId === u.id);
+  const aMontrer = decideur ? demandes.filter((d) => d.statut === "requete" || d.demandeurId === u.id) : miennes;
   const totalInd = tous.reduce((s, p) => s + p.totalIndicateurs, 0);
   const atteints = tous.reduce((s, p) => s + p.atteints, 0);
   const filtres = [
     { id: "tous", libelle: `Tous · ${tous.length}` },
     { id: "strat", libelle: `Stratégiques · ${tous.filter((p) => p.strategique).length}` },
     { id: "glisse", libelle: `Date repoussée · ${tous.filter((p) => p.glissementSemaines > 0).length}` },
+    ...(nArchives || archives ? [{ id: "archives", libelle: archives ? `Archivés · ${tous.length}` : `Archivés · ${nArchives}` }] : []),
   ];
 
   return (
@@ -72,12 +80,42 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
               Chronologie
             </a>
           </nav>
-          {a.toutVoir ? (
-            <a href="/conseil" className="bouton-ambre">
-              <Icone nom="document" taille={18} /> Rapport au conseil de {moisAnnee(aujourdhui()).split(" ")[0]}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <a href="/projets/nouveau" className="bouton-contour">
+              <Icone nom="ajouter" taille={18} /> Proposer un projet
             </a>
-          ) : null}
+            {a.toutVoir ? (
+              <a href="/conseil" className="bouton-ambre">
+                <Icone nom="document" taille={18} /> Rapport au conseil de {moisAnnee(aujourdhui()).split(" ")[0]}
+              </a>
+            ) : null}
+          </div>
         </div>
+        {aMontrer.length && !archives ? (
+          <section className="carte carte--liste" aria-labelledby="p-demandes" style={decideur && enAttente.length ? { borderColor: "var(--veille-point)" } : undefined}>
+            <h2 id="p-demandes" className="carte__titre">
+              {decideur ? `Demandes de projet · ${enAttente.length} à décider` : "Mes demandes de projet"}
+            </h2>
+            <ul className="liste">
+              {aMontrer.map((d) => (
+                <li key={d.id}>
+                  <a href={`/projets/${d.id}`} className="rangee" style={{ minHeight: 56, flexWrap: "wrap" }}>
+                    <span className="etiquette-projet">{d.code}</span>
+                    <span className="rangee__texte" style={{ flex: "1 1 220px" }}>
+                      <span className="rangee__titre">{d.titre}</span>
+                      <span className="rangee__sous">
+                        {d.demandeur ? `Proposé par ${d.demandeur}` : "Proposé"}
+                        {d.demandeLe ? ` le ${dateCourte(dateLocale(d.demandeLe))}` : ""}
+                        {d.statut === "refuse" && d.motif ? ` · refusé : ${d.motif}` : ""}
+                      </span>
+                    </span>
+                    <span className={`rangee__meta ${d.statut === "refuse" ? "ton-retard" : "ton-veille"}`}>{d.statut === "refuse" ? "Refusé" : decideur ? "À décider" : "En attente"}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         {vue === "chronologie" ? <Chronologie projets={projets} /> : null}
         <div className="grille-projets" hidden={vue === "chronologie"}>
           {projets.map((p) => {
@@ -131,7 +169,7 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
               </a>
             );
           })}
-          {projets.length === 0 ? <p className="vide">Aucun projet dans ce filtre.</p> : null}
+          {projets.length === 0 ? <p className="vide">{archives ? "Aucun projet archivé." : "Aucun projet dans ce filtre."}</p> : null}
         </div>
       </div>
     </>

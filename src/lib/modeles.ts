@@ -16,7 +16,7 @@
  */
 import { ajouterJours, dateCourte } from "./dates";
 
-export const TYPES_CHAMP = ["lignes", "sante", "charge", "texte", "texte_long", "choix", "echelle", "nombre", "date", "piece_jointe", "intertitre", "note", "mon_travail", "reprise", "synthese"] as const;
+export const TYPES_CHAMP = ["lignes", "sante", "charge", "texte", "texte_long", "choix", "echelle", "nombre", "date", "piece_jointe", "reunions", "intertitre", "note", "mon_travail", "reprise", "synthese"] as const;
 export type TypeChamp = (typeof TYPES_CHAMP)[number];
 
 /** Ce dont parle un champ : sert au préremplissage, à la reprise de la semaine dernière et au rapport du chef. */
@@ -63,6 +63,7 @@ export const CATALOGUE: Record<TypeChamp, { nom: string; detail: string; groupe:
   lignes: { nom: "Lignes par projet", detail: "Préremplies avec les tâches", groupe: "application" },
   sante: { nom: "Santé des projets", detail: "Un feu par projet suivi", groupe: "application" },
   charge: { nom: "Charge de la semaine", detail: "Niveau proposé, ressenti corrigé", groupe: "application" },
+  reunions: { nom: "Réunions de la semaine", detail: "Reprises du journal des réunions", groupe: "application" },
   texte: { nom: "Texte court", detail: "Une phrase", groupe: "remplir" },
   texte_long: { nom: "Texte long", detail: "Quelques lignes", groupe: "remplir" },
   choix: { nom: "Choix dans une liste", detail: "Une réponse parmi plusieurs", groupe: "remplir" },
@@ -145,7 +146,7 @@ export const rubriquesPossibles = (t: TypeChamp): readonly Rubrique[] => RUBRIQU
 
 /** Champs sans réponse (titres, notes, renvois). */
 export const estDecoratif = (c: Pick<Champ, "type">) => c.type === "intertitre" || c.type === "note" || c.type === "mon_travail";
-export const peutEtreObligatoire = (t: TypeChamp) => !["intertitre", "note", "mon_travail", "reprise", "synthese"].includes(t);
+export const peutEtreObligatoire = (t: TypeChamp) => !["intertitre", "note", "mon_travail", "reprise", "synthese", "reunions"].includes(t);
 export const aUneVisibilite = (t: TypeChamp) => !["intertitre", "note", "mon_travail"].includes(t);
 
 function identifiantLibre(base: string, pris: Set<string>): string {
@@ -181,6 +182,7 @@ export function nouveauChamp(type: TypeChamp, pris: Iterable<string>): Champ {
     reprise: { libelle: "Repris de l'équipe", reprise: "a_decider" },
     synthese: { libelle: "Synthèse par projet", aide: "Proposée à partir des rapports reçus ; à relire et à reformuler.", visibilite: "direction" },
     piece_jointe: { libelle: "Pièces jointes", aide: "Un compte rendu, une capture, un tableau : 10 Mo au plus par fichier." },
+    reunions: { libelle: "Mes réunions de la semaine", aide: "Reprises de votre journal des réunions ; ajoutez celles qui manquent avant d'envoyer.", visibilite: "superieur" },
   };
   const c: Champ = { id: identifiantLibre(D[type].libelle, ids), type, ...D[type] };
   if (aUneVisibilite(type) && !c.visibilite) c.visibilite = "tous";
@@ -501,4 +503,23 @@ export function etapeRapport(h: Horaires, semaine: string, maintenant: { jour: s
   if (h.rappel && now >= instant(h.rappel)) return "rappel";
   if (now >= instant(h.pret)) return "pret";
   return "en_preparation";
+}
+
+// ---------------------------------------------------------------------------
+// Réunions de la semaine (champ « reunions ») : figées à l'envoi du rapport
+// ---------------------------------------------------------------------------
+
+export type ReunionFigee = { titre: string; jour: string; heure: string | null; minutes: number; projet: string | null; avec: number };
+export type ReunionsFigees = { minutes: number; reunions: ReunionFigee[] };
+
+/** Lit la valeur figée d'un champ « reunions » (JSON) ; null si illisible. */
+export function lireReunions(valeur: string | null | undefined): ReunionsFigees | null {
+  if (!valeur) return null;
+  try {
+    const o = JSON.parse(valeur) as ReunionsFigees;
+    if (!o || typeof o.minutes !== "number" || !Array.isArray(o.reunions)) return null;
+    return o;
+  } catch {
+    return null;
+  }
 }

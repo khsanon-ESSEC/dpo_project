@@ -8,6 +8,7 @@ import { Niveau } from "@/components/Charge";
 import { nombre } from "@/lib/charge";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
+import { dureeTexte } from "@/lib/projets";
 import { ONGLETS_EQUIPE, SousOnglets } from "@/components/SousOnglets";
 import { relancerEquipe } from "./actions";
 
@@ -179,18 +180,29 @@ type Semaines = Awaited<ReturnType<typeof chargeDesPersonnes>>["lignes"][number]
 function LignePersonne({ p, semaines, jour }: { p: Personne; semaines: Semaines; jour: string }) {
   return (
     <li>
-                <a href={p.rapport ? `/rapports/${p.rapport.id}` : `/equipe/${p.id}`} className="rangee" style={{ minHeight: 64, gap: 16, flexWrap: "wrap" }}>
+                <div className="rangee" style={{ minHeight: 64, gap: 16, flexWrap: "wrap" }}>
                   <span className="mono" style={{ width: 36, height: 36, fontSize: 12 }} aria-hidden="true">
                     {p.initiales}
                   </span>
                   <span className="rangee__texte" style={{ flex: "1 1 170px" }}>
-                    <span className="rangee__titre">{p.nom}</span>
+                    <span className="rangee__titre">
+                      <a href={`/equipe/${p.id}`} className="lien-nom" title={`Tâches, charge et rapports de ${p.nom}`}>
+                        {p.nom}
+                      </a>
+                    </span>
                     <span className="rangee__sous">{p.poste}</span>
                   </span>
-                  <span style={{ flex: "0 0 128px", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className={p.rapport ? "ton-ok" : "ton-retard"}>
-                    <Icone nom={p.rapport ? "coche" : "horloge"} taille={16} />
-                    {p.rapport ? (p.rapport.envoyeLe && dateLocale(p.rapport.envoyeLe) === jour ? `${p.direct ? "Reçu" : "Envoyé"} à ${heure(p.rapport.envoyeLe)}` : `${p.direct ? "Reçu" : "Envoyé"} ${p.rapport.envoyeLe ? jourAbrege(dateLocale(p.rapport.envoyeLe)).toLowerCase() : ""}`) : "Pas encore"}
-                  </span>
+                  {p.rapport ? (
+                    <a href={`/rapports/${p.rapport.id}`} style={{ flex: "0 0 128px", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className="ton-ok lien-nom" aria-label={`Rapport de ${p.nom}`}>
+                      <Icone nom="coche" taille={16} />
+                      {p.rapport.envoyeLe && dateLocale(p.rapport.envoyeLe) === jour ? `${p.direct ? "Reçu" : "Envoyé"} à ${heure(p.rapport.envoyeLe)}` : `${p.direct ? "Reçu" : "Envoyé"} ${p.rapport.envoyeLe ? jourAbrege(dateLocale(p.rapport.envoyeLe)).toLowerCase() : ""}`}
+                    </a>
+                  ) : (
+                    <span style={{ flex: "0 0 128px", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className="ton-retard">
+                      <Icone nom="horloge" taille={16} />
+                      Pas encore
+                    </span>
+                  )}
                   <span role="img" aria-label={`${p.faites} tâches faites sur ${p.total}`} style={{ flex: "0 0 112px", display: "flex", alignItems: "center", gap: 10 }}>
                     <span className="barre" style={{ width: 64 }}>
                       <span style={{ width: `${p.total ? Math.round((p.faites / p.total) * 100) : 0}%` }} />
@@ -198,6 +210,11 @@ function LignePersonne({ p, semaines, jour }: { p: Personne; semaines: Semaines;
                     <span className="rangee__meta">
                       {p.faites}/{p.total}
                     </span>
+                  </span>
+                  <span style={{ flex: "0 0 92px", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }} title="Réunions notées cette semaine" className={p.minutesReunion ? undefined : "ton-discret"}>
+                    <Icone nom="reunion" taille={15} />
+                    {p.minutesReunion ? dureeTexte(p.minutesReunion) : "—"}
+                    <span className="visuellement-cache"> en réunion cette semaine</span>
                   </span>
                   <span style={{ flex: "0 0 132px", fontSize: 13 }}>
                     {p.retard ? <span className="ton-retard">{p.retard} en retard</span> : null}
@@ -217,7 +234,7 @@ function LignePersonne({ p, semaines, jour }: { p: Personne; semaines: Semaines;
                       </span>
                     ))}
                   </span>
-                </a>
+                </div>
               </li>
   );
 }

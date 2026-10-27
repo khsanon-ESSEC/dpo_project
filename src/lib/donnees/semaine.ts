@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq, inArray, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { ajouterJours, aujourdhui, dateLocale } from "@/lib/dates";
 import { chargerOrganisation } from "@/lib/organisation";
@@ -34,7 +34,7 @@ export async function tachesDe(personneIds: string[], options: { semaine?: strin
     })
     .from(schema.taches)
     .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
-    .where(inArray(schema.taches.assigneId, personneIds))
+    .where(and(inArray(schema.taches.assigneId, personneIds), isNull(schema.taches.annuleeLe)))
     .orderBy(asc(schema.taches.echeance), asc(schema.taches.titre));
   const dimanche = ajouterJours(semaine, 6);
   return lignes.filter((t) => t.statut !== "faite" || (t.termineeLe && dateLocale(t.termineeLe) >= semaine && dateLocale(t.termineeLe) <= dimanche));
@@ -123,18 +123,24 @@ export async function journeeDe(personneId: string, jour: string) {
     .select({ id: schema.taches.id, titre: schema.taches.titre, statut: schema.taches.statut, projetCode: schema.projets.code })
     .from(schema.taches)
     .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
-    .where(and(eq(schema.taches.assigneId, personneId), eq(schema.taches.echeance, jour)))
+    .where(and(eq(schema.taches.assigneId, personneId), eq(schema.taches.echeance, jour), isNull(schema.taches.annuleeLe)))
     .orderBy(asc(schema.taches.titre));
   return { faits, echeances: echeances.map((t) => ({ ...t, libelle: LIBELLE_STATUT[t.statut] })) };
 }
 
+/** Projets acceptés et en vie où la personne est cheffe, membre de l'équipe, ou a une tâche ouverte. */
 export async function mesProjets(personneId: string) {
-  const lignes = await db
-    .selectDistinct({ id: schema.projets.id })
-    .from(schema.projets)
-    .leftJoin(schema.taches, and(eq(schema.taches.projetId, schema.projets.id), eq(schema.taches.assigneId, personneId), ne(schema.taches.statut, "faite")))
-    .where(or(eq(schema.projets.chefProjetId, personneId), eq(schema.taches.assigneId, personneId)));
-  return resumesProjets(lignes.map((l) => l.id), personneId);
+  const [lignes, membre] = await Promise.all([
+    db
+      .selectDistinct({ id: schema.projets.id })
+      .from(schema.projets)
+      .leftJoin(schema.taches, and(eq(schema.taches.projetId, schema.projets.id), eq(schema.taches.assigneId, personneId), ne(schema.taches.statut, "faite"), isNull(schema.taches.annuleeLe)))
+      .where(or(eq(schema.projets.chefProjetId, personneId), eq(schema.taches.assigneId, personneId))),
+    db.select({ id: schema.membresProjet.projetId }).from(schema.membresProjet).where(eq(schema.membresProjet.personneId, personneId)),
+  ]);
+  const ids = [...new Set([...lignes, ...membre].map((l) => l.id))];
+  const projets = await resumesProjets(ids, personneId);
+  return projets.filter((p) => p.statut !== "requete" && p.statut !== "refuse" && p.statut !== "finalise" && !p.archiveLe);
 }
 
 export async function resumesProjets(ids: string[], personneId?: string) {

@@ -13,15 +13,20 @@ import {
   libelleRessenti,
   libelleSante,
   lireComptes,
+  lireReunions,
   NIVEAUX_RESSENTI,
   NIVEAUX_SANTE,
   texteComptes,
   type Champ,
+  type ReunionsFigees,
 } from "@/lib/modeles";
+import { jourAbrege } from "@/lib/dates";
+import { dureeTexte } from "@/lib/projets";
 import type { AvisSante, ChargeMembre, LigneLue, MatiereSynthese, ReponseLue } from "@/lib/donnees/rapport";
 import type { PieceLue } from "@/lib/donnees/pieces";
 import type { ComptesCharge } from "@/lib/modeles";
 import { ACCEPT, tailleLisible } from "@/lib/pieces";
+import { LienPersonne, LienProjet } from "@/components/Liens";
 
 export type ContexteRapport = {
   mode: "saisie" | "lecture" | "apercu";
@@ -51,7 +56,15 @@ export type ContexteRapport = {
   ia?: boolean;
   /** Les titres des champs sont des h3 quand le formulaire a des intertitres. */
   niveauTitre: 2 | 3;
+  /** Brouillon : les réunions de la semaine de l'auteur, telles qu'elles seront figées à l'envoi. */
+  reunions?: ReunionsFigees | null;
+  /** Lundi de la semaine du rapport. */
+  semaine?: string;
+  /** Projets que le lecteur peut ouvrir : leurs noms deviennent des liens. Absent (aperçu) : pas de liens. */
+  projetsVisibles?: "tous" | Set<string>;
 };
+
+const voitProjet = (x: ContexteRapport, id: string | null | undefined) => !!id && !!x.projetsVisibles && (x.projetsVisibles === "tous" || x.projetsVisibles.has(id));
 
 const NIVEAU_CALCULE: Record<string, string> = { libre: "de la marge", normale: "normale", chargee: "chargée", surchargee: "surchargée" };
 
@@ -195,7 +208,11 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
                     <span className="feu__nom">
                       <span className="etiquette-projet">{r.projetCode}</span>
                       <span className="rangee__texte">
-                        <span className="rangee__titre">{r.projetTitre}</span>
+                        <span className="rangee__titre">
+                          <LienProjet id={r.projetId} visible={voitProjet(x, r.projetId)}>
+                            {r.projetTitre}
+                          </LienProjet>
+                        </span>
                         {saisie && r.propose ? <span className={`rangee__sous ${change ? "ton-veille" : ""}`}>{change ? `Changé : « ${libelleSante(r.propose)} » était proposé` : "Proposé"}</span> : null}
                       </span>
                     </span>
@@ -300,6 +317,58 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
             )
           ) : (
             <p style={{ margin: 0, fontSize: 15, lineHeight: "22px", whiteSpace: "pre-line" }}>{v || <span className="ton-discret">Sans réponse</span>}</p>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  // ---------- Réunions de la semaine ----------
+  if (c.type === "reunions") {
+    const r = saisie ? (x.reunions ?? null) : lireReunions(reponses[0]?.valeur);
+    const n = r?.reunions.length ?? 0;
+    return (
+      <section className="carte champ-rapport" aria-labelledby={idT}>
+        <Titre c={c} x={x} id={idT} nombre={x.mode === "apercu" ? null : n} glyphe={x.mode === "apercu"} />
+        <Aide c={c} id={idA} x={x} />
+        <div className="champ-rapport__corps" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {x.mode === "apercu" ? (
+            <p className="apercu">Les réunions de la semaine, reprises du journal des réunions, avec leur durée totale. Figées à l&apos;envoi.</p>
+          ) : (
+            <>
+              <p style={{ margin: 0, fontSize: 15 }}>
+                {n ? (
+                  <>
+                    <strong style={{ fontWeight: 600 }}>{dureeTexte(r!.minutes)}</strong> en réunion · {n} réunion{n > 1 ? "s" : ""}
+                  </>
+                ) : (
+                  <span className="ton-discret">Aucune réunion notée cette semaine.</span>
+                )}
+              </p>
+              {n ? (
+                <ul className="liste">
+                  {r!.reunions.map((m, i) => (
+                    <li key={i} className="rangee" style={{ minHeight: 44, gap: 12 }}>
+                      <span className="rangee__meta" style={{ width: 64, flex: "none", fontSize: 12 }}>
+                        {jourAbrege(m.jour)}
+                        {m.heure ? ` ${m.heure.replace(":", " h ")}` : ""}
+                      </span>
+                      {m.projet ? <span className="etiquette-projet">{m.projet}</span> : null}
+                      <span className="rangee__texte">
+                        <span className="rangee__titre">{m.titre}</span>
+                        {m.avec ? <span className="rangee__sous">avec {m.avec} autre{m.avec > 1 ? "s" : ""} personne{m.avec > 1 ? "s" : ""}</span> : null}
+                      </span>
+                      <span className="rangee__meta">{dureeTexte(m.minutes)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {saisie ? (
+                <p className="note" style={{ margin: 0 }}>
+                  <a href={`/reunions${x.semaine ? `?semaine=${x.semaine}` : ""}`}>Noter une réunion</a> · la liste est figée à l&apos;envoi du rapport.
+                </p>
+              ) : null}
+            </>
           )}
         </div>
       </section>
@@ -436,7 +505,9 @@ function Synthese({ c, x, reponses, idT, idA }: { c: Champ; x: ContexteRapport; 
               <div key={projetId} className="synthese">
                 <h4 className="groupe-projet__titre" id={`${idP}-t`}>
                   <span className="etiquette-projet">{code}</span>
-                  {titre}
+                  <LienProjet id={projetId} visible={voitProjet(x, projetId)}>
+                    {titre}
+                  </LienProjet>
                 </h4>
                 {saisie ? (
                   <>
@@ -486,7 +557,7 @@ function Synthese({ c, x, reponses, idT, idA }: { c: Champ; x: ContexteRapport; 
 
 function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRapport; lignes: LigneLue[]; reponses: ReponseLue[]; idT: string; idA: string }) {
   const saisie = x.mode === "saisie";
-  const auteurs = (l: LigneLue) => l.auteursOrigine.map((id) => x.personnes.get(id) ?? { initiales: "?", nom: "" });
+  const auteurs = (l: LigneLue) => l.auteursOrigine.map((id) => ({ id: x.mode === "apercu" ? undefined : id, ...(x.personnes.get(id) ?? { initiales: "?", nom: "" }) }));
 
   if (x.mode === "apercu") {
     return (
@@ -528,7 +599,11 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
                       <span className="feu__nom">
                         <span className="etiquette-projet">{p.code}</span>
                         <span className="rangee__texte">
-                          <span className="rangee__titre">{p.titre}</span>
+                          <span className="rangee__titre">
+                            <LienProjet id={p.projetId} visible={voitProjet(x, p.projetId)}>
+                              {p.titre}
+                            </LienProjet>
+                          </span>
                           <span className="rangee__sous">{p.avis.map((a) => `${a.qui} : ${libelleSante(a.valeur).toLowerCase()}`).join(" · ")}</span>
                           {p.choisi && p.choisi !== p.propose ? <span className="rangee__sous ton-veille">Changé par vous : l'équipe disait « {libelleSante(p.propose).toLowerCase()} »</span> : null}
                         </span>
@@ -558,7 +633,11 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
                   <span className="feu__nom">
                     <span className="etiquette-projet">{r.projetCode}</span>
                     <span className="rangee__texte">
-                      <span className="rangee__titre">{r.projetTitre}</span>
+                      <span className="rangee__titre">
+                        <LienProjet id={r.projetId} visible={voitProjet(x, r.projetId)}>
+                          {r.projetTitre}
+                        </LienProjet>
+                      </span>
                       {r.commentaire ? <span className="rangee__sous">{r.commentaire}</span> : null}
                       {r.propose && r.valeur !== r.propose ? <span className="rangee__sous ton-veille">Changé par le chef : l'équipe disait « {libelleSante(r.propose).toLowerCase()} »</span> : null}
                     </span>
@@ -593,7 +672,9 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
                       {m.initiales}
                     </span>
                     <span className="rangee__texte" style={{ flex: "1 1 180px" }}>
-                      <span className="rangee__titre">{m.nom}</span>
+                      <span className="rangee__titre">
+                        <LienPersonne id={m.id}>{m.nom}</LienPersonne>
+                      </span>
                       <span className="rangee__sous">
                         Calculé : {Math.round(m.heures)} h sur {m.capacite} h la semaine prochaine ({NIVEAU_CALCULE[m.niveau]})
                       </span>
@@ -627,11 +708,11 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
   const gardees = lignes.filter((l) => !l.retiree);
   const retirees = lignes.filter((l) => l.retiree);
   const aDecider = c.reprise === "a_decider";
-  const groupes = new Map<string, { code: string; titre: string; lignes: LigneLue[] }>();
+  const groupes = new Map<string, { id: string | null; code: string; titre: string; lignes: LigneLue[] }>();
   if (!aDecider) {
     for (const l of gardees) {
       const k = l.projetId ?? "";
-      const g = groupes.get(k) ?? { code: l.projetCode ?? "—", titre: l.projetTitre ?? "Hors projet", lignes: [] };
+      const g = groupes.get(k) ?? { id: l.projetId, code: l.projetCode ?? "—", titre: l.projetTitre ?? "Hors projet", lignes: [] };
       g.lignes.push(l);
       groupes.set(k, g);
     }
@@ -680,7 +761,9 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
             <div key={g.code + g.titre} className="groupe-projet">
               <h4 className="groupe-projet__titre">
                 <span className="etiquette-projet">{g.code}</span>
-                {g.titre}
+                <LienProjet id={g.id} visible={voitProjet(x, g.id)}>
+                  {g.titre}
+                </LienProjet>
               </h4>
               <ul className="liste">
                 {g.lignes.map((l) => (

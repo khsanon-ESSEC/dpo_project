@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { acces, suitPersonne } from "@/lib/acces";
+import { acces, idsProjetsVisibles, suitPersonne } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { ajouterJours, dateCourte, dateLocale, heure } from "@/lib/dates";
 import { lireRapport, rapportsVoisins } from "@/lib/donnees/rapport";
@@ -10,6 +10,7 @@ import { semaineTexte } from "@/components/ResumeRapport";
 import { initiales, nomComplet } from "@/lib/regles";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
+import { LienPersonne } from "@/components/Liens";
 import { ChampRapport, type ContexteRapport } from "@/components/ChampRapport";
 
 export const metadata: Metadata = { title: "Rapport de la semaine" };
@@ -43,6 +44,7 @@ export default async function PageRapportRecu({ params }: { params: Promise<{ id
     superieur: null,
     equipe: null,
     niveauTitre: formulaire.some((c) => c.type === "intertitre") ? 3 : 2,
+    projetsVisibles: await idsProjetsVisibles(a),
     // Pièces des seuls champs que ce lecteur voit (un chef de projet n'en voit aucune).
     pieces: lu.complet ? (await piecesDuRapport(rapport.id)).filter((x) => formulaire.some((c) => c.id === x.champId && c.type === "piece_jointe")) : [],
   };
@@ -51,7 +53,7 @@ export default async function PageRapportRecu({ params }: { params: Promise<{ id
     <>
       <Bandeau
         surtitre={`Semaine du ${dateCourte(rapport.semaine)} au ${dateCourte(ajouterJours(rapport.semaine, 4))}`}
-        titre={nomComplet(auteur)}
+        titre={<LienPersonne id={auteur.id}>{nomComplet(auteur)}</LienPersonne>}
         retour={
           <a href={retour.href} className="retour">
             <Icone nom="chevron-gauche" taille={18} /> {retour.texte}

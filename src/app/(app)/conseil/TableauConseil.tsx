@@ -2,6 +2,7 @@
 import type { ReactNode } from "react";
 import { dateLongue } from "@/lib/dates";
 import type { lignesConseil } from "@/lib/donnees/conseil";
+import { LienProjet } from "@/components/Liens";
 import { enregistrerEtat, redigerAvecAssistant, retirerLigne } from "./actions";
 
 type Lignes = Awaited<ReturnType<typeof lignesConseil>>;
@@ -14,6 +15,7 @@ export function TableauConseil({
   ia,
   entete,
   rapportRetirable,
+  visibles,
 }: {
   lignes: Lignes;
   brouillon: boolean;
@@ -22,6 +24,8 @@ export function TableauConseil({
   entete: ReactNode;
   /** Rapport ponctuel en brouillon : chaque projet peut être retiré. */
   rapportRetirable?: string | null;
+  /** Projets que le lecteur peut ouvrir (leurs titres deviennent des liens). */
+  visibles?: "tous" | Set<string>;
 }) {
   return (
     <div className="papier">
@@ -52,7 +56,11 @@ export function TableauConseil({
                 <tr key={ligne.id}>
                   <td>{i + 1}</td>
                   <td>
-                    <strong style={{ fontWeight: 600 }}>{projet.titre}</strong>
+                    <strong style={{ fontWeight: 600 }}>
+                      <LienProjet id={projet.id} visible={!!visibles && (visibles === "tous" || visibles.has(projet.id))}>
+                        {projet.titre}
+                      </LienProjet>
+                    </strong>
                     <br />
                     {projet.description}
                     {rapportRetirable ? (

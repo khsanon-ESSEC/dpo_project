@@ -30,18 +30,24 @@ export function LigneEditable({
   modifiable: boolean;
   parProjet?: boolean;
   /** Élément reçu de l'équipe : initiales de ses auteurs (il se retire, il ne se supprime pas). */
-  auteurs?: { initiales: string; nom: string }[];
+  auteurs?: { id?: string; initiales: string; nom: string }[];
 }) {
   const [texte, setTexte] = useState(ligne.texte);
   const [, demarrer] = useTransition();
   const recu = !!auteurs;
   const Auteurs = recu ? (
     <span style={{ display: "inline-flex", gap: 3, flex: "none" }}>
-      {auteurs!.map((a) => (
-        <span key={a.initiales} className="initiales" title={a.nom}>
-          {a.initiales}
-        </span>
-      ))}
+      {auteurs!.map((a) =>
+        a.id ? (
+          <a key={a.initiales} href={`/personnes/${a.id}`} className="initiales" title={a.nom} aria-label={a.nom}>
+            {a.initiales}
+          </a>
+        ) : (
+          <span key={a.initiales} className="initiales" title={a.nom}>
+            {a.initiales}
+          </span>
+        ),
+      )}
     </span>
   ) : null;
   if (!modifiable) {

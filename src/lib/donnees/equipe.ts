@@ -1,7 +1,8 @@
 import "server-only";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { minutesDeReunion } from "./reunions";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { aujourdhui, dateLocale } from "@/lib/dates";
+import { ajouterJours, aujourdhui, dateLocale } from "@/lib/dates";
 import { chargerOrganisation } from "@/lib/organisation";
 import { initiales, membresDeLaDirection, nomComplet, resoudreSuperieur } from "@/lib/regles";
 import type { Acces } from "@/lib/acces";
@@ -17,7 +18,7 @@ export async function monEquipe(a: Acces) {
   const toute = a.directeur || a.toutVoir;
   const ids = toute ? [...membresDeLaDirection(org, a.moi.id)] : a.equipeDirecte;
   const semaine = semaineCourante();
-  const [taches, statuts] = await Promise.all([tachesDe(ids, { semaine }), statutsRapports(ids, semaine)]);
+  const [taches, statuts, reunions] = await Promise.all([tachesDe(ids, { semaine }), statutsRapports(ids, semaine), minutesDeReunion(ids, semaine, ajouterJours(semaine, 6))]);
   const jour = aujourdhui();
 
   const personnes = ids.map((id) => {
@@ -36,6 +37,7 @@ export async function monEquipe(a: Acces) {
       rapport: r?.statut === "envoye" ? { id: r.id, envoyeLe: r.envoyeLe } : null,
       ...c,
       projets: [...new Set(siennes.map((t) => t.projetCode).filter(Boolean))] as string[],
+      minutesReunion: reunions.get(id) ?? 0,
     };
   });
   // Les personnes sans rapport d'abord, puis celles qui ont des blocages.
@@ -69,7 +71,7 @@ export async function monEquipe(a: Acces) {
         .select({ id: schema.taches.id, titre: schema.taches.titre, assigneId: schema.taches.assigneId, majLe: schema.taches.majLe, projet: schema.projets.titre })
         .from(schema.taches)
         .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
-        .where(and(inArray(schema.taches.assigneId, ids), eq(schema.taches.statut, "bloquee")))
+        .where(and(inArray(schema.taches.assigneId, ids), eq(schema.taches.statut, "bloquee"), isNull(schema.taches.annuleeLe)))
         .orderBy(asc(schema.taches.majLe))
     : [];
 

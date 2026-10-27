@@ -11,6 +11,9 @@ import { Jauge } from "@/components/Charge";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { CaseTache } from "@/components/CaseTache";
 import { Icone } from "@/components/Icone";
+import { ONGLETS_SEMAINE, SousOnglets } from "@/components/SousOnglets";
+import { reunionsDe } from "@/lib/donnees/reunions";
+import { dureeTexte } from "@/lib/projets";
 
 export const metadata: Metadata = { title: "Ma semaine" };
 
@@ -28,7 +31,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
   // Un jour choisi dans la frise (passé ou non) : sa semaine s'affiche, et ce qui s'y est passé.
   const choisi = jourDemande && /^\d{4}-\d{2}-\d{2}$/.test(jourDemande) && !Number.isNaN(Date.parse(jourDemande)) ? jourDemande : null;
   const semaineVue = lundiDe(choisi ?? jour);
-  const [taches, jours, projets, rapport, maCharge, journee, rapportVu] = await Promise.all([
+  const [taches, jours, projets, rapport, maCharge, journee, rapportVu, reunions] = await Promise.all([
     tachesDe([u.id]),
     activiteDeLaSemaine(u.id, semaineVue),
     mesProjets(u.id),
@@ -42,7 +45,10 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
           .where(and(eq(schema.rapportsHebdo.auteurId, u.id), eq(schema.rapportsHebdo.semaine, semaineVue)))
           .then((r) => r[0] ?? null)
       : null,
+    reunionsDe(u.id, semaineVue, ajouterJours(semaineVue, 6)),
   ]);
+  const minutesReunion = reunions.reduce((t, r) => t + r.dureeMinutes, 0);
+  const reunionsDuJour = choisi ? reunions.filter((r) => r.jour === choisi) : [];
   const charge = maCharge.lignes[0]?.charge;
   const c = compter(taches, jour);
   const liste = trier(taches, jour);
@@ -70,6 +76,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
         </div>
       </Bandeau>
       <div className="page">
+        <SousOnglets onglets={ONGLETS_SEMAINE} courant="/semaine" label="Ma semaine" />
         <nav className="frise-semaine" aria-label="Semaines">
           <a href={`/semaine?jour=${ajouterJours(semaineVue, -7)}`} className="bouton-icone" aria-label="Semaine précédente" title="Semaine précédente">
             <Icone nom="chevron-gauche" taille={20} />
@@ -125,7 +132,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
                 Fermer
               </a>
             </div>
-            {journee.faits.length === 0 && journee.echeances.length === 0 ? <p className="vide">Aucune mise à jour de tâche ce jour-là, et aucune échéance.</p> : null}
+            {journee.faits.length === 0 && journee.echeances.length === 0 && reunionsDuJour.length === 0 ? <p className="vide">Aucune mise à jour de tâche ce jour-là, aucune échéance, aucune réunion.</p> : null}
             {journee.faits.length ? (
               <ul className="liste">
                 {journee.faits.map((f) => (
@@ -144,6 +151,27 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
                   </li>
                 ))}
               </ul>
+            ) : null}
+            {reunionsDuJour.length ? (
+              <>
+                <h3 style={{ margin: "14px 0 4px", fontSize: 13, fontWeight: 500 }}>Réunions · {dureeTexte(reunionsDuJour.reduce((t, r) => t + r.dureeMinutes, 0))}</h3>
+                <ul className="liste">
+                  {reunionsDuJour.map((r) => (
+                    <li key={r.id}>
+                      <a href={`/reunions?semaine=${semaineVue}`} className="rangee" style={{ minHeight: 48 }}>
+                        <span className="rangee__meta" style={{ flex: "0 0 64px", fontVariantNumeric: "tabular-nums" }}>
+                          {r.heure ? r.heure.replace(":", " h ") : "—"}
+                        </span>
+                        {r.projetCode ? <span className="etiquette-projet">{r.projetCode}</span> : null}
+                        <span className="rangee__texte">
+                          <span className="rangee__titre">{r.titre}</span>
+                        </span>
+                        <span className="rangee__meta">{dureeTexte(r.dureeMinutes)}</span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </>
             ) : null}
             {journee.echeances.length ? (
               <>
@@ -242,6 +270,23 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
                 </div>
               </section>
             ) : null}
+            <section className="carte" aria-labelledby="t-reunions" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div className="carte__entete" style={{ margin: 0 }}>
+                <h2 id="t-reunions" className="carte__titre">
+                  Réunions {semaineVue === semaine ? "cette semaine" : `semaine du ${dateCourte(semaineVue)}`}
+                </h2>
+                <a href={`/reunions?semaine=${semaineVue}`} className="lien-discret">
+                  Détail →
+                </a>
+              </div>
+              <span style={{ fontSize: 26, lineHeight: "32px", fontWeight: 200 }}>
+                {minutesReunion ? dureeTexte(minutesReunion) : "Aucune"}
+                {reunions.length ? <small style={{ fontSize: 14, marginLeft: 8 }} className="ton-discret">{reunions.length} réunion{reunions.length > 1 ? "s" : ""}</small> : null}
+              </span>
+              <a href={`/reunions?semaine=${semaineVue}#noter`} className="bouton-contour" style={{ alignSelf: "flex-start" }}>
+                <Icone nom="ajouter" taille={16} /> Noter une réunion
+              </a>
+            </section>
             <section className="carte carte--liste" aria-labelledby="t-projets">
               <h2 id="t-projets" className="carte__titre">
                 Mes projets

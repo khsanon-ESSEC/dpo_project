@@ -5,7 +5,7 @@
  *   leur objet, les projets choisis, la période couverte. Ils ne changent pas l'historique mensuel.
  */
 import "server-only";
-import { and, asc, desc, eq, inArray, lt, lte, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { aujourdhui, dateCourte, dateLongue, premierDuMois } from "@/lib/dates";
 import { noter } from "@/lib/journal";
@@ -49,7 +49,7 @@ export async function obtenirOuCreerRapportConseil(mois = moisCourant()) {
     const projets = await db
       .select()
       .from(schema.projets)
-      .where(and(eq(schema.projets.strategique, true), ne(schema.projets.statut, "finalise")))
+      .where(and(eq(schema.projets.strategique, true), ne(schema.projets.statut, "finalise"), ne(schema.projets.statut, "requete"), ne(schema.projets.statut, "refuse"), isNull(schema.projets.archiveLe)))
       .orderBy(asc(schema.projets.creeLe));
     let ordre = 0;
     for (const p of projets) {
@@ -150,12 +150,12 @@ export async function faitsDepuis(projetId: string, depuis: string) {
   const terminees = await db
     .select({ titre: schema.taches.titre })
     .from(schema.taches)
-    .where(and(eq(schema.taches.projetId, projetId), eq(schema.taches.statut, "faite"), sql`${schema.taches.termineeLe} >= ${debut}`))
+    .where(and(eq(schema.taches.projetId, projetId), eq(schema.taches.statut, "faite"), sql`${schema.taches.termineeLe} >= ${debut}`, isNull(schema.taches.annuleeLe)))
     .orderBy(desc(schema.taches.termineeLe));
   const bloquees = await db
     .select({ titre: schema.taches.titre, blocage: schema.taches.blocage })
     .from(schema.taches)
-    .where(and(eq(schema.taches.projetId, projetId), eq(schema.taches.statut, "bloquee")));
+    .where(and(eq(schema.taches.projetId, projetId), eq(schema.taches.statut, "bloquee"), isNull(schema.taches.annuleeLe)));
   return { terminees: terminees.map((t) => t.titre), bloquees };
 }
 
@@ -269,6 +269,7 @@ export async function projetsPourRapport(visibles: Set<string> | "tous") {
     .from(schema.projets)
     .orderBy(asc(schema.projets.code));
   return projets
+    .filter((p) => p.statut !== "requete" && p.statut !== "refuse")
     .filter((p) => visibles === "tous" || visibles.has(p.id))
     .sort((a, b) => Number(b.strategique) - Number(a.strategique) || Number(a.statut === "finalise") - Number(b.statut === "finalise") || a.code.localeCompare(b.code, "fr"));
 }

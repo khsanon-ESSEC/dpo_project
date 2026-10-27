@@ -2,15 +2,19 @@
 
 Application web de suivi des projets de la DPO (UNIBANK) :
 
-- **Ma semaine** : les tâches de chacun, cochées au fil de la semaine. Un clic sur un jour de la frise montre ce qui s'est passé ce jour-là ; les flèches remontent aux semaines précédentes.
+- **Ma semaine** : les tâches de chacun, cochées au fil de la semaine. Un clic sur un jour de la frise montre ce qui s'est passé ce jour-là (tâches, échéances, réunions) ; les flèches remontent aux semaines précédentes.
+- **Réunions** : chacun note les réunions auxquelles il a participé (sujet, jour, heure, durée, projet, participants, notes). Une seule personne la note : elle compte pour chaque participant, qui est prévenu et peut s'en retirer. Le temps en réunion apparaît dans sa semaine, dans son rapport du vendredi (pour son supérieur direct), dans la charge (il réduit le temps disponible) et dans le bilan.
+- **Mon bilan** : la semaine comparée à la précédente, et les huit dernières semaines (tâches terminées, heures livrées, terminées à temps, temps en réunion, rapport envoyé).
 - **Rapport de la semaine** : un formulaire configuré par les administrateurs (modèles de rapport), préparé à partir des tâches, relu et envoyé au supérieur. Chaque chef de projet reçoit les lignes et les feux de son projet. Ce qui était prévu la semaine précédente se reprend en un clic (fait, en cours, reporté).
 - **Rapport de chef** : le chef d'équipe et le directeur gardent leur propre rapport (« Mon travail »), suivi d'une partie préremplie à partir des rapports qu'ils reçoivent (« Mon équipe », « Ma division ») : à décider, synthèse par projet, santé des projets, charge, fait, la semaine prochaine. Un seul envoi. Les exécutifs ne rédigent pas de rapport : ils lisent ceux de tout le monde.
 - **Heures du rapport** : chaque modèle fixe quand le rapport est prêt à relire (le brouillon est alors complété avec les tâches de la semaine), quand un rappel part, et l'heure limite ; le chef apprend ensuite quels rapports manquent.
 - **Pièces jointes** dans le rapport (PDF, images, Word, Excel, PowerPoint, CSV, texte ; 10 Mo par fichier), lues selon la règle du champ.
 - **Modèles de rapport** (administrateurs) : champs à choisir ou à glisser, ordre, propriétés de chaque champ, affectation aux équipes et aux personnes, versions.
 - **Mes rapports** : tous les rapports déjà envoyés, semaine par semaine, avec passage d'une semaine à l'autre.
-- **Mon équipe** : qui a envoyé son rapport, les blocages, les retards, avec relance ; un directeur ou un exécutif y voit toute la structure sous lui, regroupée par équipe ; l'historique des rapports de l'équipe (par semaine ou par personne) ; la charge de travail.
-- **Projets** : portefeuille, fiches projet, indicateurs vérifiables, glissement des dates.
+- **Mon équipe** : qui a envoyé son rapport, les blocages, les retards, le temps en réunion de la semaine, avec relance ; un directeur ou un exécutif y voit toute la structure sous lui, regroupée par équipe ; l'historique des rapports de l'équipe (par semaine ou par personne) ; la charge de travail ; le **bilan de l'équipe**, mois contre mois, personne par personne (les exécutifs le voient pour toute la banque).
+- **Projets** : portefeuille, fiches projet, indicateurs vérifiables, glissement des dates. Chacun peut **proposer un projet** ; un directeur ou un exécutif l'accepte (en nommant le chef de projet) ou la refuse avec un motif. Le chef de projet établit l'**équipe du projet** et modifie la fiche (titre, code, dates, statut, indicateurs). Un projet qui a une histoire s'**archive** ; seul un projet vide (une erreur) se supprime.
+- **Tâches** : créer, renommer, préciser, changer de projet, **confier** à quelqu'un (à soi-même, aux personnes qu'on suit, et, sur un projet qu'on dirige, aux membres de son équipe projet) ; les deux personnes sont prévenues. Une tâche commencée s'**annule** avec un motif (et se rétablit) ; seule une tâche sans histoire se supprime.
+- **Noms cliquables** : partout, le nom d'une personne ouvre sa fiche (poste, équipe, supérieur, projets), le nom d'un projet ouvre le projet, quand on a le droit de le voir.
 - **Rapports au conseil** : le rapport mensuel des projets stratégiques, au format du tableau Word de la banque (avec le logo) ; et des **rapports ponctuels**, faits à tout moment pour une demande ou un événement imprévu : un titre, la demande, les projets choisis, la période couverte. Un exécutif les approuve ; ils ne changent pas les dates du rapport mensuel.
 - **Vues d'un projet** : vue d'ensemble, liste, tableau (colonnes par état, avec glisser-déposer), Gantt (jours, semaines ou mois), calendrier des échéances, charge de l'équipe du projet. Le portefeuille a aussi une chronologie de tous les projets.
 - **Charge de travail** : les heures de tâches prévues pour chaque personne, semaine par semaine, comparées à ses heures disponibles ; repère qui est chargé ou surchargé, et l'indique au moment de confier une tâche.
@@ -25,10 +29,10 @@ Application multipage (chaque écran est une page rendue par le serveur), en fra
 
 | Rôle | Comment on l'obtient | Ce qu'il voit |
 |---|---|---|
-| Chacun | — | Ses tâches, son rapport de la semaine, les projets sur lesquels il travaille |
+| Chacun | — | Ses tâches, son rapport de la semaine, ses réunions, son bilan, les projets sur lesquels il travaille (dont ceux de son équipe projet) ; la fiche de chacun (poste, équipe, supérieur, projets visibles) |
 | Supérieur (chef d'équipe) | Automatique : des personnes lui envoient leur rapport | Les tâches et les rapports de ses subordonnés directs |
-| Chef de projet | Automatique : désigné sur la fiche projet | Tout son projet ; dans les rapports de la semaine, **seulement** les lignes et les feux de son projet, dans les champs ouverts à tous |
-| Directeur | Interrupteur dans *Organisation* | Les projets, tâches et rapports des membres de **sa direction** (toutes les personnes placées sous lui, à tous les niveaux) ; les projets stratégiques de sa direction dans le rapport au conseil |
+| Chef de projet | Automatique : désigné sur la fiche projet | Tout son projet, qu'il gère (fiche, indicateurs, équipe projet, archivage) ; dans les rapports de la semaine, **seulement** les lignes et les feux de son projet, dans les champs ouverts à tous |
+| Directeur | Interrupteur dans *Organisation* | Les projets, tâches et rapports des membres de **sa direction** (toutes les personnes placées sous lui, à tous les niveaux) ; décide des demandes de projet qu'il voit ; les projets stratégiques de sa direction dans le rapport au conseil |
 | Exécutif | Interrupteur dans *Organisation* (seul un exécutif peut le donner) | **Tout** ; approuve les rapports au conseil. Ne rédige pas de rapport de la semaine |
 | Administrateur | Interrupteur dans *Organisation* | Gère les personnes, les équipes, les supérieurs, les accès et les **modèles de rapport**. Ne donne **aucun** accès supplémentaire aux rapports ni aux tâches |
 
@@ -44,7 +48,7 @@ Ces règles sont écrites dans `src/lib/regles.ts` et `src/lib/modeles.ts`, et v
 
 Écran *Organisation → Modèles de rapport*, réservé aux administrateurs.
 
-- **Un modèle** est la liste des champs que la personne remplit, dans l'ordre. Types : lignes par projet, santé des projets (Dans les temps, À surveiller, En retard), charge de la semaine (Légère, Normale, Lourde, Trop lourde), texte court ou long, choix, échelle, nombre, date, pièce jointe, intertitre, note ; pour les modèles de chef : « Mon travail », « Repris des rapports reçus » et « Synthèse par projet ».
+- **Un modèle** est la liste des champs que la personne remplit, dans l'ordre. Types : lignes par projet, santé des projets (Dans les temps, À surveiller, En retard), charge de la semaine (Légère, Normale, Lourde, Trop lourde), réunions de la semaine (reprises du journal des réunions, figées à l'envoi ; « son supérieur seulement » par défaut), texte court ou long, choix, échelle, nombre, date, pièce jointe, intertitre, note ; pour les modèles de chef : « Mon travail », « Repris des rapports reçus » et « Synthèse par projet ».
 - **Heures de la semaine** : prêt à relire (vendredi 10 h par défaut), rappel (14 h), à envoyer avant (17 h). Les alertes sont créées à l'ouverture d'une page, une fois par semaine : aucune tâche planifiée à installer.
 - **Synthèse par projet** (rapport de chef) : quelques phrases par projet, préparées à partir de ce que l'équipe a envoyé (ou des synthèses des chefs d'équipe), à relire ; l'assistant peut les rédiger. Seul ce que les lecteurs du champ pouvaient déjà lire y entre.
 - **Décision ou aide attendue** : des propositions sont faites à partir des tâches bloquées et des échéances dépassées ; l'assistant peut les formuler.
@@ -61,12 +65,22 @@ Ces règles sont écrites dans `src/lib/regles.ts` et `src/lib/modeles.ts`, et v
 - Les heures sont réparties sur les jours ouvrés (lundi à vendredi) entre le début et l'échéance. Sans début, la tâche commence assez tôt pour tenir à 8 heures par jour.
 - Rien n'est placé dans le passé : une tâche en retard est à rattraper tout de suite ; cette semaine, seules les heures des jours qui restent sont disponibles.
 - Les tâches bloquées ne comptent pas tant qu'elles le restent (elles attendent quelqu'un d'autre).
-- Chaque personne a ses **heures disponibles par semaine** (40 par défaut), réglées dans *Organisation*.
+- Chaque personne a ses **heures disponibles par semaine** (40 par défaut), réglées dans *Organisation*. Les **réunions notées** (passées ou prévues) en sont retirées : cette semaine, celles des jours qui restent ; les semaines suivantes, toutes.
 - Niveaux : jusqu'à 85 % des heures disponibles, charge normale ; de 85 à 100 %, chargée ; au-delà, surchargée.
 
 L'écran *Charge* est ouvert aux chefs d'équipe, directeurs et exécutifs, pour les personnes qu'ils suivent. Dans la vue *Charge* d'un projet, le chef de projet voit les heures de chacun sur son projet et seulement le **niveau** de charge totale des personnes qu'il ne suit pas, sans le détail de leurs autres projets.
 
 Ces règles sont écrites dans `src/lib/charge.ts` et vérifiées par les tests.
+
+## Bilan : ce qu'il mesure
+
+- **Tâches terminées** et **heures livrées** : les tâches marquées faites dans la période, avec leur temps estimé (4 heures pour une tâche sans estimation).
+- **Terminées à temps** : parmi les tâches terminées qui avaient une échéance, la part terminée au plus tard ce jour-là.
+- **En réunion** et **part du temps** : les réunions notées, rapportées aux heures disponibles de la période (jusqu'à aujourd'hui pour la période en cours).
+- **Rapports** : les rapports du vendredi envoyés, sur ceux attendus (une semaine compte à partir de son vendredi ; rien n'est attendu d'un exécutif).
+- L'employé compare **semaine contre semaine** (*Semaine → Mon bilan*) ; le chef d'équipe, le directeur et l'exécutif comparent leur équipe **mois contre mois** (*Équipe → Bilan*), et ouvrent le détail par semaine de chaque personne.
+
+Ces chiffres décrivent ce qui est enregistré dans l'application ; ils ne mesurent ni la qualité du travail ni ce qui n'est pas noté. L'écran le rappelle. Règles : `src/lib/bilan.ts`, testées.
 
 ## Installation (service informatique)
 
@@ -235,6 +249,8 @@ src/lib/regles.ts   qui voit quoi (sans base, testé)
 src/lib/acces.ts    couche d'accès utilisée par toutes les pages
 src/lib/charge.ts   calcul de la charge de travail (sans base, testé)
 src/lib/modeles.ts  modèles de rapport : champs, validation, dépliage, visibilité (sans base, testé)
+src/lib/projets.ts  gestion des projets et des tâches : qui assigne, gère, décide ; supprimer ou archiver (sans base, testé)
+src/lib/bilan.ts    bilan d'activité par période (sans base, testé)
 src/lib/donnees/    lectures et écritures par domaine
 src/lib/ia.ts       connecteur d'IA interchangeable
 scripts/            migration, création d'utilisateur, données de démonstration

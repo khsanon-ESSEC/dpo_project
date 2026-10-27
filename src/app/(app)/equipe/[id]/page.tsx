@@ -40,7 +40,14 @@ export default async function PagePersonne({ params, searchParams }: { params: P
   return (
     <>
       <Bandeau
-        surtitre={p.poste}
+        surtitre={
+          <>
+            {p.poste ? `${p.poste} · ` : ""}
+            <a href={`/personnes/${id}`} className="lien-nom">
+              Fiche
+            </a>
+          </>
+        }
         titre={id === u.id ? "Ma charge" : nomComplet(p)}
         retour={
           id === u.id ? (
@@ -57,14 +64,18 @@ export default async function PagePersonne({ params, searchParams }: { params: P
         {charge ? (
           <dl className="chiffres">
             <div className={`chiffre ${charge.semaines[0].niveau === "surchargee" ? "chiffre--retard" : charge.semaines[0].niveau === "chargee" ? "chiffre--veille" : ""}`}>
-              <dt>cette semaine, sur {heuresTexte(charge.semaines[0].capacite)} restantes</dt>
+              <dt>
+                cette semaine, sur {heuresTexte(charge.semaines[0].capacite)} restantes{charge.semaines[0].reunions ? ` hors ${heuresTexte(charge.semaines[0].reunions)} de réunion` : ""}
+              </dt>
               <dd>
                 {Math.round(charge.semaines[0].heures)}
                 <small>&nbsp;h</small>
               </dd>
             </div>
             <div className={`chiffre ${charge.semaines[1].niveau === "surchargee" ? "chiffre--retard" : charge.semaines[1].niveau === "chargee" ? "chiffre--veille" : ""}`}>
-              <dt>la semaine prochaine, sur {charge.semaines[1].capacite} h</dt>
+              <dt>
+                la semaine prochaine, sur {charge.semaines[1].capacite} h{charge.semaines[1].reunions ? ` hors ${heuresTexte(charge.semaines[1].reunions)} de réunion` : ""}
+              </dt>
               <dd>
                 {Math.round(charge.semaines[1].heures)}
                 <small>&nbsp;h</small>

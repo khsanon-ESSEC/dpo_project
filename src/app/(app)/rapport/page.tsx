@@ -22,6 +22,7 @@ import {
   vueEquipe,
 } from "@/lib/donnees/rapport";
 import { piecesDuRapport } from "@/lib/donnees/pieces";
+import { reunionsDeLaSemaine } from "@/lib/donnees/reunions";
 import { iaDisponible } from "@/lib/ia";
 import { redigeUnRapport } from "@/lib/regles";
 import { versionDuRapport } from "@/lib/donnees/modeles";
@@ -32,6 +33,7 @@ import { estDecoratif, LIBELLE_VISIBILITE, texteMoment, type Rubrique } from "@/
 import { ONGLETS_RAPPORT, SousOnglets } from "@/components/SousOnglets";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
+import { LienPersonne } from "@/components/Liens";
 import { ChampRapport, type ContexteRapport } from "@/components/ChampRapport";
 import { completerAvecMesTaches, envoyer, reprendreLigne } from "./actions";
 
@@ -97,6 +99,9 @@ export default async function PageRapport({ searchParams }: { searchParams: Prom
     erreurPiece: piece && champPiece ? { champId: champPiece, message: piece.slice(0, 600) } : null,
     suggestions,
     ia: iaDisponible(),
+    projetsVisibles: visibles,
+    reunions: brouillon && f.some((c) => c.type === "reunions") ? await reunionsDeLaSemaine(u.id, rapport.semaine) : null,
+    semaine: rapport.semaine,
   };
   const limite = horaires.limite ? texteMoment(horaires.limite, semaine) : null;
 
@@ -304,7 +309,9 @@ export default async function PageRapport({ searchParams }: { searchParams: Prom
                 {lecteurs.superieur ? (
                   <li className="rangee">
                     <span className="rangee__texte">
-                      <span className="rangee__titre">{lecteurs.superieur.nom}</span>
+                      <span className="rangee__titre">
+                        <LienPersonne id={lecteurs.superieur.id}>{lecteurs.superieur.nom}</LienPersonne>
+                      </span>
                       <span className="rangee__sous">Votre supérieur</span>
                     </span>
                     <span className="rangee__meta" style={{ fontSize: 12 }}>
@@ -315,7 +322,9 @@ export default async function PageRapport({ searchParams }: { searchParams: Prom
                 {lecteurs.directeurs.map((d) => (
                   <li key={d.id} className="rangee">
                     <span className="rangee__texte">
-                      <span className="rangee__titre">{d.nom}</span>
+                      <span className="rangee__titre">
+                        <LienPersonne id={d.id}>{d.nom}</LienPersonne>
+                      </span>
                       <span className="rangee__sous">Votre direction{d.poste ? ` · ${d.poste}` : ""}</span>
                     </span>
                     <span className="rangee__meta" style={{ fontSize: 12 }}>
@@ -335,7 +344,9 @@ export default async function PageRapport({ searchParams }: { searchParams: Prom
                 {lecteurs.chefs.map((c) => (
                   <li key={c.id} className="rangee">
                     <span className="rangee__texte">
-                      <span className="rangee__titre">{c.nom}</span>
+                      <span className="rangee__titre">
+                        <LienPersonne id={c.id}>{c.nom}</LienPersonne>
+                      </span>
                       <span className="rangee__sous">Chef de projet · {c.titre}</span>
                     </span>
                     <span className="rangee__meta" style={{ fontSize: 12 }}>

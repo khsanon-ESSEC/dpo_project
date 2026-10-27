@@ -3,7 +3,8 @@
  * rapports reçus (rapport de chef), envoi, lecture filtrée champ par champ.
  */
 import "server-only";
-import { and, asc, desc, eq, inArray, lt, max, ne, or, sql } from "drizzle-orm";
+import { reunionsDeLaSemaine } from "./reunions";
+import { and, asc, desc, eq, inArray, isNull, lt, max, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { ajouterJours, aujourdhui, dateLocale, lundiDe, maintenantLocal } from "@/lib/dates";
 import { noter } from "@/lib/journal";
@@ -70,7 +71,7 @@ type LignePrevue = { partie: Partie; texte: string; projetId: string | null; tac
 /** Brouillon par règles simples, sans IA : ce qui a été fait, en cours, bloqué, prévu. */
 export async function brouillonParRegles(auteurId: string, semaine: string): Promise<LignePrevue[]> {
   const { debut, fin } = bornes(semaine);
-  const taches = await db.select().from(schema.taches).where(eq(schema.taches.assigneId, auteurId)).orderBy(asc(schema.taches.echeance));
+  const taches = await db.select().from(schema.taches).where(and(eq(schema.taches.assigneId, auteurId), isNull(schema.taches.annuleeLe))).orderBy(asc(schema.taches.echeance));
   const notes = await db
     .select({ tacheId: schema.evenementsTache.tacheId, note: schema.evenementsTache.note })
     .from(schema.evenementsTache)
@@ -108,7 +109,7 @@ async function projetsANoter(auteurId: string, semaine: string) {
     .selectDistinct({ id: schema.projets.id })
     .from(schema.taches)
     .innerJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
-    .where(and(eq(schema.taches.assigneId, auteurId), or(ne(schema.taches.statut, "faite"), sql`${schema.taches.termineeLe} >= ${debut}`)));
+    .where(and(eq(schema.taches.assigneId, auteurId), or(ne(schema.taches.statut, "faite"), sql`${schema.taches.termineeLe} >= ${debut}`), isNull(schema.taches.annuleeLe)));
   const diriges = await db.select({ id: schema.projets.id }).from(schema.projets).where(eq(schema.projets.chefProjetId, auteurId));
   const ids = [...new Set([...viaTaches, ...diriges].map((x) => x.id))];
   if (!ids.length) return [];
@@ -468,6 +469,17 @@ async function figerEquipe(rapport: typeof schema.rapportsHebdo.$inferSelect) {
   });
 }
 
+/** Champ « reunions » : la liste de la semaine est figée à l'envoi (le journal peut changer ensuite). */
+async function figerReunions(rapport: typeof schema.rapportsHebdo.$inferSelect) {
+  const champs = formulaireDe(rapport).filter((c) => c.type === "reunions");
+  if (!champs.length) return;
+  const v = await reunionsDeLaSemaine(rapport.auteurId, rapport.semaine);
+  for (const c of champs) {
+    await db.delete(schema.reponsesRapport).where(and(eq(schema.reponsesRapport.rapportId, rapport.id), eq(schema.reponsesRapport.champId, c.id)));
+    await db.insert(schema.reponsesRapport).values({ rapportId: rapport.id, champId: c.id, valeur: JSON.stringify(v), commentaire: `${v.reunions.length} réunion(s)` });
+  }
+}
+
 /** Ce qu'il faut pour vérifier les champs obligatoires. */
 async function remplissage(rapportId: string, f: Champ[]) {
   const [lignes, reponses, pieces] = await Promise.all([
@@ -504,6 +516,7 @@ export async function envoyerRapport(rapportId: string, auteurId: string): Promi
   await synchroniserReprises(brouillon);
   await synchroniserSyntheses(brouillon);
   await figerEquipe(brouillon);
+  await figerReunions(brouillon);
   const org = await chargerOrganisation();
   const sup = resoudreSuperieur(org, auteurId);
   const [r] = await db
@@ -597,14 +610,14 @@ export async function lignesDuProjetCetteSemaine(projetId: string, auteurs: "tou
     .where(and(eq(schema.lignesRapport.projetId, projetId), eq(schema.rapportsHebdo.semaine, semaine), eq(schema.rapportsHebdo.statut, "envoye")))
     .orderBy(asc(schema.rapportsHebdo.envoyeLe), asc(schema.lignesRapport.ordre));
   const org = await chargerOrganisation();
-  const parAuteur = new Map<string, { auteur: string; prenom: string; nom: string; envoyeLe: Date | null; lignes: { partie: string | null; champ: string; texte: string }[] }>();
+  const parAuteur = new Map<string, { auteurId: string; auteur: string; prenom: string; nom: string; envoyeLe: Date | null; lignes: { partie: string | null; champ: string; texte: string }[] }>();
   for (const l of lignes) {
     if (auteurs !== "toutes" && !auteurs.has(l.auteurId)) continue;
     if (l.origines.length) continue; // les reprises d'un rapport de chef répètent les rapports de l'équipe
     const c = formulaireDe({ formulaire: l.formulaire }).find((x) => x.id === l.champId);
     if (!c || c.type !== "lignes" || (c.visibilite ?? "tous") !== "tous") continue;
     const p = org.personnes.get(l.auteurId)!;
-    const g = parAuteur.get(l.auteurId) ?? { auteur: nomComplet(p), prenom: p.prenom, nom: p.nom, envoyeLe: l.envoyeLe, lignes: [] };
+    const g = parAuteur.get(l.auteurId) ?? { auteurId: l.auteurId, auteur: nomComplet(p), prenom: p.prenom, nom: p.nom, envoyeLe: l.envoyeLe, lignes: [] };
     g.lignes.push({ partie: l.partie, champ: c.libelle, texte: l.texte });
     parAuteur.set(l.auteurId, g);
   }
@@ -938,7 +951,7 @@ export async function suggestionsPourDecision(rapport: typeof schema.rapportsHeb
     .select({ titre: schema.taches.titre, statut: schema.taches.statut, blocage: schema.taches.blocage, echeance: schema.taches.echeance, projetId: schema.taches.projetId, projetCode: schema.projets.code })
     .from(schema.taches)
     .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
-    .where(and(eq(schema.taches.assigneId, rapport.auteurId), ne(schema.taches.statut, "faite")));
+    .where(and(eq(schema.taches.assigneId, rapport.auteurId), ne(schema.taches.statut, "faite"), isNull(schema.taches.annuleeLe)));
   const f = formulaireDe(rapport);
   const [lignes, reponses] = await Promise.all([lignesDuRapport(rapport.id), reponsesDuRapport(rapport.id)]);
   const propres = lignes.filter((l) => l.origines.length === 0);

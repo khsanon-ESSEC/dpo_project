@@ -25,6 +25,7 @@ const GLYPHE: Record<TypeChamp, string> = {
   reprise: "M4 7h9M4 12h9M4 17h6M16 9l4 3-4 3",
   synthese: "M4 6h16M4 10h12M4 14h16M4 18h8M19 15l1 2 2 1-2 1-1 2-1-2-2-1 2-1z",
   piece_jointe: "M16.5 7.5 9.3 14.7a1.8 1.8 0 0 0 2.5 2.5l7.4-7.4a3.6 3.6 0 0 0-5.1-5.1l-7.6 7.6a5.4 5.4 0 0 0 7.6 7.6l6.4-6.4",
+  reunions: "M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM2.5 19a5.5 5.5 0 0 1 11 0M10.5 19a5.5 5.5 0 0 1 11 0",
 };
 
 function Glyphe({ type }: { type: TypeChamp }) {

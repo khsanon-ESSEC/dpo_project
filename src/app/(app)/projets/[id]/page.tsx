@@ -2,12 +2,18 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { acces, auteursLignesVisibles, exigerProjetVisible } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
-import { aujourdhui, dateCourte, dateLongue, echeanceRelative, ecartJours, heure } from "@/lib/dates";
+import { aujourdhui, dateCourte, dateLocale, dateLongue, echeanceRelative, ecartJours, heure } from "@/lib/dates";
 import { ficheProjet } from "@/lib/donnees/projets";
+import { membresDuProjet } from "@/lib/donnees/gestion";
+import { chargerOrganisation } from "@/lib/organisation";
+import { nomComplet } from "@/lib/regles";
+import { LIBELLE_STATUT_PROJET, peutDecider, peutGererProjet, STATUTS_ACCEPTES } from "@/lib/projets";
+import { ajouter, archiver, decider, retirer } from "../gestion-actions";
 import { lignesDuProjetCetteSemaine } from "@/lib/donnees/rapport";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { CocheSeule } from "@/components/CaseTache";
 import { Icone } from "@/components/Icone";
+import { LienPersonne } from "@/components/Liens";
 import { changerIndicateur, mettreAJourProjet } from "./actions";
 import { OngletsVues } from "./commun";
 
@@ -20,8 +26,9 @@ const SANTE = {
 } as const;
 const ETAT_IND = { atteint: "Atteint", en_cours: "En cours", a_venir: "À venir" } as const;
 
-export default async function PageProjet({ params }: { params: Promise<{ id: string }> }) {
+export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string }> }) {
   const { id } = await params;
+  const { propose, erreur } = await searchParams;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
   const a = await acces(u);
@@ -29,7 +36,15 @@ export default async function PageProjet({ params }: { params: Promise<{ id: str
   const f = await ficheProjet(id);
   const p = f.projet;
   // Chef du projet, directeur de la direction concernée (le projet lui est visible), exécutifs.
-  const peutModifier = a.toutVoir || a.directeur || p.chefProjetId === u.id;
+  const peutModifier = peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir }, p);
+  const demande = p.statut === "requete";
+  const refuse = p.statut === "refuse";
+  const actif = !demande && !refuse && !p.archiveLe;
+  const org = await chargerOrganisation();
+  const membres = await membresDuProjet(id);
+  const nom = (pid: string | null) => (pid && org.personnes.get(pid) ? nomComplet(org.personnes.get(pid)!) : null);
+  const personnesActives = [...org.personnes.values()].filter((x) => x.actif).sort((x, y) => x.nom.localeCompare(y.nom, "fr"));
+  const ouvertesParPersonne = new Map(f.equipe.map((m) => [m.id, m.detail]));
   const auteurs = auteursLignesVisibles(a, id);
   const rapports = auteurs ? await lignesDuProjetCetteSemaine(id, auteurs) : null;
   const jour = aujourdhui();
@@ -48,7 +63,7 @@ export default async function PageProjet({ params }: { params: Promise<{ id: str
   return (
     <>
       <Bandeau
-        surtitre={[p.strategique ? "Stratégique" : "Projet", p.programme].filter(Boolean).join(" · ")}
+        surtitre={[demande ? "Demande de projet" : refuse ? "Demande refusée" : p.strategique ? "Stratégique" : "Projet", p.archiveLe ? "Archivé" : null, actif || p.archiveLe ? LIBELLE_STATUT_PROJET[p.statut] : null, p.programme].filter(Boolean).join(" · ")}
         titre={p.titre}
         retour={
           <a href="/projets" className="retour">
@@ -78,17 +93,160 @@ export default async function PageProjet({ params }: { params: Promise<{ id: str
             </div>
             <div className="chiffre">
               <dt>chef de projet</dt>
-              <dd style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 22, lineHeight: "54px", fontWeight: 300 }}>{f.chef?.nom ?? "—"}</dd>
+              <dd style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 22, lineHeight: "54px", fontWeight: 300 }}>{f.chef ? <LienPersonne id={p.chefProjetId}>{f.chef.nom}</LienPersonne> : "—"}</dd>
             </div>
           </dl>
         </div>
       </Bandeau>
       <div className="page">
+        {propose ? (
+          <p className="succes" role="status">
+            Votre proposition est envoyée à la direction. Vous serez prévenu de sa décision.
+          </p>
+        ) : null}
+        {erreur ? (
+          <p className="erreur" role="alert">
+            {erreur}
+          </p>
+        ) : null}
+        {demande || refuse ? (
+          <section className="carte" id="decision" aria-labelledby="p-demande" style={{ display: "flex", flexDirection: "column", gap: 14, borderColor: demande ? "var(--veille-point)" : undefined }}>
+            <h2 id="p-demande" className="carte__titre" style={{ margin: 0 }}>
+              {demande ? "Demande de projet" : "Demande refusée"}
+            </h2>
+            <p className="note" style={{ margin: 0 }}>
+              {nom(p.demandeParId) ? (
+                <>
+                  Proposé par <LienPersonne id={p.demandeParId}>{nom(p.demandeParId)}</LienPersonne>
+                </>
+              ) : (
+                "Proposé"
+              )}
+              {p.demandeLe ? ` le ${dateLongue(dateLocale(p.demandeLe))}` : ""}
+              {p.chefProjetId && demande ? (
+                <>
+                  {" · chef de projet suggéré : "}
+                  <LienPersonne id={p.chefProjetId}>{nom(p.chefProjetId)}</LienPersonne>
+                </>
+              ) : null}
+            </p>
+            {p.justification ? <p style={{ margin: 0, whiteSpace: "pre-line", fontSize: 15, lineHeight: "22px" }}>{p.justification}</p> : null}
+            {refuse ? (
+              <p className="erreur" style={{ margin: 0 }}>
+                Refusée
+                {nom(p.decisionParId) ? (
+                  <>
+                    {" par "}
+                    <LienPersonne id={p.decisionParId}>{nom(p.decisionParId)}</LienPersonne>
+                  </>
+                ) : null}
+                {p.decisionLe ? ` le ${dateCourte(dateLocale(p.decisionLe))}` : ""} : {p.motifDecision}
+              </p>
+            ) : null}
+            {demande && peutDecider(a) ? (
+              <div className="colonnes" style={{ alignItems: "flex-start" }}>
+                <form action={decider.bind(null, p.id)} style={{ flex: "2 1 320px", display: "flex", flexDirection: "column", gap: 12 }}>
+                  <input type="hidden" name="decision" value="accepter" />
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 500 }}>Accepter</h3>
+                  <div className="champ">
+                    <label htmlFor="d-chef">Chef de projet</label>
+                    <select id="d-chef" name="chefProjetId" defaultValue={p.chefProjetId ?? ""} required>
+                      <option value="" disabled>
+                        Choisir
+                      </option>
+                      {personnesActives.map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {nomComplet(x)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                    <div className="champ" style={{ flex: "1 1 150px" }}>
+                      <label htmlFor="d-statut">Statut de départ</label>
+                      <select id="d-statut" name="statut" defaultValue="en_attente">
+                        {STATUTS_ACCEPTES.filter((x) => x !== "finalise").map((x) => (
+                          <option key={x} value={x}>
+                            {LIBELLE_STATUT_PROJET[x]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="champ" style={{ flex: "1 1 150px" }}>
+                      <label htmlFor="d-entree">Date d&apos;entrée</label>
+                      <input id="d-entree" name="dateEntree" type="date" defaultValue={jour} />
+                    </div>
+                    <div className="champ" style={{ flex: "1 1 150px" }}>
+                      <label htmlFor="d-fin">Fin prévue</label>
+                      <input id="d-fin" name="dateFinPrevue" type="date" defaultValue={p.dateFinPrevue ?? ""} />
+                    </div>
+                  </div>
+                  <label className="role-manuel">
+                    <span className="rangee__texte">
+                      <span className="rangee__titre">Projet stratégique</span>
+                    </span>
+                    <input type="checkbox" className="interrupteur" name="strategique" defaultChecked={p.strategique} />
+                  </label>
+                  <div className="champ">
+                    <label htmlFor="d-note">Note pour le demandeur (facultatif)</label>
+                    <input id="d-note" name="motif" maxLength={1000} />
+                  </div>
+                  <div>
+                    <button type="submit" className="bouton-ambre">
+                      Accepter le projet
+                    </button>
+                  </div>
+                </form>
+                <form action={decider.bind(null, p.id)} style={{ flex: "1 1 240px", display: "flex", flexDirection: "column", gap: 12 }}>
+                  <input type="hidden" name="decision" value="refuser" />
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 500 }}>Refuser</h3>
+                  <div className="champ">
+                    <label htmlFor="d-motif">Motif (le demandeur le lira)</label>
+                    <textarea id="d-motif" name="motif" rows={4} required maxLength={1000} />
+                  </div>
+                  <div>
+                    <button type="submit" className="bouton-contour">
+                      Refuser la demande
+                    </button>
+                  </div>
+                </form>
+              </div>
+            ) : demande ? (
+              <p className="note" style={{ margin: 0 }}>
+                En attente de la décision d&apos;un directeur ou d&apos;un exécutif.
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+        {p.archiveLe ? (
+          <div className="note" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 16px" }}>
+            <span>
+              Projet archivé le {dateCourte(dateLocale(p.archiveLe))}
+              {nom(p.archiveParId) ? ` par ${nom(p.archiveParId)}` : ""} : il n&apos;est plus dans le portefeuille, mais reste lisible.
+            </span>
+            {peutModifier ? (
+              <form action={archiver.bind(null, p.id, false)}>
+                <button type="submit" className="bouton-mini">
+                  Désarchiver
+                </button>
+              </form>
+            ) : null}
+          </div>
+        ) : null}
         <div className="ligne-actions">
           <OngletsVues projetId={p.id} vue="apercu" />
-          <a href={`/taches/nouvelle?projet=${p.id}&retour=${encodeURIComponent(`/projets/${p.id}`)}`} className="bouton-contour">
-            <Icone nom="ajouter" taille={16} /> Nouvelle tâche
-          </a>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {peutModifier ? (
+              <a href={`/projets/${p.id}/modifier`} className="bouton-contour">
+                <Icone nom="modifier" taille={16} /> Modifier le projet
+              </a>
+            ) : null}
+            {actif ? (
+              <a href={`/taches/nouvelle?projet=${p.id}&retour=${encodeURIComponent(`/projets/${p.id}`)}`} className="bouton-contour">
+                <Icone nom="ajouter" taille={16} /> Nouvelle tâche
+              </a>
+            ) : null}
+          </div>
         </div>
         <div className="colonnes">
           <div className="colonne-large">
@@ -118,7 +276,7 @@ export default async function PageProjet({ params }: { params: Promise<{ id: str
                       {i.etat === "atteint" ? <CocheSeule /> : null}
                     </span>
                     <span style={{ flex: 1, minWidth: 0, fontSize: 15, lineHeight: "20px", color: i.etat === "a_venir" ? "var(--discret)" : undefined }}>{i.libelle}</span>
-                    {peutModifier ? (
+                    {peutModifier && actif ? (
                       <form action={changerIndicateur.bind(null, p.id, i.id)} style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <label className="visuellement-cache" htmlFor={`ind-${i.id}`}>
                           État de « {i.libelle} »
@@ -198,14 +356,16 @@ export default async function PageProjet({ params }: { params: Promise<{ id: str
                 </p>
                 <ul className="liste">
                   {rapports.map((r) => (
-                    <li key={r.auteur} style={{ display: "flex", gap: 14, padding: "16px 0" }}>
+                    <li key={r.auteurId} style={{ display: "flex", gap: 14, padding: "16px 0" }}>
                       <span className="mono" aria-hidden="true">
                         {r.prenom[0]}
                         {r.nom[0]}
                       </span>
                       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
                         <span style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
-                          <span style={{ fontSize: 15, fontWeight: 500 }}>{r.auteur}</span>
+                          <span style={{ fontSize: 15, fontWeight: 500 }}>
+                            <LienPersonne id={r.auteurId}>{r.auteur}</LienPersonne>
+                          </span>
                           <span className="rangee__sous">{r.envoyeLe ? `Reçu à ${heure(r.envoyeLe)}` : ""}</span>
                         </span>
                         <ul className="liste" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -250,7 +410,7 @@ export default async function PageProjet({ params }: { params: Promise<{ id: str
               </ol>
             </section>
 
-            {peutModifier ? (
+            {peutModifier && actif ? (
               <section className="carte" aria-labelledby="p-maj">
                 <h2 id="p-maj" className="carte__titre" style={{ marginBottom: 16 }}>
                   Mettre à jour le projet
@@ -281,23 +441,73 @@ export default async function PageProjet({ params }: { params: Promise<{ id: str
 
             <section className="carte carte--liste" aria-labelledby="p-equipe">
               <h2 id="p-equipe" className="carte__titre">
-                Équipe · {f.equipe.length}
+                Équipe projet · {membres.length + (p.chefProjetId ? 1 : 0)}
               </h2>
               <ul className="liste">
-                {f.equipe.map((m) => (
-                  <li key={m.id} className="rangee" style={{ minHeight: 52 }}>
-                    <span className="mono" aria-hidden="true">
-                      {m.initiales}
-                    </span>
+                {p.chefProjetId && nom(p.chefProjetId) ? (
+                  <li className="rangee" style={{ minHeight: 52 }}>
                     <span className="rangee__texte">
-                      <span className="rangee__titre">{m.nom}</span>
+                      <span className="rangee__titre">
+                        <LienPersonne id={p.chefProjetId}>{nom(p.chefProjetId)}</LienPersonne>
+                      </span>
+                      <span className="rangee__sous">Chef de projet</span>
                     </span>
                     <span className="rangee__meta" style={{ fontSize: 12 }}>
-                      {m.detail}
+                      {ouvertesParPersonne.get(p.chefProjetId) === "Chef de projet" ? "" : (ouvertesParPersonne.get(p.chefProjetId) ?? "")}
                     </span>
                   </li>
+                ) : null}
+                {membres.map((m) => (
+                  <li key={m.id} className="rangee" style={{ minHeight: 52, flexWrap: "wrap" }}>
+                    <span className="rangee__texte" style={{ flex: "1 1 160px" }}>
+                      <span className="rangee__titre">
+                        <LienPersonne id={m.personneId}>{m.nom}</LienPersonne>
+                      </span>
+                      <span className="rangee__sous">{m.role || m.poste}</span>
+                    </span>
+                    <span className="rangee__meta" style={{ fontSize: 12 }}>
+                      {ouvertesParPersonne.get(m.personneId) ?? "Aucune tâche ouverte"}
+                    </span>
+                    {peutModifier && actif ? (
+                      <form action={retirer.bind(null, p.id, m.id)}>
+                        <button type="submit" className="bouton-mini" aria-label={`Retirer ${m.nom} de l'équipe`}>
+                          Retirer
+                        </button>
+                      </form>
+                    ) : null}
+                  </li>
                 ))}
+                {!membres.length && !p.chefProjetId ? <li className="vide">Personne pour l&apos;instant.</li> : null}
               </ul>
+              {peutModifier && actif ? (
+                <form action={ajouter.bind(null, p.id)} style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                  <label className="visuellement-cache" htmlFor="m-personne">
+                    Personne à ajouter à l&apos;équipe
+                  </label>
+                  <select id="m-personne" name="personneId" defaultValue="" required style={{ flex: "1 1 180px", minWidth: 0, maxWidth: "100%", minHeight: 40, border: "1px solid var(--controle)", background: "var(--champ)" }}>
+                    <option value="" disabled>
+                      Ajouter une personne
+                    </option>
+                    {personnesActives
+                      .filter((x) => x.id !== p.chefProjetId && !membres.some((m) => m.personneId === x.id))
+                      .map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {nomComplet(x)}
+                        </option>
+                      ))}
+                  </select>
+                  <label className="visuellement-cache" htmlFor="m-role">
+                    Son rôle dans le projet
+                  </label>
+                  <input id="m-role" name="role" maxLength={80} placeholder="Rôle (facultatif)" style={{ flex: "1 1 120px", minWidth: 0, minHeight: 40, padding: "0 10px", border: "1px solid var(--controle)", background: "var(--champ)" }} />
+                  <button type="submit" className="bouton-contour">
+                    <Icone nom="ajouter" taille={16} /> Ajouter
+                  </button>
+                </form>
+              ) : null}
+              <p className="note" style={{ margin: "10px 0 4px" }}>
+                Les membres voient le projet ; le chef de projet peut leur confier des tâches.
+              </p>
             </section>
           </div>
         </div>

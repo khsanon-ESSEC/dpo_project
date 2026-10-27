@@ -30,8 +30,9 @@ export default async function LayoutApplication({ children }: { children: React.
   const PROJETS: ElementNav = { href: "/projets", libelle: "Projets", icone: "tableau-de-bord" };
   // Les exécutifs ne rédigent pas de rapport : ils lisent ceux de tout le monde (Équipe → Rapports).
   const redige = redigeUnRapport(u);
+  const SEMAINE: ElementNav = { href: "/semaine", libelle: "Semaine", icone: "calendrier", actifs: ["/reunions", "/bilan"] };
   const elements: ElementNav[] = [
-    { href: "/semaine", libelle: "Semaine", icone: "calendrier" },
+    SEMAINE,
     ...(redige ? [RAPPORT] : []),
     ...(equipe ? [EQUIPE] : []),
     PROJETS,
@@ -42,13 +43,13 @@ export default async function LayoutApplication({ children }: { children: React.
   // Téléphone : quatre entrées. La dernière, « Plus », mène à tout le reste (avec le nombre d'alertes non lues).
   const telephone: ElementNav[] = redige
     ? [
-        { href: "/semaine", libelle: "Semaine", icone: "calendrier" },
+        SEMAINE,
         RAPPORT,
         equipe ? EQUIPE : PROJETS,
         { href: "/plus", libelle: "Plus", icone: "menu", compte: alertes, actifs: ["/alertes", "/profil", "/conseil", "/organisation", ...(equipe ? ["/projets"] : [])] },
       ]
     : [
-        { href: "/semaine", libelle: "Semaine", icone: "calendrier" },
+        SEMAINE,
         EQUIPE,
         PROJETS,
         { href: "/plus", libelle: "Plus", icone: "menu", compte: alertes, actifs: ["/alertes", "/profil", "/conseil", "/organisation"] },

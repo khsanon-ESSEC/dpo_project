@@ -108,6 +108,8 @@ export type ChargeSemaine = {
   heures: number;
   capacite: number;
   niveau: Niveau;
+  /** Heures de réunion notées sur les jours comptés (déjà retirées de la capacité). */
+  reunions: number;
   /** Heures de chaque tâche dans cette semaine. */
   taches: { id: string; heures: number }[];
 };
@@ -123,9 +125,10 @@ export type ChargePersonne = {
 
 /**
  * Charge d'une personne sur les semaines demandées (lundis AAAA-MM-JJ, la première étant
- * en général la semaine en cours).
+ * en général la semaine en cours). Les réunions notées (passées ou prévues) réduisent le temps
+ * disponible pour les tâches : cette semaine, celles des jours qui restent ; ensuite, toutes.
  */
-export function chargeDUnePersonne(taches: TacheCharge[], semaines: string[], capacite: number, jour: string): ChargePersonne {
+export function chargeDUnePersonne(taches: TacheCharge[], semaines: string[], capacite: number, jour: string, reunions: { jour: string; heures: number }[] = []): ChargePersonne {
   const ouvertes = taches.filter((t) => t.statut !== "faite");
   const parSemaine = new Map(semaines.map((s) => [s, new Map<string, number>()]));
   for (const t of ouvertes) {
@@ -140,13 +143,16 @@ export function chargeDUnePersonne(taches: TacheCharge[], semaines: string[], ca
       const m = parSemaine.get(semaine)!;
       const heures = arrondir([...m.values()].reduce((x, y) => x + y, 0));
       // Cette semaine : seulement les jours ouvrés qui restent (aujourd'hui compris).
-      const cap =
+      const brute =
         semaine === lundiCourant ? arrondir((capacite * joursOuvres(jour, ajouterJours(semaine, 4)).length) / 5) : semaine < lundiCourant ? 0 : capacite;
+      const enReunion = arrondir(reunions.filter((r) => lundiDe(r.jour) === semaine && r.jour >= jour && estJourOuvre(r.jour)).reduce((x, r) => x + r.heures, 0));
+      const cap = arrondir(Math.max(0, brute - enReunion));
       return {
         semaine,
         heures,
         capacite: cap,
         niveau: niveauCharge(heures, cap),
+        reunions: Math.min(enReunion, brute),
         taches: [...m.entries()].map(([id, h]) => ({ id, heures: arrondir(h) })).sort((x, y) => y.heures - x.heures),
       };
     }),

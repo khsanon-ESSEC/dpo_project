@@ -24,6 +24,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -32,7 +33,8 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const statutTache = pgEnum("statut_tache", ["a_faire", "en_cours", "bloquee", "faite"]);
-export const statutProjet = pgEnum("statut_projet", ["requete", "en_attente", "en_cours", "continu", "finalise"]);
+/** requete : proposé, en attente de la direction ; refuse : demande refusée (gardée, avec son motif). */
+export const statutProjet = pgEnum("statut_projet", ["requete", "en_attente", "en_cours", "continu", "finalise", "refuse"]);
 export const santeProjet = pgEnum("sante_projet", ["dans_les_temps", "a_surveiller", "en_retard"]);
 export const etatIndicateur = pgEnum("etat_indicateur", ["a_venir", "en_cours", "atteint"]);
 export const statutRapport = pgEnum("statut_rapport", ["brouillon", "envoye"]);
@@ -96,9 +98,39 @@ export const projets = pgTable("projets", {
   dateFinInitiale: date("date_fin_initiale"),
   dateFinPrevue: date("date_fin_prevue"),
   dateLancementPrevue: date("date_lancement_prevue"),
+  /** Demande de projet : qui l'a proposé, quand, et pourquoi. */
+  demandeParId: uuid("demande_par_id").references((): AnyPgColumn => personnes.id, { onDelete: "set null" }),
+  demandeLe: timestamp("demande_le", { withTimezone: true }),
+  justification: text().notNull().default(""),
+  /** Décision de la direction sur la demande (acceptée ou refusée), et son motif. */
+  decisionParId: uuid("decision_par_id").references((): AnyPgColumn => personnes.id, { onDelete: "set null" }),
+  decisionLe: timestamp("decision_le", { withTimezone: true }),
+  motifDecision: text("motif_decision").notNull().default(""),
+  /** Archivé : retiré du portefeuille, toujours lisible (un projet qui a une histoire ne se supprime pas). */
+  archiveLe: timestamp("archive_le", { withTimezone: true }),
+  archiveParId: uuid("archive_par_id").references((): AnyPgColumn => personnes.id, { onDelete: "set null" }),
   creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
   majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Équipe d'un projet : établie par le chef de projet. Les membres voient le projet et reçoivent ses tâches. */
+export const membresProjet = pgTable(
+  "membres_projet",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    projetId: uuid("projet_id")
+      .notNull()
+      .references(() => projets.id, { onDelete: "cascade" }),
+    personneId: uuid("personne_id")
+      .notNull()
+      .references(() => personnes.id, { onDelete: "cascade" }),
+    /** Rôle dans le projet, en clair (« analyste », « développeur »…). */
+    role: text().notNull().default(""),
+    ajouteParId: uuid("ajoute_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    ajouteLe: timestamp("ajoute_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("membre_projet_unique").on(t.projetId, t.personneId), index("membres_projet_personne_idx").on(t.personneId)],
+);
 
 export const indicateurs = pgTable(
   "indicateurs",
@@ -128,12 +160,53 @@ export const taches = pgTable(
     /** Temps de travail estimé, en heures (facultatif ; voir src/lib/charge.ts pour la valeur par défaut). */
     estimationHeures: integer("estimation_heures"),
     blocage: text(),
+    /** Précisions sur la tâche (facultatif). */
+    description: text().notNull().default(""),
     creeParId: uuid("cree_par_id").references(() => personnes.id, { onDelete: "set null" }),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
     majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
     termineeLe: timestamp("terminee_le", { withTimezone: true }),
+    /** Annulée : retirée des listes, de la charge et des rapports, mais gardée avec son histoire. */
+    annuleeLe: timestamp("annulee_le", { withTimezone: true }),
+    annuleeParId: uuid("annulee_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    motifAnnulation: text("motif_annulation").notNull().default(""),
   },
   (t) => [index("taches_assigne_idx").on(t.assigneId), index("taches_projet_idx").on(t.projetId)],
+);
+
+/**
+ * Réunions notées par l'équipe : elles prennent du temps de travail (la charge en tient compte),
+ * apparaissent dans le rapport de la semaine, et la direction voit le temps passé en réunion.
+ */
+export const reunions = pgTable(
+  "reunions",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    titre: text().notNull(),
+    jour: date().notNull(),
+    /** « HH:MM », facultatif. */
+    heure: text(),
+    dureeMinutes: integer("duree_minutes").notNull(),
+    projetId: uuid("projet_id").references(() => projets.id, { onDelete: "set null" }),
+    notes: text().notNull().default(""),
+    /** Qui l'a notée (et peut la modifier). */
+    noteeParId: uuid("notee_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("reunions_jour_idx").on(t.jour)],
+);
+
+export const participantsReunion = pgTable(
+  "participants_reunion",
+  {
+    reunionId: uuid("reunion_id")
+      .notNull()
+      .references(() => reunions.id, { onDelete: "cascade" }),
+    personneId: uuid("personne_id")
+      .notNull()
+      .references(() => personnes.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.reunionId, t.personneId] }), index("participants_personne_idx").on(t.personneId)],
 );
 
 /** Historique des tâches : sert au brouillon du rapport du vendredi. */
@@ -415,3 +488,4 @@ export type ModeleRapport = typeof modelesRapport.$inferSelect;
 export type VersionModele = typeof versionsModele.$inferSelect;
 export type PieceJointe = typeof piecesJointes.$inferSelect;
 export type RapportConseil = typeof rapportsConseil.$inferSelect;
+export type Reunion = typeof reunions.$inferSelect;

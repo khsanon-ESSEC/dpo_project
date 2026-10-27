@@ -7,7 +7,7 @@ const BARRES: [number, number, string][] = [
   [8, 40, "#233c7d"], [20, 62, "#1b316a"],
 ];
 
-export function Bandeau({ surtitre, titre, retour, children }: { surtitre: string; titre: string; retour?: ReactNode; children?: ReactNode }) {
+export function Bandeau({ surtitre, titre, retour, children }: { surtitre: ReactNode; titre: ReactNode; retour?: ReactNode; children?: ReactNode }) {
   return (
     <header className="bandeau">
       <div className="bandeau__barres" aria-hidden="true">

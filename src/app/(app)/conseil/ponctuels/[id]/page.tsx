@@ -9,6 +9,7 @@ import { nomComplet } from "@/lib/regles";
 import { iaDisponible } from "@/lib/ia";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
+import { LienPersonne } from "@/components/Liens";
 import { ajouterProjet, approuver, modifierPonctuel } from "../../actions";
 import { EtapesConseil, TableauConseil } from "../../TableauConseil";
 
@@ -45,7 +46,11 @@ export default async function PagePonctuel({ params }: { params: Promise<{ id: s
       >
         <p className="discret" style={{ margin: "8px 0 0", fontSize: 14, lineHeight: "21px", maxWidth: 680 }}>
           {r.depuis ? `Période depuis le ${dateLongue(r.depuis)}. ` : ""}
-          {auteur ? `Préparé par ${nomComplet(auteur)}.` : ""}
+          {auteur ? (
+            <>
+              Préparé par <LienPersonne id={auteur.id}>{nomComplet(auteur)}</LienPersonne>.
+            </>
+          ) : null}
         </p>
         <EtapesConseil statut={r.statut} />
       </Bandeau>
@@ -83,7 +88,13 @@ export default async function PagePonctuel({ params }: { params: Promise<{ id: s
           </p>
         ) : (
           <p className="succes">
-            Approuvé{approuvePar ? ` par ${nomComplet(approuvePar)}` : ""}
+            Approuvé
+            {approuvePar ? (
+              <>
+                {" par "}
+                <LienPersonne id={approuvePar.id}>{nomComplet(approuvePar)}</LienPersonne>
+              </>
+            ) : null}
             {r.approuveLe ? ` le ${dateCourte(dateLocale(r.approuveLe))}` : ""} : états et dates sont figés.
           </p>
         )}
@@ -140,6 +151,7 @@ export default async function PagePonctuel({ params }: { params: Promise<{ id: s
 
         <TableauConseil
           lignes={lignes}
+          visibles={visibles}
           brouillon={brouillon}
           ia={iaDisponible()}
           rapportRetirable={modifiable && lignes.length > 1 ? r.id : null}

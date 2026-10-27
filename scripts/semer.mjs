@@ -244,12 +244,102 @@ await sql.begin(async (tx) => {
   // Marc-Antoine Louis (chef du projet UC).
   await tache("ml", "UC", "Revue d'architecture avec le prestataire", "a_faire", jour(8), [], null, { h: 4 });
 
+  // ---------- Tâches terminées des semaines passées (pour le bilan semaine sur semaine) ----------
+  // Tirage déterministe : mêmes données à chaque semis.
+  let graine = 7;
+  const hasard = () => ((graine = (graine * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const TRAVAUX = {
+    UR: ["Compte rendu du comité", "Correctifs de recette", "Tests de non-régression", "Mise à jour du plan de lancement", "Revue des écrans avec le métier"],
+    UN: ["Gabarits de pages", "Migration d'une rubrique", "Revue des contenus", "Tests d'accessibilité"],
+    PR: ["Revue du cahier des charges", "Maquette d'un écran", "Atelier avec la DRH", "Compte rendu d'atelier"],
+    CE: ["Support de formation", "Point avec une succursale", "Fiche produit révisée"],
+    CR: ["Scénarios de recette", "Recette d'un module", "Procédure révisée"],
+    UC: ["Spécification d'un écran", "Revue d'architecture", "Jeu de données de test"],
+    AE: ["Lot d'archives indexé", "Registre numérisé", "Contrôle qualité d'un lot"],
+  };
+  const quiFaitQuoi = { dj: ["PR", "UR", "UN"], re: ["UR", "PR"], lp: ["UN", "CR"], wb: ["CE", "CR"], jn: ["UC", "CR"], sc: ["CE", "PR"], fm: ["AE"], jd: ["AE"], mv: ["UR"], ml: ["UC"] };
+  for (let w = -7; w <= -1; w++) {
+    for (const [qui, pjs] of Object.entries(quiFaitQuoi)) {
+      const n = 1 + Math.floor(hasard() * (qui === "ml" || qui === "mv" ? 2 : 4)) + (qui === "dj" && w < -3 ? 1 : 0);
+      for (let i = 0; i < n; i++) {
+        const pj = pjs[Math.floor(hasard() * pjs.length)];
+        const j = 7 * w + Math.floor(hasard() * 5);
+        const retard = hasard() < 0.22;
+        const echeance = jour(retard ? j - 1 - Math.floor(hasard() * 3) : j + Math.floor(hasard() * 3));
+        const titre = TRAVAUX[pj][Math.floor(hasard() * TRAVAUX[pj].length)];
+        await tache(qui, pj, titre, "faite", echeance, fait(j), null, { debut: jour(j - 2), h: [2, 3, 4, 6, 8][Math.floor(hasard() * 5)] });
+      }
+    }
+  }
+
+  // ---------- Journal des réunions (huit semaines, et une de la semaine prochaine) ----------
+  // [titre, qui note, participants, jour dans la semaine (0 = lundi), heure, minutes, projet, semaines]
+  const toutes = [-7, -6, -5, -4, -3, -2, -1, 0];
+  const recurrentes = [
+    ["Point hebdomadaire Solutions technologiques", "ml", ["ml", "dj", "lp", "re", "wb", "jn", "sc"], 0, "09:00", 60, null, toutes],
+    ["Point de l'équipe Projets organisationnels", "mv", ["mv", "fm", "jd"], 0, "10:30", 45, null, toutes],
+    ["Comité de pilotage UNIBANKOnline Retail", "mv", ["mv", "dj", "re", "na"], 2, "14:00", 90, "UR", [...toutes, 1]],
+    ["Revue du portefeuille", "na", ["na", "ml", "mv", "ex"], 3, "10:00", 120, null, [-6, -4, -2, 0]],
+    ["Point Credos avec le Crédit", "wb", ["wb", "lp", "jn"], 1, "10:30", 60, "CR", [-5, -4, -3, -2, -1, 0]],
+    ["Atelier avec la DRH : plateforme de recrutement", "dj", ["dj", "sc", "re"], 3, "15:00", 120, "PR", [-3, -2, -1, 0, 1]],
+    ["Formation du Réseau : compte sans livret", "sc", ["sc", "wb"], 2, "09:00", 180, "CE", [-2, 0]],
+  ];
+  const ponctuelles = [
+    ["Démonstration d'UNIBANKOnline au Réseau", "mv", ["mv", "dj", "re", "na", "ex"], -2, 4, "11:00", 60, "UR", "Retours positifs ; demande d'un guide pour les clients."],
+    ["Atelier sécurité avec la DTI", "dj", ["dj", "re", "ml"], 0, 1, "09:30", 120, "UR", "Points 1 à 3 de l'audit revus ; le point 3 reste ouvert."],
+    ["Entretien avec le prestataire du Corporate", "ml", ["ml", "jn"], -1, 2, "16:00", 60, "UC", ""],
+    ["Comité de direction", "ex", ["ex", "na"], 0, 0, "15:00", 120, null, ""],
+    ["Préparation du lancement pilote", "wb", ["wb", "sc", "mv"], 0, 3, "11:00", 45, "CE", ""],
+  ];
+  const reunion = async (titre, qui, avec, j, heure, minutes, pj, notes = "") => {
+    const id = randomUUID();
+    await tx`insert into reunions (id, titre, jour, heure, duree_minutes, projet_id, notes, notee_par_id, cree_le)
+      values (${id}, ${titre}, ${jour(j)}, ${heure}, ${minutes}, ${pj ? PJ[pj] : null}, ${notes}, ${P[qui]}, ${moment(Math.min(j, 4), 18)})`;
+    for (const k of new Set([qui, ...avec])) await tx`insert into participants_reunion (reunion_id, personne_id) values (${id}, ${P[k]})`;
+  };
+  for (const [titre, qui, avec, d, heure, minutes, pj, semaines] of recurrentes) for (const w of semaines) await reunion(titre, qui, avec, 7 * w + d, heure, minutes, pj);
+  for (const [titre, qui, avec, w, d, heure, minutes, pj, notes] of ponctuelles) await reunion(titre, qui, avec, 7 * w + d, heure, minutes, pj, notes);
+
+  // ---------- Équipes projet (établies par chaque chef de projet) ----------
+  // Les personnes qui ont des tâches sur le projet, avec un rôle pour quelques-unes ; Joël rejoint UR sans tâche encore.
+  const roles = { "UR:re": "Développeur", "UR:dj": "Audit de sécurité", "CE:sc": "Formation du Réseau", "UC:jn": "Analyste fonctionnel", "PR:re": "Développeur", "CR:jn": "Recette" };
+  const membres = await tx`select distinct t.projet_id, t.assigne_id from taches t join projets p on p.id = t.projet_id where p.chef_projet_id is distinct from t.assigne_id`;
+  const cleDe = Object.fromEntries([...Object.entries(PJ).map(([k, v]) => [v, k]), ...Object.entries(P).map(([k, v]) => [v, k])]);
+  for (const m of membres) {
+    const chef = projets.find((x) => PJ[x.k] === m.projet_id)?.pm;
+    await tx`insert into membres_projet (projet_id, personne_id, role, ajoute_par_id, ajoute_le)
+      values (${m.projet_id}, ${m.assigne_id}, ${roles[`${cleDe[m.projet_id]}:${cleDe[m.assigne_id]}`] ?? ""}, ${chef ? P[chef] : null}, ${moment(-30, 9)})`;
+  }
+  await tx`insert into membres_projet (projet_id, personne_id, role, ajoute_par_id, ajoute_le) values (${PJ.UR}, ${P.jd}, ${"Communication clients"}, ${P.mv}, ${moment(-2, 11)})`;
+
+  // ---------- Demandes de projet ----------
+  // Une proposition de Joël Dorval, en attente de la direction ; une autre, de Sophonie Charles, refusée par Marc-Antoine Louis.
+  await tx`insert into projets (id, code, titre, description, programme, strategique, statut, sante, chef_projet_id, date_entree, date_fin_initiale, date_fin_prevue, demande_par_id, demande_le, justification)
+    values (${randomUUID()}, ${"TD"}, ${"Tableau de bord des délais de traitement"}, ${"Suivre, par succursale, le temps entre le dépôt d'un dossier et sa réponse."},
+            ${""}, ${false}, ${"requete"}, ${"dans_les_temps"}, ${P.mv}, ${jour(0)}, ${jour(90)}, ${jour(90)}, ${P.jd}, ${moment(-1, 15)},
+            ${"Les succursales demandent souvent où en est un dossier. Les délais ne sont mesurés nulle part ; un tableau de bord simple permettrait de repérer les blocages et de répondre aux clients."})`;
+  await tx`insert into projets (id, code, titre, description, programme, strategique, statut, sante, chef_projet_id, date_entree, date_fin_initiale, date_fin_prevue, demande_par_id, demande_le, justification, decision_par_id, decision_le, motif_decision)
+    values (${randomUUID()}, ${"GL"}, ${"Glossaire interactif des produits"}, ${"Un glossaire des produits du Réseau, consultable dans Uninet."},
+            ${""}, ${false}, ${"refuse"}, ${"dans_les_temps"}, ${null}, ${jour(-10)}, ${null}, ${null}, ${P.sc}, ${moment(-10, 10)},
+            ${"Les nouveaux employés du Réseau cherchent souvent la définition d'un produit."}, ${P.ml}, ${moment(-8, 14)},
+            ${"Bonne idée, mais elle trouve sa place dans la refonte d'Uninet (UN) : à proposer à Ludovic comme fonctionnalité."})`;
+
+  // ---------- Un projet terminé et archivé ----------
+  const ancien = randomUUID();
+  await tx`insert into projets (id, code, titre, description, programme, strategique, statut, sante, chef_projet_id, date_entree, date_fin_initiale, date_fin_prevue, archive_le, archive_par_id)
+    values (${ancien}, ${"MS"}, ${"Migration de la messagerie"}, ${"Passage de toute la banque à la nouvelle messagerie."}, ${""}, ${false}, ${"finalise"}, ${"dans_les_temps"}, ${P.ml},
+            ${"2025-09-01"}, ${"2026-03-31"}, ${"2026-04-30"}, ${moment(-60, 10)}, ${P.ml})`;
+  await tx`insert into indicateurs (projet_id, ordre, libelle, etat, atteint_le) values (${ancien}, 1, ${"Boîtes migrées"}, ${"atteint"}, ${"2026-04-24"}), (${ancien}, 2, ${"Utilisateurs formés"}, ${"atteint"}, ${"2026-04-30"})`;
+
   // ---------- Modèles de rapport (configurés par les administrateurs) ----------
   // Mêmes formes que src/lib/modeles.ts. Le modèle par défaut reprend les quatre parties d'origine.
   const L = (id, libelle, rubrique, aide) => ({ id, type: "lignes", libelle, ...(aide ? { aide } : {}), rubrique, prerempli: true, parProjet: true, visibilite: "tous" });
   const SANTE = { id: "sante", type: "sante", libelle: "Santé de mes projets", aide: "Un feu par projet sur lequel vous avez des tâches.", obligatoire: true, prerempli: true, visibilite: "tous" };
   const QUATRE = [L("fait", "Fait", "fait"), L("en_cours", "En cours", "en_cours"), L("bloque", "Bloqué", "bloque"), L("prochaine", "La semaine prochaine", "prochaine")];
   const DEFAUT_V2 = [{ ...QUATRE[0], obligatoire: true }, QUATRE[1], QUATRE[2], SANTE, QUATRE[3]];
+  // Le journal des réunions, repris dans le rapport : seul le supérieur direct en voit le détail.
+  const REUNIONS = { id: "reunions", type: "reunions", libelle: "Mes réunions de la semaine", aide: "Reprises de votre journal des réunions ; ajoutez celles qui manquent avant d'envoyer.", visibilite: "superieur" };
+  const DEFAUT_V3 = [...DEFAUT_V2, REUNIONS];
   const ST_V2 = [
     { ...QUATRE[0], obligatoire: true },
     QUATRE[1],
@@ -258,6 +348,7 @@ await sql.begin(async (tx) => {
     QUATRE[3],
     { id: "charge", type: "charge", libelle: "Ma charge", aide: "Proposée d'après vos tâches de la semaine prochaine ; corrigez-la si ce n'est pas votre ressenti.", obligatoire: true, prerempli: true, visibilite: "superieur" },
     { id: "decision", type: "texte", libelle: "Décision ou aide attendue", aide: "Une phrase : ce qu'il vous faut, et de qui.", rubrique: "decision", visibilite: "superieur" },
+    REUNIONS,
     { id: "pieces", type: "piece_jointe", libelle: "Pièces jointes", aide: "Un compte rendu, une capture, un tableau : 10 Mo au plus par fichier.", visibilite: "tous" },
   ];
   const reprise = (id, libelle, r, aide) => ({ id, type: "reprise", libelle, ...(aide ? { aide } : {}), reprise: r, visibilite: "tous" });
@@ -288,7 +379,7 @@ await sql.begin(async (tx) => {
         : [{ ...c, partie: "equipe" }],
     );
   const M = { defaut: randomUUID(), st: randomUUID(), chef: randomUUID(), division: randomUUID() };
-  const V = { defaut1: randomUUID(), defaut2: randomUUID(), st1: randomUUID(), st2: randomUUID(), chef1: randomUUID(), division1: randomUUID() };
+  const V = { defaut1: randomUUID(), defaut2: randomUUID(), defaut3: randomUUID(), st1: randomUUID(), st2: randomUUID(), chef1: randomUUID(), division1: randomUUID() };
   await tx`insert into modeles_rapport (id, nom, description, genre, par_defaut, pour_chefs) values
     (${M.defaut}, 'Rapport du vendredi', 'Le modèle de toute personne sans autre modèle.', 'individuel', true, false),
     (${M.st}, 'Solutions technologiques', 'Avec la charge ressentie et les décisions attendues.', 'individuel', false, false),
@@ -298,9 +389,10 @@ await sql.begin(async (tx) => {
     tx`insert into versions_modele (id, modele_id, numero, champs, statut, note, creee_par_id, publiee_le, publiee_par_id)
       values (${id}, ${modele}, ${numero}, ${sql.json(champs)}, ${statut}, ${note}, ${P.jn}, ${`${jourPublie}T09:00:00-04:00`}, ${P.jn})`;
   await version(V.defaut1, M.defaut, 1, QUATRE, "archivee", "Les quatre parties d'origine.", "2026-01-12");
-  await version(V.defaut2, M.defaut, 2, DEFAUT_V2, "publiee", "Ajoute « Santé de mes projets ».", "2026-10-05");
+  await version(V.defaut2, M.defaut, 2, DEFAUT_V2, "archivee", "Ajoute « Santé de mes projets ».", "2026-10-05");
+  await version(V.defaut3, M.defaut, 3, DEFAUT_V3, "publiee", "Ajoute « Mes réunions de la semaine » (supérieur seulement).", jour(0));
   await version(V.st1, M.st, 1, DEFAUT_V2, "archivee", "Comme le modèle par défaut.", "2026-10-05");
-  await version(V.st2, M.st, 2, ST_V2, "publiee", "Ajoute « Ma charge », « Décision ou aide attendue » et les pièces jointes.", jour(0));
+  await version(V.st2, M.st, 2, ST_V2, "publiee", "Ajoute « Ma charge », « Décision ou aide attendue », « Mes réunions de la semaine » et les pièces jointes.", jour(0));
   // Solutions technologiques : rapport attendu plus tôt le vendredi.
   await tx`update modeles_rapport set horaires = ${sql.json({ pret: { jour: 5, heure: "09:00" }, rappel: { jour: 5, heure: "13:00" }, limite: { jour: 5, heure: "16:00" } })} where id = ${M.st}`;
   await version(V.chef1, M.chef, 1, CHEF_V1, "publiee", "Son travail, puis son équipe : à décider, santé, charge, fait, la semaine prochaine.", jour(0));
@@ -532,6 +624,20 @@ await sql.begin(async (tx) => {
         await tx`insert into lignes_rapport (rapport_id, champ_id, partie, texte, projet_id, tache_id, ordre) values (${id}, ${partie}, ${partie}, ${texte}, ${pj ? PJ[pj] : null}, ${tacheId}, ${o})`;
       }
     }
+  }
+
+  // ---------- Réunions figées dans les rapports déjà envoyés (comme à l'envoi) ----------
+  const envoyes = await tx`select id, auteur_id, semaine, formulaire from rapports_hebdo where statut = 'envoye'`;
+  for (const r of envoyes) {
+    const champs = (r.formulaire ?? []).filter((c) => c.type === "reunions");
+    if (!champs.length) continue;
+    const lundi = typeof r.semaine === "string" ? r.semaine : r.semaine.toISOString().slice(0, 10);
+    const liste = await tx`select r.titre, r.jour::text as jour, r.heure, r.duree_minutes, p.code,
+        (select count(*)::int from participants_reunion x where x.reunion_id = r.id) as n
+      from reunions r join participants_reunion pr on pr.reunion_id = r.id left join projets p on p.id = r.projet_id
+      where pr.personne_id = ${r.auteur_id} and r.jour between ${lundi}::date and ${lundi}::date + 6 order by r.jour, r.heure`;
+    const valeur = { minutes: liste.reduce((s, x) => s + x.duree_minutes, 0), reunions: liste.map((x) => ({ titre: x.titre, jour: x.jour, heure: x.heure, minutes: x.duree_minutes, projet: x.code, avec: x.n - 1 })) };
+    for (const c of champs) await tx`insert into reponses_rapport (rapport_id, champ_id, valeur, commentaire) values (${r.id}, ${c.id}, ${JSON.stringify(valeur)}, ${`${liste.length} réunion(s)`})`;
   }
 
   // ---------- Un rapport ponctuel au conseil, la semaine dernière (préparé par Nadège, approuvé par Frantz) ----------

@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, lt, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, ne, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { aujourdhui, ecartJours, premierDuMois } from "@/lib/dates";
 import { chargerOrganisation } from "@/lib/organisation";
@@ -21,22 +21,31 @@ async function finsAuDernierRapport(ids: string[]) {
   return m;
 }
 
-export async function portefeuille(a: Acces) {
+/**
+ * Portefeuille : les projets acceptés que la personne voit (sans les demandes ni les refus). Les projets
+ * archivés n'y sont pas, sauf quand on les demande (« Archivés »).
+ */
+export async function portefeuille(a: Acces, options: { archives?: boolean } = {}) {
   const visibles = await idsProjetsVisibles(a);
-  const ids =
-    visibles === "tous"
-      ? (await db.select({ id: schema.projets.id }).from(schema.projets).where(ne(schema.projets.statut, "finalise"))).map((p) => p.id)
-      : [...visibles];
+  const candidats = await db
+    .select({ id: schema.projets.id, statut: schema.projets.statut, archiveLe: schema.projets.archiveLe })
+    .from(schema.projets)
+    .where(and(ne(schema.projets.statut, "requete"), ne(schema.projets.statut, "refuse")));
+  const ids = candidats
+    .filter((p) => (options.archives ? !!p.archiveLe : !p.archiveLe && (visibles !== "tous" || p.statut !== "finalise")))
+    .map((p) => p.id)
+    .filter((id) => visibles === "tous" || visibles.has(id));
   const projets = await resumesProjets(ids, a.moi.id);
   const anciennes = await finsAuDernierRapport(ids);
   const equipes = ids.length
-    ? await db.selectDistinct({ projetId: schema.taches.projetId, assigneId: schema.taches.assigneId }).from(schema.taches).where(inArray(schema.taches.projetId, ids))
+    ? await db.selectDistinct({ projetId: schema.taches.projetId, assigneId: schema.taches.assigneId }).from(schema.taches).where(and(inArray(schema.taches.projetId, ids), isNull(schema.taches.annuleeLe)))
     : [];
   const org = await chargerOrganisation();
+  const membresProjets = ids.length ? await db.select({ projetId: schema.membresProjet.projetId, personneId: schema.membresProjet.personneId }).from(schema.membresProjet).where(inArray(schema.membresProjet.projetId, ids)) : [];
   return projets.map((p) => {
     const ancienne = anciennes.get(p.id) ?? null;
     const glissementJours = ancienne && p.dateFinPrevue ? ecartJours(ancienne, p.dateFinPrevue) : 0;
-    const membres = new Set(equipes.filter((e) => e.projetId === p.id).map((e) => e.assigneId));
+    const membres = new Set([...membresProjets.filter((m) => m.projetId === p.id).map((m) => m.personneId), ...equipes.filter((e) => e.projetId === p.id).map((e) => e.assigneId)]);
     if (p.chefProjetId) membres.add(p.chefProjetId);
     return {
       ...p,
@@ -53,7 +62,7 @@ export async function ficheProjet(projetId: string) {
   const taches = await db
     .select({ id: schema.taches.id, titre: schema.taches.titre, statut: schema.taches.statut, echeance: schema.taches.echeance, assigneId: schema.taches.assigneId })
     .from(schema.taches)
-    .where(eq(schema.taches.projetId, projetId))
+    .where(and(eq(schema.taches.projetId, projetId), isNull(schema.taches.annuleeLe)))
     .orderBy(asc(schema.taches.echeance));
   const historique = await db.select().from(schema.historiqueProjet).where(eq(schema.historiqueProjet.projetId, projetId)).orderBy(desc(schema.historiqueProjet.mois));
   const org = await chargerOrganisation();
@@ -93,11 +102,12 @@ export async function nomsProjets(ids: string[]) {
   return db.select({ id: schema.projets.id, code: schema.projets.code, titre: schema.projets.titre }).from(schema.projets).where(inArray(schema.projets.id, ids));
 }
 
+/** Projets auxquels on peut rattacher une tâche, une ligne ou une réunion : acceptés, pas finalisés, pas archivés. */
 export async function tousLesProjetsActifs() {
   return db
     .select({ id: schema.projets.id, code: schema.projets.code, titre: schema.projets.titre })
     .from(schema.projets)
-    .where(ne(schema.projets.statut, "finalise"))
+    .where(and(ne(schema.projets.statut, "finalise"), ne(schema.projets.statut, "requete"), ne(schema.projets.statut, "refuse"), isNull(schema.projets.archiveLe)))
     .orderBy(asc(schema.projets.titre));
 }
 
@@ -124,7 +134,7 @@ export async function tachesDuProjet(projetId: string) {
       termineeLe: schema.taches.termineeLe,
     })
     .from(schema.taches)
-    .where(eq(schema.taches.projetId, projetId))
+    .where(and(eq(schema.taches.projetId, projetId), isNull(schema.taches.annuleeLe)))
     .orderBy(asc(schema.taches.echeance), asc(schema.taches.titre));
   const org = await chargerOrganisation();
   const jour = aujourdhui();

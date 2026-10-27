@@ -21,18 +21,22 @@ export type Acces = {
   suivis: Set<string> | "toutes";
   /** Projets dont je suis le chef. */
   projetsDiriges: Set<string>;
+  /** Projets dont je suis membre (équipe projet). */
+  projetsMembre: Set<string>;
   equipeDirecte: string[];
 };
 
 export const acces = cache(async (moi: Utilisateur): Promise<Acces> => {
   const org = await chargerOrganisation();
   const diriges = await db.select({ id: schema.projets.id }).from(schema.projets).where(eq(schema.projets.chefProjetId, moi.id));
+  const membre = await db.select({ id: schema.membresProjet.projetId }).from(schema.membresProjet).where(eq(schema.membresProjet.personneId, moi.id));
   return {
     moi,
     toutVoir: voitTout(moi),
     directeur: moi.directeur,
     suivis: personnesSuivies(org, moi),
     projetsDiriges: new Set(diriges.map((d) => d.id)),
+    projetsMembre: new Set(membre.map((d) => d.id)),
     equipeDirecte: subordonnesDirects(org, moi.id).map((p) => p.id),
   };
 });
@@ -56,17 +60,21 @@ export async function exigerTacheVisible(a: Acces, tacheId: string) {
 }
 
 /**
- * Projets visibles : exécutif = tous ; sinon ceux que je dirige, ceux où travaille une
- * personne que je suis, et (directeur) ceux que dirige un membre de ma direction.
+ * Projets visibles : exécutif = tous ; sinon ceux que je dirige, ceux dont je suis membre, ceux
+ * où travaille (ou est membre) une personne que je suis, ceux que j'ai proposés ou qu'une personne
+ * que je suis a proposés, et (directeur) ceux que dirige un membre de ma direction.
  */
 export async function idsProjetsVisibles(a: Acces): Promise<Set<string> | "tous"> {
   if (a.toutVoir) return "tous";
-  const ids = new Set(a.projetsDiriges);
+  const ids = new Set([...a.projetsDiriges, ...a.projetsMembre]);
   const lignes = await db.selectDistinct({ projetId: schema.taches.projetId, assigneId: schema.taches.assigneId }).from(schema.taches);
   for (const l of lignes) if (l.projetId && suitPersonne(a, l.assigneId)) ids.add(l.projetId);
-  if (a.directeur) {
-    const projets = await db.select({ id: schema.projets.id, chef: schema.projets.chefProjetId }).from(schema.projets);
-    for (const p of projets) if (p.chef && suitPersonne(a, p.chef)) ids.add(p.id);
+  const membres = await db.select({ projetId: schema.membresProjet.projetId, personneId: schema.membresProjet.personneId }).from(schema.membresProjet);
+  for (const m of membres) if (suitPersonne(a, m.personneId)) ids.add(m.projetId);
+  const projets = await db.select({ id: schema.projets.id, chef: schema.projets.chefProjetId, demandeur: schema.projets.demandeParId }).from(schema.projets);
+  for (const p of projets) {
+    if (p.demandeur && (p.demandeur === a.moi.id || suitPersonne(a, p.demandeur))) ids.add(p.id);
+    if (a.directeur && p.chef && suitPersonne(a, p.chef)) ids.add(p.id);
   }
   return ids;
 }

@@ -28,6 +28,8 @@ export default async function PagePlus() {
       titre: "Suivi",
       entrees: [
         { href: "/alertes", libelle: "Alertes", sous: Number(n) ? `${n} non lue${Number(n) > 1 ? "s" : ""}` : "Rien de nouveau", icone: "notification", compte: Number(n) },
+        { href: "/reunions", libelle: "Réunions", sous: "Noter une réunion, voir le temps passé en réunion", icone: "reunion" },
+        { href: "/bilan", libelle: "Mon bilan", sous: "Cette semaine comparée aux précédentes", icone: "bilan" },
         ...(redigeUnRapport(u) ? [{ href: "/rapports", libelle: "Mes rapports", sous: "Tous les rapports du vendredi que vous avez envoyés", icone: "historique" }] : []),
         ...(equipe && redigeUnRapport(u) ? [{ href: "/projets", libelle: "Projets", sous: "Portefeuille, Gantt, tableau, calendrier", icone: "tableau-de-bord" }] : []),
       ],
@@ -39,6 +41,7 @@ export default async function PagePlus() {
             entrees: [
               { href: "/equipe/rapports", libelle: redigeUnRapport(u) ? "Rapports de l'équipe" : "Rapports", sous: "Semaine par semaine, ou par personne", icone: "document" },
               { href: "/charge", libelle: "Charge de travail", sous: "Qui est chargé, qui a de la marge", icone: "jauge" },
+              { href: "/equipe/bilan", libelle: "Bilan de l'équipe", sous: "Ce mois comparé au précédent, réunions comprises", icone: "bilan" },
             ],
           },
         ]
