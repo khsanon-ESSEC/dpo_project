@@ -4,7 +4,7 @@
  * s'atteint au clavier et montre sa valeur au survol ; le tableau des valeurs est juste en dessous.
  */
 /** `etiquette` : la valeur courte posée sur la colonne choisie (par défaut, `texte`). */
-export type Colonne = { cle: string; libelle: string; valeur: number; texte: string; etiquette?: string; detail?: string };
+export type Colonne = { cle: string; libelle: string; libelleCourt?: string; valeur: number; texte: string; etiquette?: string; detail?: string };
 
 export function Colonnes({ titre, colonnes, choisie, hauteur = 112 }: { titre: string; colonnes: Colonne[]; choisie: string; hauteur?: number }) {
   const max = Math.max(1, ...colonnes.map((c) => c.valeur));
@@ -38,7 +38,8 @@ export function Colonnes({ titre, colonnes, choisie, hauteur = 112 }: { titre: s
       <div className="colonnes-graphe__axe" aria-hidden="true">
         {colonnes.map((c) => (
           <span key={c.cle} data-courante={c.cle === choisie ? "1" : undefined}>
-            {c.libelle}
+            <span className="axe-long">{c.libelle}</span>
+            <span className="axe-court">{c.libelleCourt ?? c.libelle}</span>
           </span>
         ))}
       </div>

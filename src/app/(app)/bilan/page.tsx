@@ -24,9 +24,9 @@ const pc = (v: number | null) => (v === null ? "—" : `${v} %`);
 /** Lignes de la comparaison : libellé, valeur affichée, valeur numérique (pour l'écart). */
 function lignesComparaison(m: Mesures) {
   return [
-    { cle: "taches", libelle: "Tâches terminées", texte: String(m.taches), n: m.taches as number | null, unite: "" },
+    { cle: "taches", libelle: "Tâches terminées", texte: String(m.taches), detail: undefined as string | undefined, n: m.taches as number | null, unite: "" },
     { cle: "heures", libelle: "Heures livrées (estimées)", texte: `${nombre(m.heures)} h`, n: m.heures as number | null, unite: " h" },
-    { cle: "temps", libelle: "Terminées à temps", texte: m.aLHeure === null ? "—" : `${m.aLHeure} % (${m.avecEcheance} à échéance)`, n: m.aLHeure, unite: " pts" },
+    { cle: "temps", libelle: "Terminées à temps", texte: m.aLHeure === null ? "—" : `${m.aLHeure} %`, detail: m.avecEcheance ? `sur ${m.avecEcheance} à échéance` : undefined, n: m.aLHeure, unite: " pts" },
     { cle: "reunions", libelle: "En réunion", texte: h(m.minutesReunion), n: Math.round((m.minutesReunion / 60) * 10) / 10, unite: " h" },
     { cle: "part", libelle: "Part du temps en réunion", texte: pc(m.partReunion), n: m.partReunion, unite: " pts" },
   ];
@@ -50,6 +50,7 @@ export default async function PageBilan({ searchParams }: { searchParams: Promis
   const enCours = semaine === courante;
   const rapports = actuelle.rapportsAttendus + precedente.rapportsAttendus > 0 || !p.executif;
   const libelleSemaine = (l: string) => dateCourte(l).replace(/\.$/, "");
+  const court = (l: string) => `${Number(l.slice(8))}/${Number(l.slice(5, 7))}`;
   const lien = (s: string) => `/bilan?semaine=${s}${qui !== u.id ? `&personne=${qui}` : ""}`;
 
   return (
@@ -119,8 +120,14 @@ export default async function PageBilan({ searchParams }: { searchParams: Promis
                     return (
                       <tr key={l.cle}>
                         <th scope="row">{l.libelle}</th>
-                        <td>{avant.texte}</td>
-                        <td style={{ fontWeight: 600 }}>{l.texte}</td>
+                        <td>
+                          {avant.texte}
+                          {avant.detail ? <small>{avant.detail}</small> : null}
+                        </td>
+                        <td style={{ fontWeight: 600 }}>
+                          {l.texte}
+                          {l.detail ? <small>{l.detail}</small> : null}
+                        </td>
                         <td className="ecart">{ecart(l.n, avant.n, l.unite) ?? "—"}</td>
                       </tr>
                     );
@@ -149,12 +156,12 @@ export default async function PageBilan({ searchParams }: { searchParams: Promis
             <Colonnes
               titre="Tâches terminées"
               choisie={semaine}
-              colonnes={periodes.map((per, i) => ({ cle: per.cle, libelle: libelleSemaine(per.debut), valeur: mesures[i].taches, texte: `${mesures[i].taches} tâche${mesures[i].taches > 1 ? "s" : ""}`, etiquette: String(mesures[i].taches), detail: `${nombre(mesures[i].heures)} h estimées` }))}
+              colonnes={periodes.map((per, i) => ({ cle: per.cle, libelle: libelleSemaine(per.debut), libelleCourt: court(per.debut), valeur: mesures[i].taches, texte: `${mesures[i].taches} tâche${mesures[i].taches > 1 ? "s" : ""}`, etiquette: String(mesures[i].taches), detail: `${nombre(mesures[i].heures)} h estimées` }))}
             />
             <Colonnes
               titre="Heures de réunion"
               choisie={semaine}
-              colonnes={periodes.map((per, i) => ({ cle: per.cle, libelle: libelleSemaine(per.debut), valeur: mesures[i].minutesReunion, texte: h(mesures[i].minutesReunion), detail: mesures[i].partReunion === null ? undefined : `${mesures[i].partReunion} % du temps` }))}
+              colonnes={periodes.map((per, i) => ({ cle: per.cle, libelle: libelleSemaine(per.debut), libelleCourt: court(per.debut), valeur: mesures[i].minutesReunion, texte: h(mesures[i].minutesReunion), detail: mesures[i].partReunion === null ? undefined : `${mesures[i].partReunion} % du temps` }))}
             />
             <details>
               <summary className="lien-discret" style={{ cursor: "pointer" }}>

@@ -3537,6 +3537,17 @@ a.puce:hover {
   color: var(--encre);
   font-weight: 600;
 }
+.colonnes-graphe__axe .axe-court {
+  display: none;
+}
+@media (max-width: 599px) {
+  .colonnes-graphe__axe .axe-long {
+    display: none;
+  }
+  .colonnes-graphe__axe .axe-court {
+    display: inline;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .colonne__info,
   .colonne__barre {
