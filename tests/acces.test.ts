@@ -114,6 +114,39 @@ describe.skipIf(!URL_TEST)("accès, sur les données d'exemple", () => {
     expect(A.auteursLignesVisibles(jn, projets.get("UR")!)).toBeNull();
   });
 
+  it("historique : chacun retrouve tous ses rapports envoyés", async () => {
+    const liste = await R.mesRapports(qui("daphnee.joseph").id);
+    expect(liste.filter((r) => r.statut === "envoye").length).toBeGreaterThanOrEqual(6);
+    expect(liste.every((r) => r.auteurId === qui("daphnee.joseph").id)).toBe(true);
+  });
+
+  it("historique de l'équipe : le directeur lit sa direction, pas au-delà", async () => {
+    const ml = await accesDe("marc-antoine.louis");
+    const auteurs = await R.auteursDontJeLisLesRapports(ml);
+    expect(auteurs).toContain(qui("daphnee.joseph").id);
+    expect(auteurs).not.toContain(qui("fabienne.michel").id);
+    expect((await R.historiqueDe(ml, qui("daphnee.joseph").id)).length).toBeGreaterThanOrEqual(6);
+    expect(await R.historiqueDe(ml, qui("fabienne.michel").id)).toEqual([]);
+  });
+
+  it("historique : un collègue ou un administrateur ne lit pas les rapports des autres", async () => {
+    const jn = await accesDe("jean-robert.noel");
+    expect(await R.auteursDontJeLisLesRapports(jn)).toEqual([]);
+    expect(await R.historiqueDe(jn, qui("daphnee.joseph").id)).toEqual([]);
+  });
+
+  it("la semaine dernière : ce qui était prévu, et ce qui est déjà repris", async () => {
+    const dj = qui("daphnee.joseph");
+    const prec = await R.monRapportPrecedent(dj.id);
+    const prevues = prec!.lignes.filter((l) => l.partie === "prochaine");
+    expect(prevues.length).toBe(5);
+    const actuel = await R.obtenirOuCreerRapport(dj.id);
+    const lignes = await R.lignesDuRapport(actuel.id);
+    const reprises = prevues.filter((l) => R.dejaReprise(l, lignes));
+    expect(reprises.map((l) => l.texte)).toContain("Point 3 de l'audit de sécurité");
+    expect(prevues.filter((l) => !R.dejaReprise(l, lignes)).map((l) => l.texte)).toContain("Relancer la DTI pour les accès de test");
+  });
+
   it("seul un exécutif peut donner le rôle Exécutif", async () => {
     const jn = qui("jean-robert.noel");
     await expect(

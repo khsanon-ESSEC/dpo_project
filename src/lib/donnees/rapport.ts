@@ -1,11 +1,11 @@
 /** Rapport du vendredi : brouillon préparé à partir des tâches, envoi, lecture filtrée. */
 import "server-only";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { ajouterJours, aujourdhui, dateLocale, lundiDe } from "@/lib/dates";
 import { noter } from "@/lib/journal";
 import { chargerOrganisation } from "@/lib/organisation";
-import { membresDeLaDirection, nomComplet, peutVoirRapportComplet, resoudreSuperieur } from "@/lib/regles";
+import { initiales, membresDeLaDirection, nomComplet, peutVoirRapportComplet, resoudreSuperieur } from "@/lib/regles";
 import type { Acces } from "@/lib/acces";
 
 export type Partie = "fait" | "en_cours" | "bloque" | "prochaine";
@@ -99,6 +99,7 @@ export async function lignesDuRapport(rapportId: string) {
       texte: schema.lignesRapport.texte,
       ordre: schema.lignesRapport.ordre,
       projetId: schema.lignesRapport.projetId,
+      tacheId: schema.lignesRapport.tacheId,
       projetCode: schema.projets.code,
       projetTitre: schema.projets.titre,
       projetChefId: schema.projets.chefProjetId,
@@ -204,4 +205,147 @@ export async function statutsRapports(personneIds: string[], semaine = semaineCo
     .from(schema.rapportsHebdo)
     .where(and(inArray(schema.rapportsHebdo.auteurId, personneIds), eq(schema.rapportsHebdo.semaine, semaine)));
   return new Map(lignes.map((l) => [l.auteurId, l]));
+}
+
+// ---------------------------------------------------------------------------
+// Historique des rapports
+// ---------------------------------------------------------------------------
+
+export type ResumeRapport = {
+  id: string;
+  auteurId: string;
+  semaine: string;
+  statut: "brouillon" | "envoye";
+  envoyeLe: Date | null;
+  destinataireId: string | null;
+  comptes: Record<Partie, number>;
+  /** Les premières lignes « Fait », pour reconnaître la semaine d'un coup d'œil. */
+  apercu: string[];
+};
+
+async function resumes(rapports: (typeof schema.rapportsHebdo.$inferSelect)[]): Promise<ResumeRapport[]> {
+  if (!rapports.length) return [];
+  const lignes = await db
+    .select({ rapportId: schema.lignesRapport.rapportId, partie: schema.lignesRapport.partie, texte: schema.lignesRapport.texte, ordre: schema.lignesRapport.ordre })
+    .from(schema.lignesRapport)
+    .where(inArray(schema.lignesRapport.rapportId, rapports.map((r) => r.id)))
+    .orderBy(asc(schema.lignesRapport.ordre));
+  return rapports.map((r) => {
+    const siennes = lignes.filter((l) => l.rapportId === r.id);
+    const comptes = { fait: 0, en_cours: 0, bloque: 0, prochaine: 0 } as Record<Partie, number>;
+    for (const l of siennes) comptes[l.partie] += 1;
+    return {
+      id: r.id,
+      auteurId: r.auteurId,
+      semaine: r.semaine,
+      statut: r.statut,
+      envoyeLe: r.envoyeLe,
+      destinataireId: r.destinataireId,
+      comptes,
+      apercu: siennes.filter((l) => l.partie === "fait").slice(0, 2).map((l) => l.texte),
+    };
+  });
+}
+
+/** Tous mes rapports, du plus récent au plus ancien (le brouillon de la semaine compris). */
+export async function mesRapports(auteurId: string) {
+  const r = await db.select().from(schema.rapportsHebdo).where(eq(schema.rapportsHebdo.auteurId, auteurId)).orderBy(desc(schema.rapportsHebdo.semaine));
+  return resumes(r);
+}
+
+/** Semaines d'affilée avec un rapport envoyé, en remontant depuis la semaine dernière (ou celle-ci si déjà envoyé). */
+export function serieDeRapports(liste: ResumeRapport[], semaine = semaineCourante()): number {
+  const envoyees = new Set(liste.filter((r) => r.statut === "envoye").map((r) => r.semaine));
+  let s = envoyees.has(semaine) ? semaine : ajouterJours(semaine, -7);
+  let n = 0;
+  while (envoyees.has(s)) {
+    n += 1;
+    s = ajouterJours(s, -7);
+  }
+  return n;
+}
+
+/**
+ * Personnes dont je peux lire les rapports en entier, en plus des miens : celles que je suis
+ * (supérieur direct, directeur, exécutif), et les auteurs des rapports qui m'ont été envoyés.
+ */
+export async function auteursDontJeLisLesRapports(a: Acces): Promise<string[]> {
+  const org = await chargerOrganisation();
+  const suivis = a.suivis === "toutes" ? [...org.personnes.keys()] : [...a.suivis];
+  const recus = await db.selectDistinct({ id: schema.rapportsHebdo.auteurId }).from(schema.rapportsHebdo).where(eq(schema.rapportsHebdo.destinataireId, a.moi.id));
+  return [...new Set([...suivis, ...recus.map((x) => x.id)])].filter((id) => id !== a.moi.id && org.personnes.has(id));
+}
+
+/** Rapports d'une semaine pour les personnes dont je lis les rapports (y compris celles qui n'ont rien envoyé). */
+export async function rapportsDeLEquipe(a: Acces, semaine: string) {
+  const org = await chargerOrganisation();
+  const ids = (await auteursDontJeLisLesRapports(a)).filter((id) => org.personnes.get(id)?.actif);
+  const rapports = ids.length
+    ? await db
+        .select()
+        .from(schema.rapportsHebdo)
+        .where(and(inArray(schema.rapportsHebdo.auteurId, ids), eq(schema.rapportsHebdo.semaine, semaine)))
+    : [];
+  const visibles = rapports.filter((r) => r.statut === "envoye" && peutVoirRapportComplet(org, a.moi, r));
+  const parAuteur = new Map((await resumes(visibles)).map((r) => [r.auteurId, r]));
+  return ids
+    .map((id) => {
+      const p = org.personnes.get(id)!;
+      return {
+        id,
+        nom: nomComplet(p),
+        prenom: p.prenom,
+        initiales: initiales(p),
+        poste: p.poste,
+        equipe: p.equipeId ? (org.equipes.get(p.equipeId)?.nom ?? "") : "Sans équipe",
+        rapport: parAuteur.get(id) ?? null,
+      };
+    })
+    .sort((x, y) => x.equipe.localeCompare(y.equipe, "fr") || Number(!!x.rapport) - Number(!!y.rapport) || x.nom.localeCompare(y.nom, "fr"));
+}
+
+/** Historique des rapports envoyés par une personne, filtré par les règles de lecture. */
+export async function historiqueDe(a: Acces, personneId: string) {
+  const org = await chargerOrganisation();
+  const rapports = await db
+    .select()
+    .from(schema.rapportsHebdo)
+    .where(and(eq(schema.rapportsHebdo.auteurId, personneId), eq(schema.rapportsHebdo.statut, "envoye")))
+    .orderBy(desc(schema.rapportsHebdo.semaine));
+  return resumes(rapports.filter((r) => peutVoirRapportComplet(org, a.moi, r)));
+}
+
+/** Rapports précédent et suivant du même auteur, parmi ceux que je peux lire en entier. */
+export async function rapportsVoisins(a: Acces, rapport: { id: string; auteurId: string; semaine: string }) {
+  const org = await chargerOrganisation();
+  const tous = await db.select().from(schema.rapportsHebdo).where(eq(schema.rapportsHebdo.auteurId, rapport.auteurId)).orderBy(asc(schema.rapportsHebdo.semaine));
+  const lisibles = tous.filter((r) => peutVoirRapportComplet(org, a.moi, r));
+  const i = lisibles.findIndex((r) => r.id === rapport.id);
+  return { precedent: i > 0 ? lisibles[i - 1] : null, suivant: i >= 0 && i < lisibles.length - 1 ? lisibles[i + 1] : null };
+}
+
+/** Mon dernier rapport envoyé avant cette semaine, avec ses lignes (pour reprendre ce qui était prévu). */
+export async function monRapportPrecedent(auteurId: string, semaine = semaineCourante()) {
+  const [r] = await db
+    .select()
+    .from(schema.rapportsHebdo)
+    .where(and(eq(schema.rapportsHebdo.auteurId, auteurId), eq(schema.rapportsHebdo.statut, "envoye"), lt(schema.rapportsHebdo.semaine, semaine)))
+    .orderBy(desc(schema.rapportsHebdo.semaine))
+    .limit(1);
+  if (!r) return null;
+  const lignes = await db
+    .select({ id: schema.lignesRapport.id, partie: schema.lignesRapport.partie, texte: schema.lignesRapport.texte, tacheId: schema.lignesRapport.tacheId, projetId: schema.lignesRapport.projetId, projetCode: schema.projets.code })
+    .from(schema.lignesRapport)
+    .leftJoin(schema.projets, eq(schema.projets.id, schema.lignesRapport.projetId))
+    .where(eq(schema.lignesRapport.rapportId, r.id))
+    .orderBy(asc(schema.lignesRapport.ordre));
+  return { rapport: r, lignes };
+}
+
+/** Une ligne prévue la semaine dernière est-elle déjà dans le rapport de cette semaine ? (même tâche, ou même texte) */
+export function dejaReprise(prevue: { texte: string; tacheId: string | null }, actuelles: { texte: string; tacheId?: string | null; partie: Partie }[]): Partie | null {
+  const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  const t = norm(prevue.texte);
+  const trouvee = actuelles.find((l) => (prevue.tacheId && l.tacheId === prevue.tacheId) || norm(l.texte) === t || (t.length > 12 && norm(l.texte).startsWith(t)));
+  return trouvee ? trouvee.partie : null;
 }

@@ -16,23 +16,37 @@ export default async function LayoutApplication({ children }: { children: React.
     .from(schema.notifications)
     .where(and(eq(schema.notifications.personneId, u.id), eq(schema.notifications.lue, false)));
 
-  const chef = a.equipeDirecte.length > 0;
+  // L'onglet Équipe sert aux chefs d'équipe, aux directeurs et aux exécutifs (rapports, charge de travail).
+  const equipe = a.equipeDirecte.length > 0 || a.directeur || a.toutVoir;
+  const conseil = a.toutVoir || a.directeur;
+  const organisation = a.toutVoir || u.administrateur;
+  const alertes = Number(nonLues);
+
+  const RAPPORT: ElementNav = { href: "/rapport", libelle: "Rapport", icone: "document", actifs: ["/rapports"] };
+  const EQUIPE: ElementNav = { href: "/equipe", libelle: "Équipe", icone: "clients", actifs: ["/charge"] };
+  const PROJETS: ElementNav = { href: "/projets", libelle: "Projets", icone: "tableau-de-bord" };
   const elements: ElementNav[] = [
-    { href: "/semaine", libelle: "Semaine", icone: "calendrier", telephone: true },
-    { href: "/rapport", libelle: "Rapport", icone: "document", telephone: !chef },
-    ...(chef ? [{ href: "/equipe", libelle: "Équipe", icone: "clients", telephone: true }] : []),
-    { href: "/projets", libelle: "Projets", icone: "tableau-de-bord", telephone: true },
-    ...(a.toutVoir || a.directeur || chef ? [{ href: "/charge", libelle: "Charge", icone: "jauge" }] : []),
-    ...(a.toutVoir || a.directeur ? [{ href: "/conseil", libelle: "Conseil", icone: "banque" }] : []),
-    ...(a.toutVoir || u.administrateur ? [{ href: "/organisation", libelle: "Organisation", icone: "agence" }] : []),
-    { href: "/alertes", libelle: "Alertes", icone: "notification", compte: Number(nonLues), telephone: true },
+    { href: "/semaine", libelle: "Semaine", icone: "calendrier" },
+    RAPPORT,
+    ...(equipe ? [EQUIPE] : []),
+    PROJETS,
+    ...(conseil ? [{ href: "/conseil", libelle: "Conseil", icone: "banque" }] : []),
+    ...(organisation ? [{ href: "/organisation", libelle: "Organisation", icone: "agence" }] : []),
+    { href: "/alertes", libelle: "Alertes", icone: "notification", compte: alertes },
+  ];
+  // Téléphone : quatre entrées. La dernière, « Plus », mène à tout le reste (avec le nombre d'alertes non lues).
+  const telephone: ElementNav[] = [
+    { href: "/semaine", libelle: "Semaine", icone: "calendrier" },
+    RAPPORT,
+    equipe ? EQUIPE : PROJETS,
+    { href: "/plus", libelle: "Plus", icone: "menu", compte: alertes, actifs: ["/alertes", "/profil", "/conseil", "/organisation", ...(equipe ? ["/projets"] : [])] },
   ];
 
   return (
     <div className="coquille">
       <Rail elements={elements} initiales={initiales(u)} nom={`${u.prenom} ${u.nom}`} />
       <div className="contenu">{children}</div>
-      <Onglets elements={elements} />
+      <Onglets elements={telephone} />
       <Assistant />
     </div>
   );

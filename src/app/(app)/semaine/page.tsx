@@ -111,9 +111,14 @@ export default async function PageSemaine() {
           </section>
           <div className="colonne-etroite">
             <section className="carte" aria-labelledby="t-rapport" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <h2 id="t-rapport" className="carte__titre" style={{ margin: 0 }}>
-                Rapport du vendredi
-              </h2>
+              <div className="carte__entete" style={{ margin: 0 }}>
+                <h2 id="t-rapport" className="carte__titre">
+                  Rapport du vendredi
+                </h2>
+                <a href="/rapports" className="lien-discret">
+                  Mes rapports →
+                </a>
+              </div>
               <span style={{ fontSize: 26, lineHeight: "32px", fontWeight: 200 }}>{envoye ? "Envoyé" : "Brouillon prêt"}</span>
               <span className="note">{rapport.superieur ? `Pour ${rapport.superieur}` : "Aucun supérieur désigné"}</span>
               <a href="/rapport" className={envoye ? "bouton-contour" : "bouton-ambre"} style={{ alignSelf: "flex-start", marginTop: 6 }}>

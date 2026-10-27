@@ -7,6 +7,7 @@ import { chargeDesPersonnes, type LigneCharge } from "@/lib/donnees/charge";
 import { chargerOrganisation } from "@/lib/organisation";
 import { Bandeau } from "@/components/Bandeau";
 import { Jauge, LegendeCharge } from "@/components/Charge";
+import { ONGLETS_EQUIPE, SousOnglets } from "@/components/SousOnglets";
 
 export const metadata: Metadata = { title: "Charge de travail" };
 
@@ -67,6 +68,7 @@ export default async function PageCharge({ searchParams }: { searchParams: Promi
         </dl>
       </Bandeau>
       <div className="page">
+        <SousOnglets onglets={ONGLETS_EQUIPE} courant="/charge" label="Équipe" />
         <div className="ligne-actions">
           {equipes.length > 1 ? (
             <nav className="filtres" aria-label="Filtrer par équipe">

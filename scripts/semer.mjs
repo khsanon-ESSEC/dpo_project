@@ -164,10 +164,11 @@ await sql.begin(async (tx) => {
   await tache("dj", "PR", "Maquettes du formulaire de candidature", "faite", jour(1), [[0, "statut", "a_faire", "en_cours"], [1, "statut", "en_cours", "faite"]], null, { debut: jour(0), h: 10 });
   await tache("dj", "UR", "Points 1 et 2 de l'audit de sécurité", "faite", jour(2), [[1, "statut", "en_cours", "faite"]], null, { debut: jour(1), h: 8 });
   await tache("dj", "PR", "Revue du cahier des charges avec la DRH", "faite", jour(3), [[3, "statut", "a_faire", "faite"]], null, { h: 3 });
-  await tache("dj", "UR", "Point 3 de l'audit de sécurité", "en_cours", jour(2), [[2, "statut", "a_faire", "en_cours"]], null, { debut: jour(2), h: 6 });
-  await tache("dj", "UN", "Maquettes de l'accueil", "en_cours", jour(3), [[0, "statut", "a_faire", "en_cours"], [3, "note", null, null, "Aux trois quarts"]], null, { debut: jour(0), h: 10 });
+  const T = {};
+  T.audit3 = await tache("dj", "UR", "Point 3 de l'audit de sécurité", "en_cours", jour(2), [[2, "statut", "a_faire", "en_cours"]], null, { debut: jour(2), h: 6 });
+  T.accueil = await tache("dj", "UN", "Maquettes de l'accueil", "en_cours", jour(3), [[0, "statut", "a_faire", "en_cours"], [3, "note", null, null, "Aux trois quarts"]], null, { debut: jour(0), h: 10 });
   await tache("dj", "UN", "Accès de test DTI", "bloquee", jour(2), [[1, "statut", "en_cours", "bloquee", "Identifiants demandés à la DTI"], [3, "note", null, null, "Relance faite"]], "Identifiants de test demandés à la DTI mardi ; relance faite jeudi.", { h: 2 });
-  await tache("dj", "PR", "Cahier des charges, version 1", "a_faire", jour(4), [], null, { h: 6 });
+  T.cdc = await tache("dj", "PR", "Cahier des charges, version 1", "a_faire", jour(4), [], null, { h: 6 });
   await tache("dj", "PR", "Fiches de poste", "a_faire", jour(7), [], null, { h: 8 });
   await tache("dj", "PR", "Ateliers avec les utilisateurs de la DRH", "a_faire", jour(10), [], null, { debut: jour(8), h: 16 });
   await tache("dj", "PR", "Maquettes des écrans de suivi des candidatures", "a_faire", jour(11), [], null, { debut: jour(9), h: 12 });
@@ -238,6 +239,122 @@ await sql.begin(async (tx) => {
   await rapport("re", 11, [["fait", "UR", "Tests du module de virements"], ["fait", "PR", "Environnement de développement"], ["prochaine", "UR", "Correctifs du module de virements, lundi"]]);
   await rapport("lp", 9, [["en_cours", "UN", "Plan de migration des données"], ["bloque", "CR", "Serveur de recette demandé à la DTI lundi"], ["prochaine", "UN", "Valider le plan de migration avec la DTI"]]);
   await rapport("wb", 8, [["fait", "CE", "Planning de la phase pilote"], ["en_cours", "CR", "Validation de la recette avec le Crédit"], ["prochaine", "CE", "Présenter le planning au Réseau"]]);
+
+  // ---------- Historique : rapports des six semaines précédentes ----------
+  // [texte, projet] par partie. Chaque semaine prend quelques lignes, en tournant dans la liste.
+  const RESERVES = {
+    dj: {
+      fait: [["Atelier de cadrage avec la DRH", "PR"], ["Maquettes de la page d'accueil, première version", "UN"], ["Revue des exigences de sécurité avec l'auditeur", "UR"], ["Comparatif des plateformes de recrutement", "PR"], ["Compte rendu du comité de projet", "UR"], ["Parcours du candidat dessiné", "PR"]],
+      en_cours: [["Cahier des charges de la plateforme de recrutement", "PR"], ["Préparation de l'audit de sécurité", "UR"], ["Maquettes de l'intranet", "UN"]],
+      bloque: [["Accès à l'environnement de test : demande en attente à la DTI", "UN"]],
+      prochaine: [["Finaliser le parcours du candidat", "PR"], ["Présenter les maquettes à la DRH", "PR"], ["Préparer l'audit de sécurité", "UR"]],
+    },
+    re: {
+      fait: [["Écrans de saisie du module de virements", "UR"], ["Correction des anomalies de recette", "UR"], ["Revue de code avec le prestataire", "UR"], ["Tests unitaires du module de virements", "UR"], ["Intégration continue en place", "PR"]],
+      en_cours: [["Module de virements", "UR"], ["Environnement de développement de la plateforme", "PR"]],
+      bloque: [],
+      prochaine: [["Terminer les tests du module de virements", "UR"], ["Démarrer le formulaire de candidature", "PR"]],
+    },
+    lp: {
+      fait: [["Inventaire des contenus de l'intranet", "UN"], ["Réunion de cadrage avec la DTI", "UN"], ["Plan de migration, première version", "UN"], ["Recette du module de garanties", "CR"]],
+      en_cours: [["Plan de migration des données", "UN"], ["Spécifications de la recherche dans l'intranet", "UN"]],
+      bloque: [["Serveur de recette Credos : demande en cours à la DTI", "CR"]],
+      prochaine: [["Valider le plan de migration", "UN"], ["Préparer la recette de Credos", "CR"]],
+    },
+    wb: {
+      fait: [["Présentation du produit aux responsables du Réseau", "CE"], ["Planning de la phase pilote, version de travail", "CE"], ["Recette des écrans Credos avec le Crédit", "CR"], ["Choix des succursales pilotes", "CE"]],
+      en_cours: [["Planning de la phase pilote", "CE"], ["Procédures Credos", "CR"]],
+      bloque: [],
+      prochaine: [["Valider les succursales pilotes", "CE"], ["Rédiger les procédures Credos", "CR"]],
+    },
+    sc: {
+      fait: [["Supports de formation, module 1", "CE"], ["Glossaire des produits, première version", null], ["Questionnaire de satisfaction des formations", "CE"]],
+      en_cours: [["Supports de formation du Réseau", "CE"]],
+      bloque: [["Cahier des charges : signature de la DRH attendue", "PR"]],
+      prochaine: [["Supports de formation, module 2", "CE"]],
+    },
+    jn: {
+      fait: [["Spécifications des virements de masse, première partie", "UC"], ["Jeux de données de recette", "CR"], ["Maquettes des écrans de paie validées", "UC"]],
+      en_cours: [["Spécifications du module de paie", "UC"]],
+      bloque: [],
+      prochaine: [["Spécifications du module de paie, suite", "UC"]],
+    },
+    mv: {
+      fait: [["Point d'avancement avec le prestataire", "UR"], ["Comité de projet UNIBANKOnline Retail", "UR"], ["Plan de communication validé", "UR"]],
+      en_cours: [["Plan de lancement révisé", "UR"]],
+      bloque: [["Nouvelle date d'audit : réponse de l'auditeur attendue", "UR"]],
+      prochaine: [["Fixer la date du nouveau passage d'audit", "UR"]],
+    },
+    fm: {
+      fait: [["Archives du 1er étage transférées", "AE"], ["Indexation des dossiers de 2018", "AE"]],
+      en_cours: [["Transfert des archives du 2e étage", "AE"]],
+      bloque: [],
+      prochaine: [["Poursuivre le transfert du 2e étage", "AE"]],
+    },
+    jd: {
+      fait: [["Numérisation des registres 2015 et 2016", "AE"]],
+      en_cours: [["Numérisation des registres 2017", "AE"]],
+      bloque: [],
+      prochaine: [["Registres 2018", "AE"]],
+    },
+    ml: {
+      fait: [["Comité de direction Solutions technologiques", null], ["Revue d'architecture UNIBANKOnline Corporate", "UC"], ["Arbitrage des priorités de l'équipe", null]],
+      en_cours: [["Recrutement d'un développeur", null]],
+      bloque: [],
+      prochaine: [["Revue d'architecture avec le prestataire", "UC"]],
+    },
+    na: {
+      fait: [["Revue du portefeuille avec les chefs de projet", null], ["Préparation du rapport au conseil", null], ["Point budgétaire avec la Finance", null]],
+      en_cours: [["Plan annuel de la division", null]],
+      bloque: [],
+      prochaine: [["Rapport au conseil du mois", null]],
+    },
+    ej: {
+      fait: [["Statistiques d'appels de la semaine", null], ["Formation des nouveaux opérateurs", null]],
+      en_cours: [["Script d'accueil révisé", null]],
+      bloque: [],
+      prochaine: [["Planning des équipes du week-end", null]],
+    },
+  };
+  const SUP = Object.fromEntries(gens.map(([k, , , , , sup]) => [k, sup]));
+  SUP.gp = "na"; SUP.tl = "na"; // équipe sans responsable : les rapports remontent à la directrice
+  // Semaines sans rapport, pour que l'historique ressemble à la réalité.
+  const MANQUE = new Set(["lp:3", "sc:2", "jd:4", "ej:5", "re:6"]);
+  const prendre = (liste, debut, n) => (liste.length ? Array.from({ length: Math.min(n, liste.length) }, (_, i) => liste[(debut + i) % liste.length]) : []);
+  for (let w = 1; w <= 6; w++) {
+    const lundiW = jour(-7 * w);
+    for (const [qui, R] of Object.entries(RESERVES)) {
+      if (MANQUE.has(`${qui}:${w}`)) continue;
+      const id = randomUUID();
+      const heureEnvoi = 13 + ((w * 7 + [...qui].reduce((x, c) => x + c.charCodeAt(0), 0)) % 5);
+      await tx`insert into rapports_hebdo (id, auteur_id, semaine, statut, destinataire_id, envoye_le, parties_relues, cree_le)
+        values (${id}, ${P[qui]}, ${lundiW}, 'envoye', ${SUP[qui] ? P[SUP[qui]] : null}, ${moment(4 - 7 * w, heureEnvoi)}, ${tx.array(["fait", "en_cours", "bloque", "prochaine"])}, ${moment(-7 * w, 9)})`;
+      let lignes = [
+        ...prendre(R.fait, w, 2 + (w % 2)).map(([t, pj]) => ["fait", t, pj, null]),
+        ...prendre(R.en_cours, w, 1 + (w % 2)).map(([t, pj]) => ["en_cours", t, pj, null]),
+        ...(w % 2 === 0 ? prendre(R.bloque, w, 1) : []).map(([t, pj]) => ["bloque", t, pj, null]),
+        ...prendre(R.prochaine, w, 2).map(([t, pj]) => ["prochaine", t, pj, null]),
+      ];
+      // La semaine dernière de Daphnée : ce qu'elle avait prévu, à reprendre dans son rapport de cette semaine.
+      if (qui === "dj" && w === 1) {
+        lignes = [
+          ["fait", "Préparation de l'audit de sécurité", "UR", null],
+          ["fait", "Revue des exigences de sécurité avec l'auditeur", "UR", null],
+          ["en_cours", "Maquettes de l'accueil, la moitié des écrans", "UN", T.accueil],
+          ["prochaine", "Point 3 de l'audit de sécurité", "UR", T.audit3],
+          ["prochaine", "Maquettes de l'accueil", "UN", T.accueil],
+          ["prochaine", "Cahier des charges, version 1", "PR", T.cdc],
+          ["prochaine", "Préparer l'atelier avec les utilisateurs de la DRH", "PR", null],
+          ["prochaine", "Relancer la DTI pour les accès de test", "UN", null],
+        ];
+      }
+      let o = 0;
+      for (const [partie, texte, pj, tacheId] of lignes) {
+        o += 1;
+        await tx`insert into lignes_rapport (rapport_id, partie, texte, projet_id, tache_id, ordre) values (${id}, ${partie}, ${texte}, ${pj ? PJ[pj] : null}, ${tacheId}, ${o})`;
+      }
+    }
+  }
 
   await tx`insert into journal (action, objet, details) values ('donnees_exemple', 'base', ${sql.json({ personnes: gens.length, projets: projets.length, version: VERSION_DONNEES_EXEMPLE })})`;
 });

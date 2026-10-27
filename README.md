@@ -3,8 +3,9 @@
 Application web de suivi des projets de la DPO (UNIBANK) :
 
 - **Ma semaine** : les tâches de chacun, cochées au fil de la semaine.
-- **Rapport du vendredi** : préparé à partir des tâches, relu et envoyé au supérieur. Chaque chef de projet reçoit les lignes qui concernent son projet.
-- **Mon équipe** : qui a envoyé son rapport, les blocages, les retards, avec relance.
+- **Rapport du vendredi** : préparé à partir des tâches, relu et envoyé au supérieur. Chaque chef de projet reçoit les lignes qui concernent son projet. Ce qui était prévu la semaine précédente se reprend en un clic (fait, en cours, reporté).
+- **Mes rapports** : tous les rapports déjà envoyés, semaine par semaine, avec passage d'une semaine à l'autre.
+- **Mon équipe** : qui a envoyé son rapport, les blocages, les retards, avec relance ; l'historique des rapports de l'équipe (par semaine ou par personne) ; la charge de travail.
 - **Projets** : portefeuille, fiches projet, indicateurs vérifiables, glissement des dates.
 - **Rapport au conseil** : rapport mensuel des projets stratégiques, au format du tableau Word de la banque.
 - **Vues d'un projet** : vue d'ensemble, liste, tableau (colonnes par état, avec glisser-déposer), Gantt (jours, semaines ou mois), calendrier des échéances, charge de l'équipe du projet. Le portefeuille a aussi une chronologie de tous les projets.
@@ -12,7 +13,7 @@ Application web de suivi des projets de la DPO (UNIBANK) :
 - **Organisation** : personnes, équipes, supérieurs, rôles et heures disponibles par semaine.
 - **Assistant** (facultatif) : un bouton flottant sur chaque écran, branché sur le fournisseur d'IA choisi par la banque.
 
-Application multipage (chaque écran est une page rendue par le serveur), en français, avec thème clair et sombre. Elle fonctionne sur ordinateur et sur téléphone.
+Application multipage (chaque écran est une page rendue par le serveur), en français, avec thème clair et sombre. Elle fonctionne sur ordinateur et sur téléphone. Sur téléphone, la barre du bas a quatre entrées (Semaine, Rapport, Équipe ou Projets, Plus) ; « Plus » mène à tout le reste.
 
 ---
 

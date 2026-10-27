@@ -72,3 +72,21 @@ export async function envoyer(rapportId: string) {
   await envoyerRapport(rapportId, u.id);
   revalidatePath("/", "layout");
 }
+
+/**
+ * Reprendre en un clic une ligne d'un de mes rapports précédents (ce qui était prévu la semaine
+ * dernière) dans le brouillon de cette semaine, dans la partie choisie.
+ */
+export async function reprendreLigne(rapportId: string, ligneId: string, partie: Partie) {
+  const { u } = await monBrouillon(rapportId);
+  if (!PARTIES.includes(partie)) return;
+  const [l] = await db
+    .select({ texte: schema.lignesRapport.texte, projetId: schema.lignesRapport.projetId, tacheId: schema.lignesRapport.tacheId, auteurId: schema.rapportsHebdo.auteurId })
+    .from(schema.lignesRapport)
+    .innerJoin(schema.rapportsHebdo, eq(schema.rapportsHebdo.id, schema.lignesRapport.rapportId))
+    .where(eq(schema.lignesRapport.id, ligneId));
+  if (!l || l.auteurId !== u.id) return; // seulement mes propres lignes
+  const [{ m }] = await db.select({ m: max(schema.lignesRapport.ordre) }).from(schema.lignesRapport).where(eq(schema.lignesRapport.rapportId, rapportId));
+  await db.insert(schema.lignesRapport).values({ rapportId, partie, texte: l.texte, projetId: l.projetId, tacheId: l.tacheId, ordre: (m ?? 0) + 1 });
+  revalidatePath("/rapport");
+}

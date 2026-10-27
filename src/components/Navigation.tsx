@@ -4,10 +4,11 @@ import { usePathname } from "next/navigation";
 import { BoutonTheme } from "./BoutonTheme";
 import { Icone } from "./Icone";
 
-export type ElementNav = { href: string; libelle: string; icone: string; compte?: number; telephone?: boolean };
+/** `actifs` : autres débuts d'adresse pour lesquels l'élément est l'écran courant. */
+export type ElementNav = { href: string; libelle: string; icone: string; compte?: number; actifs?: string[] };
 
-function estCourant(pathname: string, href: string) {
-  return pathname === href || pathname.startsWith(`${href}/`);
+function estCourant(pathname: string, e: ElementNav) {
+  return [e.href, ...(e.actifs ?? [])].some((h) => pathname === h || pathname.startsWith(`${h}/`));
 }
 
 export function Rail({ elements, initiales, nom }: { elements: ElementNav[]; initiales: string; nom: string }) {
@@ -17,7 +18,7 @@ export function Rail({ elements, initiales, nom }: { elements: ElementNav[]; ini
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img className="rail__logo" src="/logo-blanc.svg" alt="UNIBANK" />
       {elements.map((e) => (
-        <a key={e.href} href={e.href} className="rail__lien" aria-current={estCourant(pathname, e.href) ? "page" : undefined}>
+        <a key={e.href} href={e.href} className="rail__lien" aria-current={estCourant(pathname, e) ? "page" : undefined}>
           <span className="rail__pastille">
             <Icone nom={e.icone} />
             {e.compte ? <span className="compteur">{e.compte}</span> : null}
@@ -41,21 +42,21 @@ export function Rail({ elements, initiales, nom }: { elements: ElementNav[]; ini
   );
 }
 
+/** Barre du bas sur téléphone : quatre entrées au plus ; « Plus » mène à tout le reste. */
 export function Onglets({ elements }: { elements: ElementNav[] }) {
   const pathname = usePathname();
   return (
     <nav className="onglets" aria-label="Navigation principale">
-      {elements
-        .filter((e) => e.telephone)
-        .map((e) => (
-          <a key={e.href} href={e.href} aria-current={estCourant(pathname, e.href) ? "page" : undefined}>
-            <span style={{ position: "relative", display: "flex" }}>
-              <Icone nom={e.icone} />
-              {e.compte ? <span className="compteur" style={{ top: -6, right: -12 }}>{e.compte}</span> : null}
-            </span>
-            {e.libelle}
-          </a>
-        ))}
+      {elements.slice(0, 4).map((e) => (
+        <a key={e.href} href={e.href} aria-current={estCourant(pathname, e) ? "page" : undefined}>
+          <span style={{ position: "relative", display: "flex" }}>
+            <Icone nom={e.icone} />
+            {e.compte ? <span className="compteur" style={{ top: -6, right: -12 }}>{e.compte}</span> : null}
+          </span>
+          {e.libelle}
+          {e.compte ? <span className="visuellement-cache"> ({e.compte} non lues)</span> : null}
+        </a>
+      ))}
     </nav>
   );
 }

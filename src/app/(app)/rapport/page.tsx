@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { ajouterJours, dateCourte, dateLocale, heure } from "@/lib/dates";
-import { lecteursDuRapport, lignesDuRapport, obtenirOuCreerRapport, PARTIES, semaineCourante } from "@/lib/donnees/rapport";
+import { dejaReprise, lecteursDuRapport, lignesDuRapport, monRapportPrecedent, obtenirOuCreerRapport, PARTIES, semaineCourante } from "@/lib/donnees/rapport";
+import { ONGLETS_RAPPORT, SousOnglets } from "@/components/SousOnglets";
 import { tousLesProjetsActifs } from "@/lib/donnees/projets";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
-import { ajouterLigne, envoyer } from "./actions";
+import { ajouterLigne, envoyer, reprendreLigne } from "./actions";
 import { CasePartie, LigneEditable } from "./Lignes";
 
 export const metadata: Metadata = { title: "Rapport du vendredi" };
@@ -23,6 +24,11 @@ export default async function PageRapport() {
   const brouillon = rapport.statut === "brouillon";
   const relues = new Set(rapport.partiesRelues);
   const nRelues = PARTIES.filter((p) => relues.has(p.id)).length;
+  // Ce qui était prévu la semaine dernière : à reprendre en un clic s'il n'y est pas déjà.
+  const precedent = brouillon ? await monRapportPrecedent(u.id, semaine) : null;
+  const prevues = (precedent?.lignes ?? []).filter((l) => l.partie === "prochaine").map((l) => ({ ...l, dans: dejaReprise(l, lignes) }));
+  const aReprendre = prevues.filter((l) => !l.dans);
+  const LIBELLE = Object.fromEntries(PARTIES.map((x) => [x.id, x.libelle]));
 
   return (
     <>
@@ -30,7 +36,9 @@ export default async function PageRapport() {
         <div className="discret" style={{ marginTop: 16, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px 32px", fontSize: 13, lineHeight: "18px" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <Icone nom="cadenas" taille={16} />
-            {lecteurs.superieur ? `${lecteurs.superieur.nom} et votre direction lisent tout ; chaque chef de projet, sa partie` : "Aucun supérieur désigné : voir avec l'administrateur"}
+            {lecteurs.superieur
+              ? `${lecteurs.superieur.nom}${lecteurs.directeurs.length ? " et votre direction lisent" : " lit"} tout ; chaque chef de projet, sa partie`
+              : "Aucun supérieur désigné : voir avec l'administrateur"}
           </span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <Icone nom="etincelle" taille={16} />
@@ -51,8 +59,64 @@ export default async function PageRapport() {
         </div>
       </Bandeau>
       <div className="page">
+        <SousOnglets onglets={ONGLETS_RAPPORT} courant="/rapport" label="Rapports" />
         <div className="colonnes">
           <div className="colonne-large" style={{ gap: 20 }}>
+            {precedent && prevues.length && !aReprendre.length ? (
+              <p className="succes" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 12px", margin: 0 }}>
+                <Icone nom="coche" taille={16} /> Tout ce que vous aviez prévu la semaine dernière est déjà dans ce rapport.
+                <a href={`/rapports/${precedent.rapport.id}`} className="lien-discret">
+                  Voir le rapport de la semaine dernière →
+                </a>
+              </p>
+            ) : null}
+            {precedent && aReprendre.length ? (
+              <section className="carte carte--liste" aria-labelledby="r-precedent" style={aReprendre.length ? { borderColor: "var(--veille-point)" } : undefined}>
+                <div className="carte__entete">
+                  <h2 id="r-precedent" className="carte__titre">
+                    Prévu la semaine dernière{aReprendre.length ? ` · ${aReprendre.length} à reprendre` : ""}
+                  </h2>
+                  <a href={`/rapports/${precedent.rapport.id}`} className="lien-discret">
+                    Voir ce rapport →
+                  </a>
+                </div>
+                <ul className="liste">
+                  {prevues.map((l) => (
+                    <li key={l.id} className="rangee" style={{ minHeight: 52, flexWrap: "wrap" }}>
+                      <span className="etiquette-projet">{l.projetCode ?? "—"}</span>
+                      <span className="rangee__texte" style={{ flex: "1 1 220px" }}>
+                        <span className="rangee__titre" style={l.dans ? { color: "var(--discret)" } : undefined}>
+                          {l.texte}
+                        </span>
+                        {l.dans ? <span className="rangee__sous ton-ok">Déjà dans « {LIBELLE[l.dans]} »</span> : null}
+                      </span>
+                      {l.dans ? null : (
+                        <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }} aria-label={`Reprendre « ${l.texte} »`}>
+                          <form action={reprendreLigne.bind(null, rapport.id, l.id, "fait")}>
+                            <button type="submit" className="bouton-mini">
+                              <Icone nom="coche" taille={14} /> Fait
+                            </button>
+                          </form>
+                          <form action={reprendreLigne.bind(null, rapport.id, l.id, "en_cours")}>
+                            <button type="submit" className="bouton-mini">
+                              En cours
+                            </button>
+                          </form>
+                          <form action={reprendreLigne.bind(null, rapport.id, l.id, "prochaine")}>
+                            <button type="submit" className="bouton-mini">
+                              <Icone nom="reprendre" taille={14} /> Reporter
+                            </button>
+                          </form>
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="note" style={{ margin: "10px 0 4px" }}>
+                  {aReprendre.length ? "Un clic ajoute la ligne à la partie choisie de ce rapport." : "Tout ce qui était prévu est déjà dans votre rapport."}
+                </p>
+              </section>
+            ) : null}
             {PARTIES.map((p) => {
               const siennes = lignes.filter((l) => l.partie === p.id);
               return (

@@ -8,6 +8,7 @@ import { Niveau } from "@/components/Charge";
 import { nombre } from "@/lib/charge";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
+import { ONGLETS_EQUIPE, SousOnglets } from "@/components/SousOnglets";
 import { relancerEquipe } from "./actions";
 
 export const metadata: Metadata = { title: "Mon équipe" };
@@ -23,7 +24,8 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
       <>
         <Bandeau surtitre={jourComplet(jour)} titre="Mon équipe" />
         <div className="page">
-          <p className="vide">Personne ne vous envoie de rapport pour le moment.</p>
+          <SousOnglets onglets={ONGLETS_EQUIPE} courant="/equipe" label="Équipe" />
+          <p className="vide">Personne ne vous envoie directement de rapport. Les rapports et la charge de votre direction sont dans les onglets ci-dessus.</p>
         </div>
       </>
     );
@@ -61,6 +63,7 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
         </div>
       </Bandeau>
       <div className="page">
+        <SousOnglets onglets={ONGLETS_EQUIPE} courant="/equipe" label="Équipe" />
         <div className="ligne-actions">
           <nav className="filtres" aria-label="Filtrer l'équipe">
             {filtres.map((f) => (
@@ -68,9 +71,6 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
                 {f.libelle}
               </a>
             ))}
-            <a className="filtre" href="/charge">
-              Charge de travail →
-            </a>
           </nav>
           {relance ? (
             <span className="succes" role="status" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>

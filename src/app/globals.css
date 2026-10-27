@@ -2209,3 +2209,24 @@ a.puce:hover {
 [hidden] {
   display: none !important;
 }
+
+/* ---------- Petits boutons (reprendre une ligne du rapport précédent) ---------- */
+.bouton-mini {
+  height: 30px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--controle);
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--encre);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.bouton-mini:hover {
+  background: var(--choisi);
+  border-color: var(--encre);
+}
