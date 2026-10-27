@@ -28,3 +28,9 @@ export const ONGLETS_RAPPORT: SousOnglet[] = [
   { href: "/rapport", libelle: "Cette semaine", icone: "document" },
   { href: "/rapports", libelle: "Mes rapports", icone: "liste" },
 ];
+
+/** Section Organisation (administrateurs) : les personnes et équipes, les modèles de rapport. */
+export const ONGLETS_ORGANISATION: SousOnglet[] = [
+  { href: "/organisation", libelle: "Personnes et équipes", icone: "personnes" },
+  { href: "/organisation/modeles", libelle: "Modèles de rapport", icone: "modeles" },
+];

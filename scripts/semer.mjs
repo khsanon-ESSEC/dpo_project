@@ -40,7 +40,7 @@ const premierDuMois = (decalageMois) => {
 const empreinte = await hash(motDePasse, { memoryCost: 19456, timeCost: 2, parallelism: 1 });
 
 // ---------- Équipes et personnes (noms fictifs) ----------
-const E = Object.fromEntries(["dir", "st", "po", "om", "ca"].map((k) => [k, randomUUID()]));
+const E = Object.fromEntries(["dir", "st", "po", "om"].map((k) => [k, randomUUID()]));
 const P = {};
 // [clé, prénom, nom, poste, équipe, supérieur, rôles réglés à la main]
 // Exemple de cumul : Jean-Robert Noël, analyste, est aussi administrateur de l'application.
@@ -50,7 +50,6 @@ const gens = [
   ["na", "Nadège", "Augustin", "Directrice de la division", "dir", "ex", ["directeur", "administrateur"]],
   ["ml", "Marc-Antoine", "Louis", "Directeur Solutions technologiques", "st", "na", ["directeur"]],
   ["mv", "Myriam", "Valcin", "Cheffe d'équipe, Projets organisationnels", "po", "na", []],
-  ["ej", "Évelyne", "Jean", "Cheffe du centre d'appels", "ca", "na", []],
   ["dj", "Daphnée", "Joseph", "Chargée de projets organisationnels", "st", "ml", []],
   ["lp", "Ludovic", "Pierre", "Chargé de projets", "st", "ml", []],
   ["re", "Ricardo", "Étienne", "Développeur", "st", "ml", []],
@@ -61,15 +60,12 @@ const gens = [
   ["jd", "Joël", "Dorval", "Analyste", "po", "mv", []],
   ["gp", "Guerline", "Paul", "Analyste de processus", "om", null, []],
   ["tl", "Thierry", "Lamy", "Analyste de processus", "om", null, []],
-  ["rp", "Rose-Marie", "Pierre", "Opératrice", "ca", "ej", []],
-  ["ps", "Patrick", "Simon", "Opérateur", "ca", "ej", []],
-  ["nl", "Nadia", "Laguerre", "Opératrice", "ca", "ej", []],
 ];
 for (const [k] of gens) P[k] = randomUUID();
 const sansAccent = (s) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z-]/g, "");
 
 await sql.begin(async (tx) => {
-  for (const [k, nom] of [["dir", "Direction de la division"], ["st", "Solutions technologiques"], ["po", "Projets organisationnels"], ["om", "Organisation et méthodes"], ["ca", "Centre d'appels"]]) {
+  for (const [k, nom] of [["dir", "Direction de la division"], ["st", "Solutions technologiques"], ["po", "Projets organisationnels"], ["om", "Organisation et méthodes"]]) {
     await tx`insert into equipes (id, nom, equipe_parente_id) values (${E[k]}, ${nom}, ${k === "dir" ? null : E.dir})`;
   }
   for (const [k, prenom, nom, poste, eq, , roles] of gens) {
@@ -81,7 +77,7 @@ await sql.begin(async (tx) => {
     if (sup) await tx`update personnes set superieur_id = ${P[sup]} where id = ${P[k]}`;
   }
   // Responsables d'équipe. « Organisation et méthodes » : poste vacant.
-  for (const [eq, chef] of [["dir", "na"], ["st", "ml"], ["po", "mv"], ["ca", "ej"]]) {
+  for (const [eq, chef] of [["dir", "na"], ["st", "ml"], ["po", "mv"]]) {
     await tx`update equipes set chef_id = ${P[chef]} where id = ${E[eq]}`;
   }
 
@@ -225,20 +221,169 @@ await sql.begin(async (tx) => {
   // Marc-Antoine Louis (chef du projet UC).
   await tache("ml", "UC", "Revue d'architecture avec le prestataire", "a_faire", jour(8), [], null, { h: 4 });
 
+  // ---------- Modèles de rapport (configurés par les administrateurs) ----------
+  // Mêmes formes que src/lib/modeles.ts. Le modèle par défaut reprend les quatre parties d'origine.
+  const L = (id, libelle, rubrique, aide) => ({ id, type: "lignes", libelle, ...(aide ? { aide } : {}), rubrique, prerempli: true, parProjet: true, visibilite: "tous" });
+  const SANTE = { id: "sante", type: "sante", libelle: "Santé de mes projets", aide: "Un feu par projet sur lequel vous avez des tâches.", obligatoire: true, prerempli: true, visibilite: "tous" };
+  const QUATRE = [L("fait", "Fait", "fait"), L("en_cours", "En cours", "en_cours"), L("bloque", "Bloqué", "bloque"), L("prochaine", "La semaine prochaine", "prochaine")];
+  const DEFAUT_V2 = [{ ...QUATRE[0], obligatoire: true }, QUATRE[1], QUATRE[2], SANTE, QUATRE[3]];
+  const ST_V2 = [
+    { ...QUATRE[0], obligatoire: true },
+    QUATRE[1],
+    L("bloque", "Bloqué", "bloque", "Ce qui vous arrête, et depuis quand."),
+    SANTE,
+    QUATRE[3],
+    { id: "charge", type: "charge", libelle: "Ma charge", aide: "Proposée d'après vos tâches de la semaine prochaine ; corrigez-la si ce n'est pas votre ressenti.", obligatoire: true, prerempli: true, visibilite: "superieur" },
+    { id: "decision", type: "texte", libelle: "Décision ou aide attendue", aide: "Une phrase : ce qu'il vous faut, et de qui.", rubrique: "decision", visibilite: "superieur" },
+  ];
+  const reprise = (id, libelle, r, aide) => ({ id, type: "reprise", libelle, ...(aide ? { aide } : {}), reprise: r, visibilite: "tous" });
+  const CHEF_V1 = [
+    { id: "mon_travail", type: "mon_travail", libelle: "Mon travail", aide: "Le formulaire de votre équipe, préparé à partir de vos propres tâches." },
+    { id: "mon_equipe", type: "intertitre", libelle: "Mon équipe", aide: "Préparé à partir des rapports reçus. Vous gardez, retirez ou reformulez ; rien ne part sans vous." },
+    reprise("a_decider", "À décider ou débloquer", "a_decider", "Repris des blocages et des décisions attendues. « Remonter » met l'élément en tête du rapport de votre supérieur."),
+    reprise("sante_equipe", "Santé des projets de l'équipe", "sante", "Le feu le plus préoccupant de l'équipe est proposé pour chaque projet ; vous pouvez le changer."),
+    reprise("charge_equipe", "Charge de l'équipe", "charge"),
+    reprise("fait_equipe", "Fait cette semaine", "fait"),
+    reprise("prochaine_equipe", "La semaine prochaine", "prochaine"),
+  ];
+  const DIVISION_V1 = [
+    { id: "mon_travail", type: "mon_travail", libelle: "Mon travail", aide: "Le formulaire de votre équipe, préparé à partir de vos propres tâches." },
+    { id: "ma_division", type: "intertitre", libelle: "Ma division", aide: "Préparée à partir des rapports des chefs d'équipe, et de ceux des personnes sans chef d'équipe." },
+    reprise("a_decider", "À décider", "a_decider", "Ce que les chefs d'équipe ont choisi de remonter, et les blocages des personnes sans chef d'équipe."),
+    reprise("sante_equipe", "Santé des projets de la division", "sante"),
+    reprise("charge_equipe", "Charge de la division", "charge"),
+    reprise("fait_equipe", "Fait cette semaine", "fait"),
+    reprise("prochaine_equipe", "La semaine prochaine", "prochaine"),
+  ];
+  const deplier = (chef, individuel) =>
+    chef.flatMap((c) =>
+      c.type === "mon_travail"
+        ? [{ id: c.id, type: "intertitre", libelle: c.libelle, aide: c.aide, partie: "travail" }, ...individuel.map((f) => ({ ...f, partie: "travail" }))]
+        : [{ ...c, partie: "equipe" }],
+    );
+  const M = { defaut: randomUUID(), st: randomUUID(), chef: randomUUID(), division: randomUUID() };
+  const V = { defaut1: randomUUID(), defaut2: randomUUID(), st1: randomUUID(), st2: randomUUID(), chef1: randomUUID(), division1: randomUUID() };
+  await tx`insert into modeles_rapport (id, nom, description, genre, par_defaut, pour_chefs) values
+    (${M.defaut}, 'Rapport du vendredi', 'Le modèle de toute personne sans autre modèle.', 'individuel', true, false),
+    (${M.st}, 'Solutions technologiques', 'Avec la charge ressentie et les décisions attendues.', 'individuel', false, false),
+    (${M.chef}, 'Rapport de chef d''équipe', 'Son travail, puis la synthèse préremplie de son équipe.', 'chef', false, true),
+    (${M.division}, 'Rapport de la division', 'Son travail, puis la synthèse de la division.', 'chef', false, false)`;
+  const version = (id, modele, numero, champs, statut, note, jourPublie) =>
+    tx`insert into versions_modele (id, modele_id, numero, champs, statut, note, creee_par_id, publiee_le, publiee_par_id)
+      values (${id}, ${modele}, ${numero}, ${sql.json(champs)}, ${statut}, ${note}, ${P.jn}, ${`${jourPublie}T09:00:00-04:00`}, ${P.jn})`;
+  await version(V.defaut1, M.defaut, 1, QUATRE, "archivee", "Les quatre parties d'origine.", "2026-01-12");
+  await version(V.defaut2, M.defaut, 2, DEFAUT_V2, "publiee", "Ajoute « Santé de mes projets ».", "2026-10-05");
+  await version(V.st1, M.st, 1, DEFAUT_V2, "archivee", "Comme le modèle par défaut.", "2026-10-05");
+  await version(V.st2, M.st, 2, ST_V2, "publiee", "Ajoute « Ma charge » et « Décision ou aide attendue ».", jour(0));
+  await version(V.chef1, M.chef, 1, CHEF_V1, "publiee", "Son travail, puis son équipe : à décider, santé, charge, fait, la semaine prochaine.", jour(0));
+  await version(V.division1, M.division, 1, DIVISION_V1, "publiee", "Son travail, puis sa division.", jour(0));
+  await tx`insert into affectations_modele (modele_id, equipe_id) values (${M.st}, ${E.st})`;
+  await tx`insert into affectations_modele (modele_id, personne_id) values (${M.division}, ${P.na})`;
+
   // ---------- Rapports déjà envoyés cette semaine ----------
-  const rapport = async (qui, heure, lignes) => {
+  // [type, champ, projet, texte] ; ["feu", projet, valeur, phrase] ; ["charge", valeur, propose, calcul] ; ["texte", champ, valeur]
+  const rapport = async (qui, dest, heure, formulaire, versionId, contenu) => {
     const id = randomUUID();
-    await tx`insert into rapports_hebdo (id, auteur_id, semaine, statut, destinataire_id, envoye_le, parties_relues)
-      values (${id}, ${P[qui]}, ${jour(0)}, 'envoye', ${P.ml}, ${moment(4, heure)}, ${tx.array(["fait", "en_cours", "bloque", "prochaine"])})`;
+    await tx`insert into rapports_hebdo (id, auteur_id, semaine, statut, destinataire_id, envoye_le, parties_relues, version_modele_id, formulaire)
+      values (${id}, ${P[qui]}, ${jour(0)}, 'envoye', ${P[dest]}, ${moment(4, heure)}, ${tx.array(formulaire.filter((c) => !["intertitre", "note"].includes(c.type)).map((c) => c.id))}, ${versionId}, ${sql.json(formulaire)})`;
+    const lignes = {};
     let o = 0;
-    for (const [partie, pj, texte] of lignes) {
-      o += 1;
-      await tx`insert into lignes_rapport (rapport_id, partie, texte, projet_id, ordre) values (${id}, ${partie}, ${texte}, ${pj ? PJ[pj] : null}, ${o})`;
+    for (const x of contenu) {
+      if (x[0] === "ligne") {
+        const [, champ, pj, texte, extra = {}] = x;
+        o += 1;
+        const c = formulaire.find((f) => f.id === champ);
+        const lid = randomUUID();
+        lignes[extra.cle ?? lid] = lid;
+        await tx`insert into lignes_rapport (id, rapport_id, champ_id, partie, texte, projet_id, ordre, origines, auteurs_origine, remonte, visibilite)
+          values (${lid}, ${id}, ${champ}, ${extra.partie ?? (c.rubrique && c.rubrique !== "autre" ? c.rubrique : null)}, ${texte}, ${pj ? PJ[pj] : null}, ${o},
+                  ${`{${(extra.origines ?? []).join(",")}}`}::text[], ${`{${(extra.auteurs ?? []).map((k) => P[k]).join(",")}}`}::uuid[], ${extra.remonte ?? false}, ${extra.visibilite ?? null})`;
+      } else if (x[0] === "feu") {
+        const [, pj, valeur, phrase = "", champ = "sante", propose = valeur] = x;
+        await tx`insert into reponses_rapport (rapport_id, champ_id, projet_id, valeur, commentaire, propose) values (${id}, ${champ}, ${PJ[pj]}, ${valeur}, ${phrase}, ${propose})`;
+      } else if (x[0] === "charge") {
+        const [, valeur, propose, calcul, champ = "charge"] = x;
+        await tx`insert into reponses_rapport (rapport_id, champ_id, valeur, commentaire, propose) values (${id}, ${champ}, ${valeur}, ${calcul}, ${propose})`;
+      } else if (x[0] === "texte") {
+        const [, champ, valeur] = x;
+        await tx`insert into reponses_rapport (rapport_id, champ_id, valeur) values (${id}, ${champ}, ${valeur})`;
+      }
     }
+    return { id, lignes };
   };
-  await rapport("re", 11, [["fait", "UR", "Tests du module de virements"], ["fait", "PR", "Environnement de développement"], ["prochaine", "UR", "Correctifs du module de virements, lundi"]]);
-  await rapport("lp", 9, [["en_cours", "UN", "Plan de migration des données"], ["bloque", "CR", "Serveur de recette demandé à la DTI lundi"], ["prochaine", "UN", "Valider le plan de migration avec la DTI"]]);
-  await rapport("wb", 8, [["fait", "CE", "Planning de la phase pilote"], ["en_cours", "CR", "Validation de la recette avec le Crédit"], ["prochaine", "CE", "Présenter le planning au Réseau"]]);
+  // Solutions technologiques : trois rapports reçus par Marc-Antoine sur six (Daphnée, Sophonie et lui-même pas encore).
+  await rapport("re", "ml", 11, ST_V2, V.st2, [
+    ["ligne", "fait", "UR", "Tests du module de virements"],
+    ["ligne", "fait", "PR", "Environnement de développement"],
+    ["ligne", "prochaine", "UR", "Correctifs du module de virements, lundi"],
+    ["feu", "UR", "dans_les_temps"],
+    ["feu", "PR", "dans_les_temps"],
+    ["charge", "normale", "normale", "30 h sur 40 h"],
+  ]);
+  await rapport("lp", "ml", 9, ST_V2, V.st2, [
+    ["ligne", "en_cours", "UN", "Plan de migration des données"],
+    ["ligne", "bloque", "CR", "Serveur de recette demandé à la DTI lundi"],
+    ["ligne", "prochaine", "UN", "Valider le plan de migration avec la DTI"],
+    ["feu", "UN", "a_surveiller", "Plan de migration à valider avec la DTI", "sante", "a_surveiller"],
+    ["feu", "CR", "en_retard", "Le serveur de recette n'est toujours pas là", "sante", "dans_les_temps"],
+    ["charge", "trop_lourde", "normale", "24 h sur 40 h"],
+    ["texte", "decision", "Valider le report de la recette Credos au 13 novembre"],
+  ]);
+  await rapport("wb", "ml", 8, ST_V2, V.st2, [
+    ["ligne", "fait", "CE", "Planning de la phase pilote"],
+    ["ligne", "en_cours", "CR", "Validation de la recette avec le Crédit"],
+    ["ligne", "bloque", "CE", "Date de la phase pilote : le Réseau n'a pas répondu"],
+    ["ligne", "prochaine", "CE", "Présenter le planning au Réseau"],
+    ["feu", "CE", "a_surveiller", "Date de la phase pilote à obtenir du Réseau"],
+    ["feu", "CR", "dans_les_temps"],
+    ["charge", "lourde", "trop_lourde", "45 h sur 40 h"],
+  ]);
+  await rapport("jn", "ml", 12, ST_V2, V.st2, [
+    ["ligne", "fait", "CR", "Jeux de données de recette"],
+    ["ligne", "en_cours", "UC", "Spécifications du module de paie"],
+    ["ligne", "prochaine", "UC", "Spécifications des virements de masse"],
+    ["feu", "UC", "dans_les_temps"],
+    ["feu", "CR", "dans_les_temps"],
+    ["charge", "legere", "normale", "16 h sur 32 h"],
+  ]);
+  // Projets organisationnels : Fabienne et Joël ont envoyé ; Myriam a envoyé son rapport de cheffe d'équipe à Nadège.
+  const fm = await rapport("fm", "mv", 10, DEFAUT_V2, V.defaut2, [
+    ["ligne", "fait", "AE", "Archives du 2e étage : 60 % transférées", { cle: "fait" }],
+    ["ligne", "prochaine", "AE", "Poursuivre le transfert du 2e étage", { cle: "prochaine" }],
+    ["feu", "AE", "dans_les_temps"],
+  ]);
+  const jd = await rapport("jd", "mv", 9, DEFAUT_V2, V.defaut2, [
+    ["ligne", "fait", "AE", "Numérisation des registres 2017", { cle: "fait" }],
+    ["ligne", "bloque", "AE", "Scanner du 3e étage en panne depuis mercredi", { cle: "bloque" }],
+    ["ligne", "prochaine", "AE", "Registres 2018", { cle: "prochaine" }],
+    ["feu", "AE", "a_surveiller", "Scanner en panne : la numérisation est arrêtée"],
+  ]);
+  const MV = deplier(CHEF_V1, DEFAUT_V2);
+  const chargePO = JSON.stringify({ calcule: { libre: 0, normale: 2, chargee: 0, surchargee: 0 }, ressenti: { legere: 0, normale: 0, lourde: 0, trop_lourde: 0, aucun: 2 } });
+  await rapport("mv", "na", 14, MV, V.chef1, [
+    ["ligne", "fait", "UR", "Comité de projet UNIBANKOnline Retail"],
+    ["ligne", "en_cours", "UR", "Plan de lancement révisé"],
+    ["ligne", "prochaine", "UR", "Plan de lancement révisé : version pour la direction"],
+    ["feu", "UR", "a_surveiller", "Audit de sécurité à repasser avant le lancement"],
+    ["ligne", "a_decider", "AE", "Scanner du 3e étage en panne depuis mercredi", { partie: "bloque", origines: [`l:${jd.lignes.bloque}`], auteurs: ["jd"], remonte: true }],
+    ["ligne", "fait_equipe", "AE", "Archives du 2e étage : 60 % transférées", { partie: "fait", origines: [`l:${fm.lignes.fait}`], auteurs: ["fm"] }],
+    ["ligne", "fait_equipe", "AE", "Numérisation des registres 2017", { partie: "fait", origines: [`l:${jd.lignes.fait}`], auteurs: ["jd"] }],
+    ["ligne", "prochaine_equipe", "AE", "Poursuivre le transfert du 2e étage", { partie: "prochaine", origines: [`l:${fm.lignes.prochaine}`], auteurs: ["fm"] }],
+    ["ligne", "prochaine_equipe", "AE", "Registres 2018", { partie: "prochaine", origines: [`l:${jd.lignes.prochaine}`], auteurs: ["jd"] }],
+    ["feu", "AE", "a_surveiller", "FM : dans les temps · JD : à surveiller", "sante_equipe", "a_surveiller"],
+    ["feu", "UR", "a_surveiller", "MV : à surveiller", "sante_equipe", "a_surveiller"],
+    ["charge", chargePO, null, "2 personne(s)", "charge_equipe"],
+  ]);
+  // Organisation et méthodes : pas de chef d'équipe, les rapports vont directement à Nadège.
+  await rapport("gp", "na", 13, DEFAUT_V2, V.defaut2, [
+    ["ligne", "en_cours", null, "Procédure d'ouverture de compte, version 2"],
+    ["ligne", "bloque", null, "Validation de la procédure : en attente de la Conformité depuis deux semaines"],
+    ["ligne", "prochaine", null, "Procédure d'ouverture de compte : présentation au Réseau"],
+  ]);
+  await rapport("tl", "na", 15, DEFAUT_V2, V.defaut2, [
+    ["ligne", "fait", null, "Cartographie des processus du Crédit : première partie"],
+    ["ligne", "prochaine", null, "Cartographie : ateliers avec le Crédit"],
+  ]);
 
   // ---------- Historique : rapports des six semaines précédentes ----------
   // [texte, projet] par partie. Chaque semaine prend quelques lignes, en tournant dans la liste.
@@ -309,17 +454,11 @@ await sql.begin(async (tx) => {
       bloque: [],
       prochaine: [["Rapport au conseil du mois", null]],
     },
-    ej: {
-      fait: [["Statistiques d'appels de la semaine", null], ["Formation des nouveaux opérateurs", null]],
-      en_cours: [["Script d'accueil révisé", null]],
-      bloque: [],
-      prochaine: [["Planning des équipes du week-end", null]],
-    },
   };
   const SUP = Object.fromEntries(gens.map(([k, , , , , sup]) => [k, sup]));
   SUP.gp = "na"; SUP.tl = "na"; // équipe sans responsable : les rapports remontent à la directrice
   // Semaines sans rapport, pour que l'historique ressemble à la réalité.
-  const MANQUE = new Set(["lp:3", "sc:2", "jd:4", "ej:5", "re:6"]);
+  const MANQUE = new Set(["lp:3", "sc:2", "jd:4", "tl:5", "re:6"]);
   const prendre = (liste, debut, n) => (liste.length ? Array.from({ length: Math.min(n, liste.length) }, (_, i) => liste[(debut + i) % liste.length]) : []);
   for (let w = 1; w <= 6; w++) {
     const lundiW = jour(-7 * w);
@@ -351,7 +490,7 @@ await sql.begin(async (tx) => {
       let o = 0;
       for (const [partie, texte, pj, tacheId] of lignes) {
         o += 1;
-        await tx`insert into lignes_rapport (rapport_id, partie, texte, projet_id, tache_id, ordre) values (${id}, ${partie}, ${texte}, ${pj ? PJ[pj] : null}, ${tacheId}, ${o})`;
+        await tx`insert into lignes_rapport (rapport_id, champ_id, partie, texte, projet_id, tache_id, ordre) values (${id}, ${partie}, ${partie}, ${texte}, ${pj ? PJ[pj] : null}, ${tacheId}, ${o})`;
       }
     }
   }

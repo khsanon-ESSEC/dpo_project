@@ -1,11 +1,36 @@
-/** Rapport du vendredi : brouillon préparé à partir des tâches, envoi, lecture filtrée. */
+/**
+ * Rapport de la semaine : formulaire du modèle, brouillon préparé à partir des tâches, reprise des
+ * rapports reçus (rapport de chef), envoi, lecture filtrée champ par champ.
+ */
 import "server-only";
-import { and, asc, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, max, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { ajouterJours, aujourdhui, dateLocale, lundiDe } from "@/lib/dates";
 import { noter } from "@/lib/journal";
 import { chargerOrganisation } from "@/lib/organisation";
-import { initiales, membresDeLaDirection, nomComplet, peutVoirRapportComplet, resoudreSuperieur } from "@/lib/regles";
+import { estSuperieurDe, initiales, membresDeLaDirection, nomComplet, peutVoirRapportComplet, resoudreSuperieur, subordonnesDirects, voitTout } from "@/lib/regles";
+import { chargeDesPersonnes } from "@/lib/donnees/charge";
+import { formulairePour, versionDuRapport } from "@/lib/donnees/modeles";
+import {
+  additionnerComptes,
+  champsManquants,
+  comptesVides,
+  estDecoratif,
+  FORMULAIRE_PAR_DEFAUT,
+  libelleRessenti,
+  libelleSante,
+  lireComptes,
+  pireSante,
+  ressentiPropose,
+  visibiliteDeLigne,
+  voitVisibilite,
+  type Champ,
+  type ComptesCharge,
+  type Lecteur,
+  type Reprise,
+  type Rubrique,
+  type ValeurRessenti,
+} from "@/lib/modeles";
 import type { Acces } from "@/lib/acces";
 
 export type Partie = "fait" | "en_cours" | "bloque" | "prochaine";
@@ -20,6 +45,11 @@ const TZ = process.env.APP_TZ || "America/Port-au-Prince";
 
 export function semaineCourante() {
   return lundiDe(aujourdhui());
+}
+
+/** Le formulaire d'un rapport ; les rapports d'avant les modèles ont les quatre parties. */
+export function formulaireDe(r: { formulaire: Champ[] | null }): Champ[] {
+  return r.formulaire && r.formulaire.length ? r.formulaire : FORMULAIRE_PAR_DEFAUT;
 }
 
 /** Début et fin (exclue) de la semaine, en heure locale de la division. */
@@ -66,6 +96,44 @@ export async function brouillonParRegles(auteurId: string, semaine: string): Pro
   return lignes;
 }
 
+/** Projets à noter (santé) : ceux de mes tâches ouvertes ou faites cette semaine, et ceux que je dirige. */
+async function projetsANoter(auteurId: string, semaine: string) {
+  const { debut } = bornes(semaine);
+  const viaTaches = await db
+    .selectDistinct({ id: schema.projets.id })
+    .from(schema.taches)
+    .innerJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
+    .where(and(eq(schema.taches.assigneId, auteurId), or(ne(schema.taches.statut, "faite"), sql`${schema.taches.termineeLe} >= ${debut}`)));
+  const diriges = await db.select({ id: schema.projets.id }).from(schema.projets).where(eq(schema.projets.chefProjetId, auteurId));
+  const ids = [...new Set([...viaTaches, ...diriges].map((x) => x.id))];
+  if (!ids.length) return [];
+  return db
+    .select({ id: schema.projets.id, code: schema.projets.code, sante: schema.projets.sante, statut: schema.projets.statut })
+    .from(schema.projets)
+    .where(and(inArray(schema.projets.id, ids), ne(schema.projets.statut, "finalise")))
+    .orderBy(asc(schema.projets.code));
+}
+
+/** Feux donnés dans mon dernier rapport envoyé, par projet. */
+async function feuxPrecedents(auteurId: string, semaine: string) {
+  const [r] = await db
+    .select()
+    .from(schema.rapportsHebdo)
+    .where(and(eq(schema.rapportsHebdo.auteurId, auteurId), eq(schema.rapportsHebdo.statut, "envoye"), lt(schema.rapportsHebdo.semaine, semaine)))
+    .orderBy(desc(schema.rapportsHebdo.semaine))
+    .limit(1);
+  if (!r) return new Map<string, string>();
+  const champs = new Set(formulaireDe(r).filter((c) => c.type === "sante" && c.partie !== "equipe").map((c) => c.id));
+  const rep = await db.select().from(schema.reponsesRapport).where(eq(schema.reponsesRapport.rapportId, r.id));
+  return new Map(rep.filter((x) => champs.has(x.champId) && x.projetId && x.valeur).map((x) => [x.projetId!, x.valeur]));
+}
+
+/** Charge calculée d'une personne (semaine prochaine : la semaine que le rapport prépare). */
+async function chargeCalculee(ids: string[]) {
+  const { lignes } = await chargeDesPersonnes(ids, 2);
+  return new Map(lignes.map((l) => [l.id, l.charge.semaines[1] ?? l.charge.semaines[0]]));
+}
+
 export async function obtenirOuCreerRapport(auteurId: string, semaine = semaineCourante()) {
   const [existant] = await db
     .select()
@@ -73,20 +141,44 @@ export async function obtenirOuCreerRapport(auteurId: string, semaine = semaineC
     .where(and(eq(schema.rapportsHebdo.auteurId, auteurId), eq(schema.rapportsHebdo.semaine, semaine)))
     .limit(1);
   if (existant) return existant;
-  const lignes = await brouillonParRegles(auteurId, semaine);
+  const f = await formulairePour(auteurId);
+  const prevues = await brouillonParRegles(auteurId, semaine);
+  const lignesDuChamp = (r: Rubrique) => f.champs.find((c) => c.type === "lignes" && c.prerempli && c.partie !== "equipe" && c.rubrique === r);
+  const lignes = prevues.flatMap((l) => {
+    const c = lignesDuChamp(l.partie);
+    return c ? [{ ...l, champId: c.id, projetId: c.parProjet === false ? null : l.projetId }] : [];
+  });
+  const reponses: Omit<typeof schema.reponsesRapport.$inferInsert, "rapportId">[] = [];
+  const sante = f.champs.filter((c) => c.type === "sante" && c.partie !== "equipe");
+  if (sante.length) {
+    const [projets, precedents] = await Promise.all([projetsANoter(auteurId, semaine), feuxPrecedents(auteurId, semaine)]);
+    for (const c of sante) {
+      for (const p of projets) {
+        const propose = c.prerempli ? (precedents.get(p.id) ?? p.sante) : null;
+        reponses.push({ champId: c.id, projetId: p.id, valeur: propose ?? "", propose, commentaire: "" });
+      }
+    }
+  }
+  const charge = f.champs.filter((c) => c.type === "charge" && c.partie !== "equipe");
+  if (charge.length) {
+    const calc = (await chargeCalculee([auteurId])).get(auteurId);
+    for (const c of charge) {
+      const propose = calc && c.prerempli ? ressentiPropose(calc.niveau) : null;
+      reponses.push({ champId: c.id, valeur: propose ?? "", propose, commentaire: calc ? `${Math.round(calc.heures)} h sur ${calc.capacite} h` : "" });
+    }
+  }
   return db.transaction(async (tx) => {
     const [r] = await tx
       .insert(schema.rapportsHebdo)
-      .values({ auteurId, semaine })
+      .values({ auteurId, semaine, versionModeleId: f.versionId, formulaire: f.champs })
       .onConflictDoNothing()
       .returning();
     if (!r) {
       const [deja] = await tx.select().from(schema.rapportsHebdo).where(and(eq(schema.rapportsHebdo.auteurId, auteurId), eq(schema.rapportsHebdo.semaine, semaine)));
       return deja;
     }
-    if (lignes.length) {
-      await tx.insert(schema.lignesRapport).values(lignes.map((l, i) => ({ ...l, rapportId: r.id, ordre: i + 1 })));
-    }
+    if (lignes.length) await tx.insert(schema.lignesRapport).values(lignes.map((l, i) => ({ ...l, rapportId: r.id, ordre: i + 1 })));
+    if (reponses.length) await tx.insert(schema.reponsesRapport).values(reponses.map((x) => ({ ...x, rapportId: r.id })));
     return r;
   });
 }
@@ -95,11 +187,17 @@ export async function lignesDuRapport(rapportId: string) {
   return db
     .select({
       id: schema.lignesRapport.id,
+      champId: schema.lignesRapport.champId,
       partie: schema.lignesRapport.partie,
       texte: schema.lignesRapport.texte,
       ordre: schema.lignesRapport.ordre,
       projetId: schema.lignesRapport.projetId,
       tacheId: schema.lignesRapport.tacheId,
+      origines: schema.lignesRapport.origines,
+      auteursOrigine: schema.lignesRapport.auteursOrigine,
+      visibilite: schema.lignesRapport.visibilite,
+      remonte: schema.lignesRapport.remonte,
+      retiree: schema.lignesRapport.retiree,
       projetCode: schema.projets.code,
       projetTitre: schema.projets.titre,
       projetChefId: schema.projets.chefProjetId,
@@ -109,89 +207,390 @@ export async function lignesDuRapport(rapportId: string) {
     .where(eq(schema.lignesRapport.rapportId, rapportId))
     .orderBy(asc(schema.lignesRapport.ordre));
 }
+export type LigneLue = Awaited<ReturnType<typeof lignesDuRapport>>[number];
 
-/** Qui lira ce rapport : le supérieur en entier, chaque chef de projet sa partie. */
-export async function lecteursDuRapport(auteurId: string, lignes: Awaited<ReturnType<typeof lignesDuRapport>>) {
+export async function reponsesDuRapport(rapportId: string) {
+  return db
+    .select({
+      id: schema.reponsesRapport.id,
+      champId: schema.reponsesRapport.champId,
+      projetId: schema.reponsesRapport.projetId,
+      valeur: schema.reponsesRapport.valeur,
+      commentaire: schema.reponsesRapport.commentaire,
+      propose: schema.reponsesRapport.propose,
+      projetCode: schema.projets.code,
+      projetTitre: schema.projets.titre,
+      projetChefId: schema.projets.chefProjetId,
+    })
+    .from(schema.reponsesRapport)
+    .leftJoin(schema.projets, eq(schema.projets.id, schema.reponsesRapport.projetId))
+    .where(eq(schema.reponsesRapport.rapportId, rapportId))
+    .orderBy(asc(schema.projets.code));
+}
+export type ReponseLue = Awaited<ReturnType<typeof reponsesDuRapport>>[number];
+
+const estPropre = (l: { origines: string[] }) => l.origines.length === 0;
+
+/** Qui lira ce rapport : le supérieur en entier, la direction, chaque chef de projet sa partie. */
+export async function lecteursDuRapport(auteurId: string, lignes: LigneLue[], formulaire: Champ[] = FORMULAIRE_PAR_DEFAUT) {
   const org = await chargerOrganisation();
   const sup = resoudreSuperieur(org, auteurId);
-  // Directeurs au-dessus de l'auteur : ils voient tout le rapport (sa direction). Les exécutifs aussi.
+  // Directeurs au-dessus de l'auteur : ils voient le rapport (sa direction), sauf les champs réservés au supérieur.
   const directeurs = [...org.personnes.values()].filter(
     (p) => p.actif && p.directeur && !p.executif && p.id !== auteurId && p.id !== sup?.id && membresDeLaDirection(org, p.id).has(auteurId),
   );
   const voientTout = new Set([auteurId, sup?.id, ...directeurs.map((d) => d.id)]);
+  const champs = new Map(formulaire.map((c) => [c.id, c]));
   const parChef = new Map<string, { code: string; titre: string; n: number }>();
   for (const l of lignes) {
+    const c = champs.get(l.champId);
+    if (!c || !estPropre(l) || (c.visibilite ?? "tous") !== "tous") continue;
     if (!l.projetChefId || voientTout.has(l.projetChefId) || org.personnes.get(l.projetChefId)?.executif) continue;
-    const c = parChef.get(l.projetChefId) ?? { code: l.projetCode ?? "", titre: l.projetTitre ?? "", n: 0 };
-    c.n += 1;
-    parChef.set(l.projetChefId, c);
+    const x = parChef.get(l.projetChefId) ?? { code: l.projetCode ?? "", titre: l.projetTitre ?? "", n: 0 };
+    x.n += 1;
+    parChef.set(l.projetChefId, x);
   }
   return {
     superieur: sup ? { id: sup.id, nom: nomComplet(sup), poste: sup.poste, prenom: sup.prenom } : null,
     directeurs: directeurs.map((d) => ({ id: d.id, nom: nomComplet(d), poste: d.poste })),
-    chefs: [...parChef.entries()].map(([id, c]) => {
+    chefs: [...parChef.entries()].map(([id, x]) => {
       const p = org.personnes.get(id)!;
-      return { id, nom: nomComplet(p), prenom: p.prenom, ...c };
+      return { id, nom: nomComplet(p), prenom: p.prenom, ...x };
     }),
   };
 }
 
-export async function envoyerRapport(rapportId: string, auteurId: string) {
+// ---------------------------------------------------------------------------
+// Rapport de chef : ce qui est repris des rapports reçus
+// ---------------------------------------------------------------------------
+
+/** Rapports envoyés au chef cette semaine-là (destinataire fixé à l'envoi). */
+async function rapportsRecus(chefId: string, semaine: string) {
+  return db
+    .select()
+    .from(schema.rapportsHebdo)
+    .where(and(eq(schema.rapportsHebdo.destinataireId, chefId), eq(schema.rapportsHebdo.semaine, semaine), eq(schema.rapportsHebdo.statut, "envoye")))
+    .orderBy(asc(schema.rapportsHebdo.envoyeLe));
+}
+
+type Element = { origine: string; texte: string; projetId: string | null; partie: string | null; visibilite: string | null; auteurs: string[] };
+
+const RUBRIQUES_A_DECIDER = new Set(["bloque", "decision"]);
+const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+
+/** Ce qu'un rapport reçu apporte à une reprise donnée. */
+function elementsDe(recu: typeof schema.rapportsHebdo.$inferSelect, lignes: LigneLue[], reponses: ReponseLue[], reprise: Reprise): Element[] {
+  const f = formulaireDe(recu);
+  const champs = new Map(f.map((c) => [c.id, c]));
+  const prive = (c: Champ) => ((c.visibilite ?? "tous") === "superieur" ? "auteur" : (c.visibilite ?? "tous") === "direction" ? "direction" : null);
+  const sortie: Element[] = [];
+  for (const l of lignes) {
+    const c = champs.get(l.champId);
+    if (!c || l.retiree) continue;
+    if (c.type === "lignes" && c.partie !== "equipe" && estPropre(l)) {
+      const r = c.rubrique ?? "autre";
+      const pour = reprise === "a_decider" ? RUBRIQUES_A_DECIDER.has(r) : r === reprise;
+      if (!pour) continue;
+      // Ce qui est réservé au supérieur ne remonte dans les listes que comme élément à décider.
+      if (reprise !== "a_decider" && (c.visibilite ?? "tous") === "superieur") continue;
+      sortie.push({ origine: `l:${l.id}`, texte: l.texte, projetId: l.projetId, partie: r, visibilite: prive(c), auteurs: [recu.auteurId] });
+    } else if (c.type === "reprise" && c.reprise === reprise && !estPropre(l)) {
+      // Rapport de chef reçu : ce qu'il a gardé (et, pour « à décider », seulement ce qu'il fait remonter).
+      if (reprise === "a_decider" && !l.remonte) continue;
+      sortie.push({ origine: `l:${l.id}`, texte: l.texte, projetId: l.projetId, partie: l.partie, visibilite: l.remonte ? null : l.visibilite, auteurs: l.auteursOrigine });
+    }
+  }
+  if (reprise === "a_decider") {
+    for (const x of reponses) {
+      const c = champs.get(x.champId);
+      if (!c || c.partie === "equipe" || (c.type !== "texte" && c.type !== "texte_long") || c.rubrique !== "decision" || !x.valeur.trim()) continue;
+      sortie.push({ origine: `r:${x.id}`, texte: x.valeur.trim(), projetId: null, partie: "decision", visibilite: prive(c), auteurs: [recu.auteurId] });
+    }
+  }
+  return sortie;
+}
+
+/**
+ * Brouillon d'un rapport de chef : ajoute les éléments des rapports reçus depuis la dernière fois
+ * (à décider, fait, en cours, prévu). Les signalements identiques sur un même projet sont fusionnés.
+ * Rien n'est retiré : ce que le chef a retiré reste retiré.
+ */
+export async function synchroniserReprises(rapport: typeof schema.rapportsHebdo.$inferSelect) {
+  if (rapport.statut !== "brouillon") return 0;
+  const f = formulaireDe(rapport);
+  const champs = f.filter((c) => c.type === "reprise" && c.reprise && c.reprise !== "sante" && c.reprise !== "charge");
+  if (!champs.length) return 0;
+  const recus = await rapportsRecus(rapport.auteurId, rapport.semaine);
+  if (!recus.length) return 0;
+  const existantes = await lignesDuRapport(rapport.id);
+  const vues = new Set(existantes.flatMap((l) => l.origines));
+  let ordre = existantes.reduce((m, l) => Math.max(m, l.ordre), 0);
+  let ajoutees = 0;
+  for (const recu of recus) {
+    const [lignes, reponses] = await Promise.all([lignesDuRapport(recu.id), reponsesDuRapport(recu.id)]);
+    for (const c of champs) {
+      for (const e of elementsDe(recu, lignes, reponses, c.reprise!)) {
+        if (vues.has(e.origine)) continue;
+        vues.add(e.origine);
+        const jumelle = existantes.find((l) => l.champId === c.id && l.projetId === e.projetId && norm(l.texte) === norm(e.texte));
+        if (jumelle) {
+          jumelle.origines = [...jumelle.origines, e.origine];
+          jumelle.auteursOrigine = [...new Set([...jumelle.auteursOrigine, ...e.auteurs])];
+          await db.update(schema.lignesRapport).set({ origines: jumelle.origines, auteursOrigine: jumelle.auteursOrigine }).where(eq(schema.lignesRapport.id, jumelle.id));
+          continue;
+        }
+        ordre += 1;
+        const [n] = await db
+          .insert(schema.lignesRapport)
+          .values({ rapportId: rapport.id, champId: c.id, partie: e.partie, texte: e.texte, projetId: e.projetId, ordre, origines: [e.origine], auteursOrigine: e.auteurs, visibilite: e.visibilite })
+          .returning();
+        existantes.push({ ...n, projetCode: null, projetTitre: null, projetChefId: null });
+        ajoutees += 1;
+      }
+    }
+  }
+  return ajoutees;
+}
+
+export type AvisSante = { projetId: string; code: string; titre: string; propose: string | null; choisi: string | null; avis: { qui: string; valeur: string }[] };
+export type ChargeMembre = { id: string; nom: string; initiales: string; ressenti: string | null; niveau: string; heures: number; capacite: number; envoye: boolean };
+
+/** Ce que le chef voit des feux et de la charge de son équipe, tant que son rapport est un brouillon. */
+export async function vueEquipe(rapport: typeof schema.rapportsHebdo.$inferSelect) {
+  const f = formulaireDe(rapport);
+  const org = await chargerOrganisation();
+  const recus = await rapportsRecus(rapport.auteurId, rapport.semaine);
+  const contenu = await Promise.all(recus.map(async (r) => ({ r, lignes: await lignesDuRapport(r.id), reponses: await reponsesDuRapport(r.id) })));
+  const miennes = await reponsesDuRapport(rapport.id);
+  const ini = (id: string) => (org.personnes.get(id) ? initiales(org.personnes.get(id)!) : "?");
+
+  // Santé : les feux de chaque rapport reçu (et les miens), le plus préoccupant est proposé.
+  const parProjet = new Map<string, { code: string; titre: string; avis: { qui: string; valeur: string }[] }>();
+  const noter = (projetId: string | null, code: string | null, titre: string | null, qui: string, valeur: string) => {
+    if (!projetId || !valeur) return;
+    const p = parProjet.get(projetId) ?? { code: code ?? "", titre: titre ?? "", avis: [] };
+    p.avis.push({ qui, valeur });
+    parProjet.set(projetId, p);
+  };
+  for (const x of miennes) {
+    const c = f.find((k) => k.id === x.champId);
+    if (c?.type === "sante" && c.partie !== "equipe") noter(x.projetId, x.projetCode, x.projetTitre, ini(rapport.auteurId), x.valeur);
+  }
+  for (const { r, reponses } of contenu) {
+    const fr = formulaireDe(r);
+    // Un rapport de chef donne déjà, par projet, le feu qu'il a retenu pour lui et son équipe.
+    const deChef = fr.some((k) => k.type === "reprise" && k.reprise === "sante");
+    for (const x of reponses) {
+      const c = fr.find((k) => k.id === x.champId);
+      if (!deChef && c?.type === "sante" && c.partie !== "equipe") noter(x.projetId, x.projetCode, x.projetTitre, ini(r.auteurId), x.valeur);
+      if (c?.type === "reprise" && c.reprise === "sante") noter(x.projetId, x.projetCode, x.projetTitre, `${ini(r.auteurId)} et équipe`, x.valeur);
+    }
+  }
+  const sante = new Map<string, AvisSante[]>();
+  for (const c of f.filter((k) => k.type === "reprise" && k.reprise === "sante")) {
+    const choix = new Map(miennes.filter((x) => x.champId === c.id && x.projetId).map((x) => [x.projetId!, x.valeur]));
+    sante.set(
+      c.id,
+      [...parProjet.entries()]
+        .map(([projetId, p]) => ({ projetId, code: p.code, titre: p.titre, propose: pireSante(p.avis.map((a) => a.valeur)), choisi: choix.get(projetId) || null, avis: p.avis }))
+        .sort((a, b) => a.code.localeCompare(b.code, "fr")),
+    );
+  }
+
+  // Charge : chaque personne qui m'envoie son rapport (ressenti déclaré, niveau calculé) ; les équipes en nombres.
+  const subordonnes = subordonnesDirects(org, rapport.auteurId);
+  const calc = await chargeCalculee(subordonnes.map((p) => p.id));
+  const membres: ChargeMembre[] = subordonnes.map((p) => {
+    const recu = contenu.find((x) => x.r.auteurId === p.id);
+    let ressenti: string | null = null;
+    if (recu) {
+      const fr = formulaireDe(recu.r);
+      ressenti = recu.reponses.find((x) => fr.find((k) => k.id === x.champId)?.type === "charge" && fr.find((k) => k.id === x.champId)?.partie !== "equipe")?.valeur || null;
+    }
+    const s = calc.get(p.id);
+    return { id: p.id, nom: nomComplet(p), initiales: initiales(p), ressenti, niveau: s?.niveau ?? "libre", heures: s?.heures ?? 0, capacite: s?.capacite ?? 0, envoye: !!recu };
+  });
+  const equipes: { qui: string; comptes: ComptesCharge }[] = [];
+  for (const { r, reponses } of contenu) {
+    const fr = formulaireDe(r);
+    for (const x of reponses) {
+      const c = fr.find((k) => k.id === x.champId);
+      const comptes = c?.type === "reprise" && c.reprise === "charge" ? lireComptes(x.valeur) : null;
+      if (comptes) equipes.push({ qui: org.personnes.get(r.auteurId) ? nomComplet(org.personnes.get(r.auteurId)!) : "", comptes });
+    }
+  }
+  const comptes = [comptesDesMembres(membres), ...equipes.map((e) => e.comptes)].reduce(additionnerComptes, comptesVides());
+  return { recus: recus.map((r) => ({ id: r.id, auteurId: r.auteurId, envoyeLe: r.envoyeLe })), subordonnes: subordonnes.map((p) => ({ id: p.id, nom: nomComplet(p), initiales: initiales(p) })), sante, charge: { membres, equipes, comptes } };
+}
+
+function comptesDesMembres(membres: ChargeMembre[]): ComptesCharge {
+  const c = comptesVides();
+  for (const m of membres) {
+    c.calcule[m.niveau as keyof ComptesCharge["calcule"]] += 1;
+    c.ressenti[(m.ressenti as ValeurRessenti) || "aucun"] += 1;
+  }
+  return c;
+}
+
+/** À l'envoi d'un rapport de chef : feux et charge de l'équipe sont figés tels qu'il les a vus. */
+async function figerEquipe(rapport: typeof schema.rapportsHebdo.$inferSelect) {
+  const f = formulaireDe(rapport);
+  if (!f.some((c) => c.type === "reprise" && (c.reprise === "sante" || c.reprise === "charge"))) return;
+  const v = await vueEquipe(rapport);
+  await db.transaction(async (tx) => {
+    for (const c of f.filter((k) => k.type === "reprise" && k.reprise === "sante")) {
+      await tx.delete(schema.reponsesRapport).where(and(eq(schema.reponsesRapport.rapportId, rapport.id), eq(schema.reponsesRapport.champId, c.id)));
+      const lignes = (v.sante.get(c.id) ?? []).filter((p) => p.choisi || p.propose);
+      if (lignes.length)
+        await tx.insert(schema.reponsesRapport).values(
+          lignes.map((p) => ({
+            rapportId: rapport.id,
+            champId: c.id,
+            projetId: p.projetId,
+            valeur: p.choisi || p.propose || "",
+            propose: p.propose,
+            commentaire: p.avis.map((a) => `${a.qui} : ${libelleSante(a.valeur).toLowerCase()}`).join(" · "),
+          })),
+        );
+    }
+    for (const c of f.filter((k) => k.type === "reprise" && k.reprise === "charge")) {
+      await tx.delete(schema.reponsesRapport).where(and(eq(schema.reponsesRapport.rapportId, rapport.id), eq(schema.reponsesRapport.champId, c.id)));
+      await tx.insert(schema.reponsesRapport).values({ rapportId: rapport.id, champId: c.id, valeur: JSON.stringify(v.charge.comptes), commentaire: `${v.charge.membres.length} personne(s) ; ${v.charge.equipes.map((e) => e.qui).join(", ")}` });
+    }
+  });
+}
+
+/** Ce qu'il faut pour vérifier les champs obligatoires. */
+async function remplissage(rapportId: string, f: Champ[]) {
+  const [lignes, reponses] = await Promise.all([lignesDuRapport(rapportId), reponsesDuRapport(rapportId)]);
+  const nLignes = new Map<string, number>();
+  for (const l of lignes) if (!l.retiree) nLignes.set(l.champId, (nLignes.get(l.champId) ?? 0) + 1);
+  const rep = new Map<string, string[]>();
+  const projets = new Map<string, number>();
+  for (const x of reponses) {
+    rep.set(x.champId, [...(rep.get(x.champId) ?? []), x.valeur]);
+    if (x.projetId) projets.set(x.champId, (projets.get(x.champId) ?? 0) + 1);
+  }
+  return champsManquants(f, { lignes: nLignes, reponses: rep, projetsANoter: projets });
+}
+
+export async function manquantsDuRapport(rapport: typeof schema.rapportsHebdo.$inferSelect) {
+  return remplissage(rapport.id, formulaireDe(rapport));
+}
+
+export async function envoyerRapport(rapportId: string, auteurId: string): Promise<{ ok: true } | { ok: false; manquants: string[] } | null> {
+  const [brouillon] = await db
+    .select()
+    .from(schema.rapportsHebdo)
+    .where(and(eq(schema.rapportsHebdo.id, rapportId), eq(schema.rapportsHebdo.auteurId, auteurId), eq(schema.rapportsHebdo.statut, "brouillon")));
+  if (!brouillon) return null;
+  const f = formulaireDe(brouillon);
+  const manquants = await remplissage(rapportId, f);
+  if (manquants.length) return { ok: false, manquants: manquants.map((c) => c.libelle) };
+  await synchroniserReprises(brouillon);
+  await figerEquipe(brouillon);
   const org = await chargerOrganisation();
   const sup = resoudreSuperieur(org, auteurId);
   const [r] = await db
     .update(schema.rapportsHebdo)
     .set({ statut: "envoye", destinataireId: sup?.id ?? null, envoyeLe: new Date(), majLe: new Date() })
-    .where(and(eq(schema.rapportsHebdo.id, rapportId), eq(schema.rapportsHebdo.auteurId, auteurId), eq(schema.rapportsHebdo.statut, "brouillon")))
+    .where(and(eq(schema.rapportsHebdo.id, rapportId), eq(schema.rapportsHebdo.statut, "brouillon")))
     .returning();
   if (!r) return null;
   const auteur = org.personnes.get(auteurId)!;
   const lignes = await lignesDuRapport(rapportId);
   const notifs: (typeof schema.notifications.$inferInsert)[] = [];
-  if (sup) notifs.push({ personneId: sup.id, type: "rapport_recu", texte: `Rapport du vendredi de ${nomComplet(auteur)}`, lien: `/rapports/${rapportId}` });
-  const { chefs } = await lecteursDuRapport(auteurId, lignes);
+  if (sup) notifs.push({ personneId: sup.id, type: "rapport_recu", texte: `Rapport de la semaine de ${nomComplet(auteur)}`, lien: `/rapports/${rapportId}` });
+  const { chefs } = await lecteursDuRapport(auteurId, lignes, f);
   for (const c of chefs) {
     notifs.push({ personneId: c.id, type: "rapport_recu", texte: `${nomComplet(auteur)} : ${c.n} ligne${c.n > 1 ? "s" : ""} sur ${c.titre}`, lien: `/rapports/${rapportId}` });
   }
   if (notifs.length) await db.insert(schema.notifications).values(notifs);
   await noter(auteurId, "rapport_envoye", rapportId, { destinataire: sup?.id ?? null, chefs: chefs.map((c) => c.id) });
-  return r;
+  return { ok: true };
 }
 
-/** Lecture d'un rapport : complet, ou réduit aux lignes des projets que je dirige. */
+/** Quelle place a cette personne devant ce rapport (null : aucune). */
+function lecteurDe(org: Awaited<ReturnType<typeof chargerOrganisation>>, a: Acces, r: typeof schema.rapportsHebdo.$inferSelect): Lecteur | null {
+  if (r.auteurId === a.moi.id) return "auteur";
+  if (r.statut !== "envoye") return null;
+  if (r.destinataireId === a.moi.id || estSuperieurDe(org, a.moi.id, r.auteurId)) return "superieur";
+  if (voitTout(a.moi) || (a.moi.directeur && membresDeLaDirection(org, a.moi.id).has(r.auteurId))) return "direction";
+  return null;
+}
+
+/**
+ * Lecture d'un rapport, filtrée champ par champ : le supérieur voit tout ; la direction tout sauf
+ * les champs réservés au supérieur ; un chef de projet, les seules lignes et feux de ses projets.
+ */
 export async function lireRapport(a: Acces, rapportId: string) {
   const [r] = await db.select().from(schema.rapportsHebdo).where(eq(schema.rapportsHebdo.id, rapportId)).limit(1);
   if (!r) return null;
   const org = await chargerOrganisation();
-  const lignes = await lignesDuRapport(r.id);
-  if (peutVoirRapportComplet(org, a.moi, r)) return { rapport: r, lignes, complet: true, auteur: org.personnes.get(r.auteurId)! };
-  if (r.statut !== "envoye") return null;
-  const miennes = lignes.filter((l) => l.projetChefId === a.moi.id);
-  if (!miennes.length) return null;
-  return { rapport: r, lignes: miennes, complet: false, auteur: org.personnes.get(r.auteurId)! };
+  const [lignes, reponses, version] = await Promise.all([lignesDuRapport(r.id), reponsesDuRapport(r.id), versionDuRapport(r.versionModeleId)]);
+  const f = formulaireDe(r);
+  let lecteur = lecteurDe(org, a, r);
+  if (!lecteur && r.statut === "envoye" && lignes.some((l) => l.projetChefId === a.moi.id)) lecteur = "chef_projet";
+  if (!lecteur) return null;
+  const champs = new Map(f.map((c) => [c.id, c]));
+  const champVisible = (c: Champ) => (estDecoratif(c) ? lecteur !== "chef_projet" : voitVisibilite(lecteur!, c.visibilite ?? "tous"));
+  const lignesVisibles = lignes.filter((l) => {
+    const c = champs.get(l.champId);
+    if (!c || !champVisible(c)) return false;
+    if (l.retiree && lecteur !== "auteur") return false;
+    if (!voitVisibilite(lecteur!, visibiliteDeLigne(c, l))) return false;
+    if (lecteur === "chef_projet") return estPropre(l) && l.projetChefId === a.moi.id;
+    return true;
+  });
+  const reponsesVisibles = reponses.filter((x) => {
+    const c = champs.get(x.champId);
+    if (!c || !champVisible(c)) return false;
+    if (lecteur === "chef_projet") return c.type === "sante" && c.partie !== "equipe" && x.projetChefId === a.moi.id;
+    return true;
+  });
+  if (lecteur === "chef_projet" && !lignesVisibles.length && !reponsesVisibles.length) return null;
+  const formulaire = f.filter((c) => champVisible(c) && (lecteur !== "chef_projet" || lignesVisibles.some((l) => l.champId === c.id) || reponsesVisibles.some((x) => x.champId === c.id)));
+  return {
+    rapport: r,
+    formulaire,
+    lignes: lignesVisibles,
+    reponses: reponsesVisibles,
+    lecteur,
+    complet: lecteur !== "chef_projet",
+    /** Champs cachés à ce lecteur (pour le dire, sans montrer le contenu). */
+    caches: f.filter((c) => !estDecoratif(c) && !champVisible(c)).map((c) => c.libelle),
+    version,
+    auteur: org.personnes.get(r.auteurId)!,
+  };
 }
 
-/** Lignes envoyées cette semaine sur un projet, regroupées par auteur (fiche projet). */
+/** Lignes envoyées cette semaine sur un projet, regroupées par auteur (fiche projet). Seuls les champs ouverts à tous. */
 export async function lignesDuProjetCetteSemaine(projetId: string, auteurs: "toutes" | Set<string>, semaine = semaineCourante()) {
   const lignes = await db
     .select({
       auteurId: schema.rapportsHebdo.auteurId,
       envoyeLe: schema.rapportsHebdo.envoyeLe,
+      formulaire: schema.rapportsHebdo.formulaire,
+      champId: schema.lignesRapport.champId,
       partie: schema.lignesRapport.partie,
       texte: schema.lignesRapport.texte,
       ordre: schema.lignesRapport.ordre,
+      origines: schema.lignesRapport.origines,
     })
     .from(schema.lignesRapport)
     .innerJoin(schema.rapportsHebdo, eq(schema.rapportsHebdo.id, schema.lignesRapport.rapportId))
     .where(and(eq(schema.lignesRapport.projetId, projetId), eq(schema.rapportsHebdo.semaine, semaine), eq(schema.rapportsHebdo.statut, "envoye")))
     .orderBy(asc(schema.rapportsHebdo.envoyeLe), asc(schema.lignesRapport.ordre));
   const org = await chargerOrganisation();
-  const parAuteur = new Map<string, { auteur: string; prenom: string; nom: string; envoyeLe: Date | null; lignes: { partie: Partie; texte: string }[] }>();
+  const parAuteur = new Map<string, { auteur: string; prenom: string; nom: string; envoyeLe: Date | null; lignes: { partie: string | null; champ: string; texte: string }[] }>();
   for (const l of lignes) {
     if (auteurs !== "toutes" && !auteurs.has(l.auteurId)) continue;
+    if (l.origines.length) continue; // les reprises d'un rapport de chef répètent les rapports de l'équipe
+    const c = formulaireDe({ formulaire: l.formulaire }).find((x) => x.id === l.champId);
+    if (!c || c.type !== "lignes" || (c.visibilite ?? "tous") !== "tous") continue;
     const p = org.personnes.get(l.auteurId)!;
     const g = parAuteur.get(l.auteurId) ?? { auteur: nomComplet(p), prenom: p.prenom, nom: p.nom, envoyeLe: l.envoyeLe, lignes: [] };
-    g.lignes.push({ partie: l.partie, texte: l.texte });
+    g.lignes.push({ partie: l.partie, champ: c.libelle, texte: l.texte });
     parAuteur.set(l.auteurId, g);
   }
   return [...parAuteur.values()];
@@ -226,14 +625,15 @@ export type ResumeRapport = {
 async function resumes(rapports: (typeof schema.rapportsHebdo.$inferSelect)[]): Promise<ResumeRapport[]> {
   if (!rapports.length) return [];
   const lignes = await db
-    .select({ rapportId: schema.lignesRapport.rapportId, partie: schema.lignesRapport.partie, texte: schema.lignesRapport.texte, ordre: schema.lignesRapport.ordre })
+    .select({ rapportId: schema.lignesRapport.rapportId, partie: schema.lignesRapport.partie, texte: schema.lignesRapport.texte, ordre: schema.lignesRapport.ordre, origines: schema.lignesRapport.origines })
     .from(schema.lignesRapport)
     .where(inArray(schema.lignesRapport.rapportId, rapports.map((r) => r.id)))
     .orderBy(asc(schema.lignesRapport.ordre));
   return rapports.map((r) => {
-    const siennes = lignes.filter((l) => l.rapportId === r.id);
+    // Ses propres lignes seulement : les reprises d'un rapport de chef sont comptées chez leurs auteurs.
+    const siennes = lignes.filter((l) => l.rapportId === r.id && l.origines.length === 0);
     const comptes = { fait: 0, en_cours: 0, bloque: 0, prochaine: 0 } as Record<Partie, number>;
-    for (const l of siennes) comptes[l.partie] += 1;
+    for (const l of siennes) if (l.partie && l.partie in comptes) comptes[l.partie as Partie] += 1;
     return {
       id: r.id,
       auteurId: r.auteurId,
@@ -324,7 +724,7 @@ export async function rapportsVoisins(a: Acces, rapport: { id: string; auteurId:
   return { precedent: i > 0 ? lisibles[i - 1] : null, suivant: i >= 0 && i < lisibles.length - 1 ? lisibles[i + 1] : null };
 }
 
-/** Mon dernier rapport envoyé avant cette semaine, avec ses lignes (pour reprendre ce qui était prévu). */
+/** Mon dernier rapport envoyé avant cette semaine, avec mes propres lignes (pour reprendre ce qui était prévu). */
 export async function monRapportPrecedent(auteurId: string, semaine = semaineCourante()) {
   const [r] = await db
     .select()
@@ -334,18 +734,38 @@ export async function monRapportPrecedent(auteurId: string, semaine = semaineCou
     .limit(1);
   if (!r) return null;
   const lignes = await db
-    .select({ id: schema.lignesRapport.id, partie: schema.lignesRapport.partie, texte: schema.lignesRapport.texte, tacheId: schema.lignesRapport.tacheId, projetId: schema.lignesRapport.projetId, projetCode: schema.projets.code })
+    .select({
+      id: schema.lignesRapport.id,
+      partie: schema.lignesRapport.partie,
+      texte: schema.lignesRapport.texte,
+      tacheId: schema.lignesRapport.tacheId,
+      projetId: schema.lignesRapport.projetId,
+      projetCode: schema.projets.code,
+      origines: schema.lignesRapport.origines,
+    })
     .from(schema.lignesRapport)
     .leftJoin(schema.projets, eq(schema.projets.id, schema.lignesRapport.projetId))
     .where(eq(schema.lignesRapport.rapportId, r.id))
     .orderBy(asc(schema.lignesRapport.ordre));
-  return { rapport: r, lignes };
+  return { rapport: r, lignes: lignes.filter((l) => l.origines.length === 0) };
 }
 
 /** Une ligne prévue la semaine dernière est-elle déjà dans le rapport de cette semaine ? (même tâche, ou même texte) */
-export function dejaReprise(prevue: { texte: string; tacheId: string | null }, actuelles: { texte: string; tacheId?: string | null; partie: Partie }[]): Partie | null {
-  const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+export function dejaReprise(prevue: { texte: string; tacheId: string | null }, actuelles: { texte: string; tacheId?: string | null; partie: string | null }[]): string | null {
   const t = norm(prevue.texte);
   const trouvee = actuelles.find((l) => (prevue.tacheId && l.tacheId === prevue.tacheId) || norm(l.texte) === t || (t.length > 12 && norm(l.texte).startsWith(t)));
-  return trouvee ? trouvee.partie : null;
+  return trouvee ? (trouvee.partie ?? "autre") : null;
 }
+
+/** Le champ de lignes qui reçoit une rubrique (mon travail, pas la partie équipe). */
+export function champDeRubrique(f: Champ[], r: Rubrique): Champ | undefined {
+  return f.find((c) => c.type === "lignes" && c.partie !== "equipe" && c.rubrique === r);
+}
+
+/** Prochain numéro d'ordre dans un rapport. */
+export async function ordreSuivant(rapportId: string) {
+  const [{ m }] = await db.select({ m: max(schema.lignesRapport.ordre) }).from(schema.lignesRapport).where(eq(schema.lignesRapport.rapportId, rapportId));
+  return (m ?? 0) + 1;
+}
+
+export { libelleRessenti };

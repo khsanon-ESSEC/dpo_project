@@ -10,6 +10,8 @@ const traces: Record<string, string> = {
   "chevron-gauche": "M14.5 6 8.5 12l6 6",
   "chevron-droite": "M9.5 6l6 6-6 6",
   "chevron-bas": "M6 9.5l6 6 6-6",
+  "chevron-haut": "M6 14.5l6-6 6 6",
+  modeles: "M5 4h14v16H5zM9 8h6M9 12h6M9 16h3",
   ajouter: "M12 5v14M5 12h14",
   modifier: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
   cadenas: "M6.5 10.5h11v9h-11zM9 10.5V7.5a3 3 0 0 1 6 0v3",

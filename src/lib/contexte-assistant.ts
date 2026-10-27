@@ -5,7 +5,8 @@ import { acces, auteursLignesVisibles, exigerProjetVisible } from "@/lib/acces";
 import type { Utilisateur } from "@/lib/auth/session";
 import { monEquipe } from "@/lib/donnees/equipe";
 import { ficheProjet, portefeuille } from "@/lib/donnees/projets";
-import { lignesDuProjetCetteSemaine, lignesDuRapport, obtenirOuCreerRapport, PARTIES } from "@/lib/donnees/rapport";
+import { formulaireDe, lignesDuProjetCetteSemaine, lignesDuRapport, obtenirOuCreerRapport, reponsesDuRapport } from "@/lib/donnees/rapport";
+import { estDecoratif, libelleRessenti, type Champ } from "@/lib/modeles";
 import { tachesDe } from "@/lib/donnees/semaine";
 import { chargeDesPersonnes } from "@/lib/donnees/charge";
 import { LIBELLE_NIVEAU } from "@/lib/charge";
@@ -29,10 +30,25 @@ export async function contexteAssistant(u: Utilisateur, ecran: string, chemin: s
   if (ecran === "semaine" || ecran === "rapport") {
     await mesTaches();
     const r = await obtenirOuCreerRapport(u.id);
-    const lignes = await lignesDuRapport(r.id);
+    const [lignes, reponses] = await Promise.all([lignesDuRapport(r.id), reponsesDuRapport(r.id)]);
+    const f = formulaireDe(r);
+    const contenu = (c: Champ) => {
+      if (c.type === "lignes" || c.type === "reprise") {
+        const siennes = lignes.filter((l) => l.champId === c.id && !l.retiree);
+        if (c.type === "reprise" && (c.reprise === "sante" || c.reprise === "charge")) return "(préparé à partir des rapports reçus)";
+        return siennes.map((l) => l.texte + (l.projetCode ? ` [${l.projetCode}]` : "") + (l.remonte ? " (remonté)" : "")).join(" ; ") || "rien";
+      }
+      const rep = reponses.filter((x) => x.champId === c.id);
+      if (c.type === "sante") return rep.map((x) => `${x.projetCode} : ${SANTE[x.valeur] ?? "non noté"}${x.commentaire ? ` (${x.commentaire})` : ""}`).join(" ; ") || "aucun projet";
+      if (c.type === "charge") return libelleRessenti(rep[0]?.valeur) || "non renseignée";
+      return rep[0]?.valeur || "sans réponse";
+    };
     blocs.push(
-      `Mon rapport du vendredi (${r.statut === "envoye" ? "envoyé" : "brouillon"}) :\n` +
-        PARTIES.map((p) => `${p.libelle} : ${lignes.filter((l) => l.partie === p.id).map((l) => l.texte + (l.projetCode ? ` [${l.projetCode}]` : "")).join(" ; ") || "rien"}`).join("\n"),
+      `Mon rapport de la semaine (${r.statut === "envoye" ? "envoyé" : "brouillon"}) :\n` +
+        f
+          .filter((c) => !estDecoratif(c))
+          .map((c) => `${c.libelle} : ${contenu(c)}`)
+          .join("\n"),
     );
   }
 
@@ -71,7 +87,7 @@ export async function contexteAssistant(u: Utilisateur, ecran: string, chemin: s
     const auteurs = auteursLignesVisibles(a, id);
     if (auteurs) {
       const r = await lignesDuProjetCetteSemaine(id, auteurs);
-      blocs.push("Rapports du vendredi sur ce projet :\n" + (r.map((g) => `- ${g.auteur} : ${g.lignes.map((l) => `${l.partie} — ${l.texte}`).join(" ; ")}`).join("\n") || "aucun"));
+      blocs.push("Rapports du vendredi sur ce projet :\n" + (r.map((g) => `- ${g.auteur} : ${g.lignes.map((l) => `${l.champ} — ${l.texte}`).join(" ; ")}`).join("\n") || "aucun"));
     }
   }
 

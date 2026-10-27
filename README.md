@@ -3,7 +3,9 @@
 Application web de suivi des projets de la DPO (UNIBANK) :
 
 - **Ma semaine** : les tâches de chacun, cochées au fil de la semaine.
-- **Rapport du vendredi** : préparé à partir des tâches, relu et envoyé au supérieur. Chaque chef de projet reçoit les lignes qui concernent son projet. Ce qui était prévu la semaine précédente se reprend en un clic (fait, en cours, reporté).
+- **Rapport de la semaine** : un formulaire configuré par les administrateurs (modèles de rapport), préparé à partir des tâches, relu et envoyé au supérieur. Chaque chef de projet reçoit les lignes et les feux de son projet. Ce qui était prévu la semaine précédente se reprend en un clic (fait, en cours, reporté).
+- **Rapport de chef** : le chef d'équipe et le directeur gardent leur propre rapport (« Mon travail »), suivi d'une partie préremplie à partir des rapports qu'ils reçoivent (« Mon équipe », « Ma division ») : à décider, santé des projets, charge, fait, la semaine prochaine. Un seul envoi.
+- **Modèles de rapport** (administrateurs) : champs à choisir ou à glisser, ordre, propriétés de chaque champ, affectation aux équipes et aux personnes, versions.
 - **Mes rapports** : tous les rapports déjà envoyés, semaine par semaine, avec passage d'une semaine à l'autre.
 - **Mon équipe** : qui a envoyé son rapport, les blocages, les retards, avec relance ; l'historique des rapports de l'équipe (par semaine ou par personne) ; la charge de travail.
 - **Projets** : portefeuille, fiches projet, indicateurs vérifiables, glissement des dates.
@@ -21,16 +23,30 @@ Application multipage (chaque écran est une page rendue par le serveur), en fra
 
 | Rôle | Comment on l'obtient | Ce qu'il voit |
 |---|---|---|
-| Chacun | — | Ses tâches, son rapport du vendredi, les projets sur lesquels il travaille |
+| Chacun | — | Ses tâches, son rapport de la semaine, les projets sur lesquels il travaille |
 | Supérieur (chef d'équipe) | Automatique : des personnes lui envoient leur rapport | Les tâches et les rapports de ses subordonnés directs |
-| Chef de projet | Automatique : désigné sur la fiche projet | Tout son projet ; dans les rapports du vendredi, **seulement** les lignes marquées de son projet |
+| Chef de projet | Automatique : désigné sur la fiche projet | Tout son projet ; dans les rapports de la semaine, **seulement** les lignes et les feux de son projet, dans les champs ouverts à tous |
 | Directeur | Interrupteur dans *Organisation* | Les projets, tâches et rapports des membres de **sa direction** (toutes les personnes placées sous lui, à tous les niveaux) ; les projets stratégiques de sa direction dans le rapport au conseil |
 | Exécutif | Interrupteur dans *Organisation* (seul un exécutif peut le donner) | **Tout** ; approuve le rapport au conseil |
-| Administrateur | Interrupteur dans *Organisation* | Gère les personnes, les équipes, les supérieurs et les accès. Ne donne **aucun** accès supplémentaire aux rapports ni aux tâches |
+| Administrateur | Interrupteur dans *Organisation* | Gère les personnes, les équipes, les supérieurs, les accès et les **modèles de rapport**. Ne donne **aucun** accès supplémentaire aux rapports ni aux tâches |
 
 Les rôles se cumulent. Chaque personne a **un seul** supérieur. Si le poste de responsable d'une équipe est vacant, les rapports remontent au niveau suivant. Un brouillon de rapport n'est visible que par son auteur. Il reste toujours au moins un administrateur.
 
-Ces règles sont écrites dans `src/lib/regles.ts` et vérifiées par les tests (`tests/`).
+Dans un rapport, chaque champ a sa règle de lecture, choisie dans le modèle : « tous ses lecteurs » (supérieur, direction, chefs de projet pour leurs lignes), « supérieur et direction » (pas les chefs de projet), ou « son supérieur seulement » (ni la direction, ni les exécutifs, ni les chefs de projet). Un élément reçu à titre privé reste au chef ; il ne remonte que s'il le décide, et la charge ressentie ne remonte qu'en nombres.
+
+Ces règles sont écrites dans `src/lib/regles.ts` et `src/lib/modeles.ts`, et vérifiées par les tests (`tests/`).
+
+---
+
+## Modèles de rapport
+
+Écran *Organisation → Modèles de rapport*, réservé aux administrateurs.
+
+- **Un modèle** est la liste des champs que la personne remplit, dans l'ordre. Types : lignes par projet, santé des projets (Dans les temps, À surveiller, En retard), charge de la semaine (Légère, Normale, Lourde, Trop lourde), texte court ou long, choix, échelle, nombre, date, intertitre, note ; pour les modèles de chef : « Mon travail » et « Repris des rapports reçus ».
+- **Propriétés d'un champ** : libellé, aide, obligatoire, rubrique (fait, en cours, bloqué, prévu, décision attendue, autre), préremplissage (tâches, feu de la semaine dernière, niveau de charge calculé), marquage par projet, qui le voit.
+- **Qui remplit quoi** : l'affectation nominative d'abord ; sinon, pour une personne qui reçoit des rapports, le modèle des chefs d'équipe ; sinon celui de son équipe ; sinon le modèle par défaut. Le modèle par défaut reprend les quatre parties d'avant les modèles.
+- **Versions** : toute modification prépare une nouvelle version, publiée d'un clic. Un rapport garde une copie du formulaire avec lequel il a été rempli ; on le relit toujours tel qu'il a été envoyé.
+- **Rapport de chef** : « Mon travail » est remplacé par le formulaire de son équipe ; la partie équipe reprend les rapports reçus. Le chef garde, retire ou reformule chaque élément, choisit ce qui remonte, et peut changer le feu proposé (le plus préoccupant de l'équipe). Sans chef d'équipe, les rapports vont directement au niveau suivant.
 
 ---
 
@@ -111,6 +127,8 @@ git pull
 docker compose up -d --build     # les migrations s'appliquent au démarrage
 ```
 
+Mise à jour vers les modèles de rapport (migration `0002`) : les rapports déjà envoyés gardent leurs quatre parties ; le modèle par défaut « Rapport du vendredi » est créé au premier besoin avec ces quatre parties. Rien n'est perdu.
+
 ### Sauvegardes
 
 La base contient tout (personnes, tâches, rapports, historique des projets, journal). Exemple de sauvegarde quotidienne :
@@ -175,10 +193,10 @@ Personnes fictives (mot de passe commun `Demo-DPO-2026`) :
 | Adresse | Rôles |
 |---|---|
 | `daphnee.joseph@demo.dpo.local` | Chargée de projets |
-| `marc-antoine.louis@demo.dpo.local` | Directeur (sa direction : Solutions technologiques) |
+| `marc-antoine.louis@demo.dpo.local` | Directeur (sa direction : Solutions technologiques) ; son rapport reprend celui de son équipe |
 | `nadege.augustin@demo.dpo.local` | Directrice de la division et administratrice |
 | `frantz.desrosiers@demo.dpo.local` | Exécutif et administrateur |
-| `jean-robert.noel@demo.dpo.local` | Analyste et administrateur |
+| `jean-robert.noel@demo.dpo.local` | Analyste et administrateur (modèles de rapport) |
 
 ---
 
@@ -207,6 +225,7 @@ src/db/             schéma de la base (Drizzle)
 src/lib/regles.ts   qui voit quoi (sans base, testé)
 src/lib/acces.ts    couche d'accès utilisée par toutes les pages
 src/lib/charge.ts   calcul de la charge de travail (sans base, testé)
+src/lib/modeles.ts  modèles de rapport : champs, validation, dépliage, visibilité (sans base, testé)
 src/lib/donnees/    lectures et écritures par domaine
 src/lib/ia.ts       connecteur d'IA interchangeable
 scripts/            migration, création d'utilisateur, données de démonstration

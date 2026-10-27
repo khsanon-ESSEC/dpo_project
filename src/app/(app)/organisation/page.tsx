@@ -6,6 +6,7 @@ import { vueOrganisation } from "@/lib/donnees/organisation";
 import { peutAdministrer } from "@/lib/regles";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
+import { ONGLETS_ORGANISATION, SousOnglets } from "@/components/SousOnglets";
 import { changerChefEquipe } from "./actions";
 import { FichePersonne, NouvellePersonne } from "./Formulaires";
 
@@ -74,6 +75,7 @@ export default async function PageOrganisation({ searchParams }: { searchParams:
         </dl>
       </Bandeau>
       <div className="page">
+        {admin ? <SousOnglets onglets={ONGLETS_ORGANISATION} courant="/organisation" label="Organisation" /> : null}
         {admin ? (
           <div className="ligne-actions">
             <p className="note">

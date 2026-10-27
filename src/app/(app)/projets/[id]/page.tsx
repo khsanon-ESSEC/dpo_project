@@ -4,7 +4,7 @@ import { acces, auteursLignesVisibles, exigerProjetVisible } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { aujourdhui, dateCourte, dateLongue, echeanceRelative, ecartJours, heure } from "@/lib/dates";
 import { ficheProjet } from "@/lib/donnees/projets";
-import { lignesDuProjetCetteSemaine, PARTIES } from "@/lib/donnees/rapport";
+import { lignesDuProjetCetteSemaine } from "@/lib/donnees/rapport";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { CocheSeule } from "@/components/CaseTache";
 import { Icone } from "@/components/Icone";
@@ -36,7 +36,6 @@ export default async function PageProjet({ params }: { params: Promise<{ id: str
   const atteints = f.indicateurs.filter((i) => i.etat === "atteint").length;
   const ancienne = f.dernier?.dateFinPrevue ?? null;
   const glissement = ancienne && p.dateFinPrevue ? Math.round(ecartJours(ancienne, p.dateFinPrevue) / 7) : 0;
-  const libellePartie = Object.fromEntries(PARTIES.map((x) => [x.id, x.libelle === "La semaine prochaine" ? "Semaine prochaine" : x.libelle]));
 
   const dates = [
     { libelle: "Date d'entrée", date: p.dateEntree },
@@ -213,7 +212,7 @@ export default async function PageProjet({ params }: { params: Promise<{ id: str
                           {r.lignes.map((l, n) => (
                             <li key={n} style={{ borderTop: 0, display: "grid", gridTemplateColumns: "136px minmax(0, 1fr)", gap: 12, fontSize: 14, lineHeight: "20px" }}>
                               <span className="carte__titre" style={{ margin: 0, fontSize: 10, lineHeight: "20px", letterSpacing: "0.16em" }}>
-                                {libellePartie[l.partie]}
+                                {l.champ}
                               </span>
                               <span>{l.texte}</span>
                             </li>

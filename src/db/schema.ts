@@ -12,6 +12,7 @@
  *   se cochent à la main, indépendamment les uns des autres, pour n'importe qui.
  */
 import { sql } from "drizzle-orm";
+import type { Champ, Genre } from "../lib/modeles";
 import {
   type AnyPgColumn,
   bigserial,
@@ -25,6 +26,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -33,7 +35,6 @@ export const statutProjet = pgEnum("statut_projet", ["requete", "en_attente", "e
 export const santeProjet = pgEnum("sante_projet", ["dans_les_temps", "a_surveiller", "en_retard"]);
 export const etatIndicateur = pgEnum("etat_indicateur", ["a_venir", "en_cours", "atteint"]);
 export const statutRapport = pgEnum("statut_rapport", ["brouillon", "envoye"]);
-export const partieRapport = pgEnum("partie_rapport", ["fait", "en_cours", "bloque", "prochaine"]);
 export const statutConseil = pgEnum("statut_conseil", ["brouillon", "approuve", "envoye"]);
 
 export const equipes = pgTable("equipes", {
@@ -147,6 +148,61 @@ export const evenementsTache = pgTable(
   (t) => [index("evenements_tache_idx").on(t.tacheId, t.creeLe)],
 );
 
+/**
+ * Modèles de rapport (voir src/lib/modeles.ts) : seuls les administrateurs les configurent.
+ * Les champs vivent dans les versions ; un rapport garde une copie du formulaire rempli.
+ */
+export const modelesRapport = pgTable("modeles_rapport", {
+  id: uuid().primaryKey().defaultRandom(),
+  nom: text().notNull(),
+  description: text().notNull().default(""),
+  /** « individuel » : le rapport d'une personne ; « chef » : son travail, puis ce qu'il reçoit. */
+  genre: text().$type<Genre>().notNull().default("individuel"),
+  /** Le modèle de toute personne sans autre modèle (un seul). */
+  parDefaut: boolean("par_defaut").notNull().default(false),
+  /** Le modèle des personnes qui reçoivent des rapports, sauf affectation nominative (un seul). */
+  pourChefs: boolean("pour_chefs").notNull().default(false),
+  actif: boolean().notNull().default(true),
+  creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const versionsModele = pgTable(
+  "versions_modele",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    modeleId: uuid("modele_id")
+      .notNull()
+      .references(() => modelesRapport.id, { onDelete: "cascade" }),
+    numero: integer().notNull(),
+    champs: jsonb().$type<Champ[]>().notNull(),
+    /** brouillon (en préparation, un seul) | publiee (en service, une seule) | archivee */
+    statut: text().$type<"brouillon" | "publiee" | "archivee">().notNull().default("brouillon"),
+    /** Ce qui change dans cette version. */
+    note: text().notNull().default(""),
+    creeeParId: uuid("creee_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+    publieeLe: timestamp("publiee_le", { withTimezone: true }),
+    publieeParId: uuid("publiee_par_id").references(() => personnes.id, { onDelete: "set null" }),
+  },
+  (t) => [unique("version_modele_numero").on(t.modeleId, t.numero)],
+);
+
+/** Qui remplit quel modèle : une équipe ou une personne (une seule affectation chacune). */
+export const affectationsModele = pgTable("affectations_modele", {
+  id: uuid().primaryKey().defaultRandom(),
+  modeleId: uuid("modele_id")
+    .notNull()
+    .references(() => modelesRapport.id, { onDelete: "cascade" }),
+  equipeId: uuid("equipe_id")
+    .unique("affectation_equipe")
+    .references(() => equipes.id, { onDelete: "cascade" }),
+  personneId: uuid("personne_id")
+    .unique("affectation_personne")
+    .references(() => personnes.id, { onDelete: "cascade" }),
+  creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const rapportsHebdo = pgTable(
   "rapports_hebdo",
   {
@@ -158,7 +214,12 @@ export const rapportsHebdo = pgTable(
     /** Fixé à l'envoi : le supérieur à ce moment-là (poste vacant compris). */
     destinataireId: uuid("destinataire_id").references(() => personnes.id, { onDelete: "set null" }),
     envoyeLe: timestamp("envoye_le", { withTimezone: true }),
+    /** Champs relus par l'auteur (identifiants de champ). */
     partiesRelues: text("parties_relues").array().notNull().default(sql`'{}'::text[]`),
+    /** Version du modèle à la création ; vide = rapport d'avant les modèles (les quatre parties). */
+    versionModeleId: uuid("version_modele_id").references(() => versionsModele.id, { onDelete: "set null" }),
+    /** Formulaire rempli, copié à la création (« Mon travail » déplié) : un rapport garde sa version. */
+    formulaire: jsonb().$type<Champ[]>(),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
     majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -170,15 +231,48 @@ export const lignesRapport = pgTable(
   {
     id: uuid().primaryKey().defaultRandom(),
     rapportId: uuid("rapport_id").notNull().references(() => rapportsHebdo.id, { onDelete: "cascade" }),
-    partie: partieRapport().notNull(),
+    /** Champ du formulaire qui porte la ligne. */
+    champId: text("champ_id").notNull(),
+    /** Rubrique de la ligne (fait, en_cours, bloque, prochaine, decision) ; vide = autre. */
+    partie: text(),
     texte: text().notNull(),
     /** Le chef de ce projet voit cette ligne. Vide = ligne générale, réservée au supérieur. */
     projetId: uuid("projet_id").references(() => projets.id, { onDelete: "set null" }),
     tacheId: uuid("tache_id").references(() => taches.id, { onDelete: "set null" }),
     ordre: integer().notNull().default(0),
     proposeeParIa: boolean("proposee_par_ia").notNull().default(false),
+    /** Ligne reprise d'un rapport reçu (rapport de chef) : références des éléments d'origine (« l:… », « r:… »). */
+    origines: text().array().notNull().default(sql`'{}'::text[]`),
+    /** Qui a écrit les éléments d'origine. */
+    auteursOrigine: uuid("auteurs_origine").array().notNull().default(sql`'{}'::uuid[]`),
+    /** Visibilité propre (élément reçu à titre privé : « auteur ») ; vide = celle du champ. */
+    visibilite: text(),
+    /** Le chef fait remonter cet élément dans son propre rapport, en tête. */
+    remonte: boolean().notNull().default(false),
+    /** Le chef l'a retiré de son rapport (gardé pour ne pas le reprendre une seconde fois). */
+    retiree: boolean().notNull().default(false),
   },
   (t) => [index("lignes_rapport_idx").on(t.rapportId), index("lignes_rapport_projet_idx").on(t.projetId)],
+);
+
+/** Réponses autres que des lignes : feux par projet, charge, textes, choix, nombres, dates. */
+export const reponsesRapport = pgTable(
+  "reponses_rapport",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    rapportId: uuid("rapport_id")
+      .notNull()
+      .references(() => rapportsHebdo.id, { onDelete: "cascade" }),
+    champId: text("champ_id").notNull(),
+    /** Santé : un feu par projet. Vide pour les autres champs. */
+    projetId: uuid("projet_id").references(() => projets.id, { onDelete: "cascade" }),
+    valeur: text().notNull().default(""),
+    commentaire: text().notNull().default(""),
+    /** Ce que l'application avait proposé (feu de la semaine dernière, niveau calculé). */
+    propose: text(),
+    majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("reponse_unique").on(t.rapportId, t.champId, sql`coalesce(${t.projetId}, '00000000-0000-0000-0000-000000000000'::uuid)`)],
 );
 
 /** État d'un projet à chaque rapport au conseil : donne la « date de fin prévue au dernier rapport ». */
@@ -269,3 +363,6 @@ export type Projet = typeof projets.$inferSelect;
 export type Tache = typeof taches.$inferSelect;
 export type RapportHebdo = typeof rapportsHebdo.$inferSelect;
 export type LigneRapport = typeof lignesRapport.$inferSelect;
+export type ReponseRapport = typeof reponsesRapport.$inferSelect;
+export type ModeleRapport = typeof modelesRapport.$inferSelect;
+export type VersionModele = typeof versionsModele.$inferSelect;

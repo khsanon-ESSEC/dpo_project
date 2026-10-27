@@ -2,33 +2,75 @@ import type { Metadata } from "next";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { ajouterJours, dateCourte, dateLocale, heure } from "@/lib/dates";
-import { dejaReprise, lecteursDuRapport, lignesDuRapport, monRapportPrecedent, obtenirOuCreerRapport, PARTIES, semaineCourante } from "@/lib/donnees/rapport";
-import { ONGLETS_RAPPORT, SousOnglets } from "@/components/SousOnglets";
+import {
+  champDeRubrique,
+  dejaReprise,
+  formulaireDe,
+  lecteursDuRapport,
+  lignesDuRapport,
+  manquantsDuRapport,
+  monRapportPrecedent,
+  obtenirOuCreerRapport,
+  reponsesDuRapport,
+  semaineCourante,
+  synchroniserReprises,
+  vueEquipe,
+} from "@/lib/donnees/rapport";
+import { versionDuRapport } from "@/lib/donnees/modeles";
 import { tousLesProjetsActifs } from "@/lib/donnees/projets";
+import { chargerOrganisation } from "@/lib/organisation";
+import { initiales, nomComplet } from "@/lib/regles";
+import { estDecoratif, LIBELLE_VISIBILITE, type Rubrique } from "@/lib/modeles";
+import { ONGLETS_RAPPORT, SousOnglets } from "@/components/SousOnglets";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
-import { ajouterLigne, envoyer, reprendreLigne } from "./actions";
-import { CasePartie, LigneEditable } from "./Lignes";
+import { ChampRapport, type ContexteRapport } from "@/components/ChampRapport";
+import { envoyer, reprendreLigne } from "./actions";
 
-export const metadata: Metadata = { title: "Rapport du vendredi" };
+export const metadata: Metadata = { title: "Mon rapport" };
 
-export default async function PageRapport() {
+const LIBELLE_RUBRIQUE_COURT: Record<string, string> = { fait: "Fait", en_cours: "En cours", bloque: "Bloqué", prochaine: "La semaine prochaine", decision: "Décision attendue", autre: "Autre" };
+
+export default async function PageRapport({ searchParams }: { searchParams: Promise<{ envoi?: string }> }) {
+  const { envoi } = await searchParams;
   const u = await exigerUtilisateur();
   const a = await acces(u);
   const semaine = semaineCourante();
   const rapport = await obtenirOuCreerRapport(u.id, semaine);
-  const lignes = await lignesDuRapport(rapport.id);
-  const lecteurs = await lecteursDuRapport(u.id, lignes);
-  const visibles = await idsProjetsVisibles(a);
-  const projets = (await tousLesProjetsActifs()).filter((p) => visibles === "tous" || visibles.has(p.id));
   const brouillon = rapport.statut === "brouillon";
+  const f = formulaireDe(rapport);
+  const chef = f.some((c) => c.type === "reprise");
+  if (chef && brouillon) await synchroniserReprises(rapport);
+  const [lignes, reponses, version, visibles, org] = await Promise.all([lignesDuRapport(rapport.id), reponsesDuRapport(rapport.id), versionDuRapport(rapport.versionModeleId), idsProjetsVisibles(a), chargerOrganisation()]);
+  const lecteurs = await lecteursDuRapport(u.id, lignes, f);
+  const projets = (await tousLesProjetsActifs()).filter((p) => visibles === "tous" || visibles.has(p.id));
+  const equipe = chef && brouillon ? await vueEquipe(rapport) : null;
+  const manquants = brouillon ? await manquantsDuRapport(rapport) : [];
+  const remplissables = f.filter((c) => !estDecoratif(c) && !(c.type === "reprise" && (c.reprise === "sante" || c.reprise === "charge")));
   const relues = new Set(rapport.partiesRelues);
-  const nRelues = PARTIES.filter((p) => relues.has(p.id)).length;
+  const nRelues = remplissables.filter((c) => relues.has(c.id)).length;
   // Ce qui était prévu la semaine dernière : à reprendre en un clic s'il n'y est pas déjà.
   const precedent = brouillon ? await monRapportPrecedent(u.id, semaine) : null;
-  const prevues = (precedent?.lignes ?? []).filter((l) => l.partie === "prochaine").map((l) => ({ ...l, dans: dejaReprise(l, lignes) }));
+  const propres = lignes.filter((l) => l.origines.length === 0);
+  const prevues = (precedent?.lignes ?? []).filter((l) => l.partie === "prochaine").map((l) => ({ ...l, dans: dejaReprise(l, propres) }));
   const aReprendre = prevues.filter((l) => !l.dans);
-  const LIBELLE = Object.fromEntries(PARTIES.map((x) => [x.id, x.libelle]));
+  const cibles = (["fait", "en_cours", "prochaine"] as Rubrique[]).filter((r) => champDeRubrique(f, r));
+  const personnes = new Map([...org.personnes.values()].map((p) => [p.id, { initiales: initiales(p), nom: nomComplet(p) }]));
+  const parties = f.filter((c) => c.type === "intertitre" && c.partie);
+  const prives = f.filter((c) => !estDecoratif(c) && (c.visibilite ?? "tous") !== "tous");
+  const recus = equipe?.recus.length ?? 0;
+  const x: ContexteRapport = {
+    mode: brouillon ? "saisie" : "lecture",
+    rapportId: rapport.id,
+    lignes,
+    reponses,
+    relues,
+    projets,
+    personnes,
+    superieur: lecteurs.superieur?.prenom ?? null,
+    equipe,
+    niveauTitre: f.some((c) => c.type === "intertitre") ? 3 : 2,
+  };
 
   return (
     <>
@@ -37,24 +79,32 @@ export default async function PageRapport() {
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <Icone nom="cadenas" taille={16} />
             {lecteurs.superieur
-              ? `${lecteurs.superieur.nom}${lecteurs.directeurs.length ? " et votre direction lisent" : " lit"} tout ; chaque chef de projet, sa partie`
+              ? `${lecteurs.superieur.nom}${lecteurs.directeurs.length ? " et votre direction lisent" : " lit"} ${prives.length ? "votre rapport" : "tout"} ; chaque chef de projet, sa partie`
               : "Aucun supérieur désigné : voir avec l'administrateur"}
           </span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <Icone nom="etincelle" taille={16} />
-            Préparé à partir de vos tâches de la semaine
+            {chef ? `Préparé à partir de vos tâches et de ${recus} rapport${recus > 1 ? "s" : ""} reçu${recus > 1 ? "s" : ""}` : "Préparé à partir de vos tâches de la semaine"}
           </span>
+          {version ? (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <Icone nom="document" taille={16} />
+              Modèle {version.nom} · version {version.numero}
+            </span>
+          ) : null}
           {brouillon ? (
             <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
-              <span className="segments" role="img" aria-label={`${nRelues} parties relues sur 4`} style={{ width: 120 }}>
-                {PARTIES.map((p) => (
-                  <span key={p.id} data-plein={relues.has(p.id) ? "1" : "0"} />
+              <span className="segments" role="img" aria-label={`${nRelues} champs relus sur ${remplissables.length}`} style={{ width: Math.min(24 * remplissables.length, 200), gridTemplateColumns: `repeat(${remplissables.length}, minmax(0, 1fr))` }}>
+                {remplissables.map((c) => (
+                  <span key={c.id} data-plein={relues.has(c.id) ? "1" : "0"} />
                 ))}
               </span>
-              {nRelues}/4 relues
+              {nRelues}/{remplissables.length} relus
             </span>
           ) : (
-            <span>Envoyé le {dateCourte(dateLocale(rapport.envoyeLe!))} à {heure(rapport.envoyeLe!)}</span>
+            <span>
+              Envoyé le {dateCourte(dateLocale(rapport.envoyeLe!))} à {heure(rapport.envoyeLe!)}
+            </span>
           )}
         </div>
       </Bandeau>
@@ -62,6 +112,15 @@ export default async function PageRapport() {
         <SousOnglets onglets={ONGLETS_RAPPORT} courant="/rapport" label="Rapports" />
         <div className="colonnes">
           <div className="colonne-large" style={{ gap: 20 }}>
+            {parties.length > 1 ? (
+              <nav aria-label="Parties du rapport" className="filtres">
+                {parties.map((p, i) => (
+                  <a key={p.id} href={`#partie-${p.id}`} className="filtre">
+                    <strong>{i + 1}</strong>&nbsp;{p.libelle}
+                  </a>
+                ))}
+              </nav>
+            ) : null}
             {precedent && prevues.length && !aReprendre.length ? (
               <p className="succes" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 12px", margin: 0 }}>
                 <Icone nom="coche" taille={16} /> Tout ce que vous aviez prévu la semaine dernière est déjà dans ce rapport.
@@ -70,11 +129,11 @@ export default async function PageRapport() {
                 </a>
               </p>
             ) : null}
-            {precedent && aReprendre.length ? (
-              <section className="carte carte--liste" aria-labelledby="r-precedent" style={aReprendre.length ? { borderColor: "var(--veille-point)" } : undefined}>
+            {precedent && aReprendre.length && cibles.length ? (
+              <section className="carte carte--liste" aria-labelledby="r-precedent" style={{ borderColor: "var(--veille-point)" }}>
                 <div className="carte__entete">
                   <h2 id="r-precedent" className="carte__titre">
-                    Prévu la semaine dernière{aReprendre.length ? ` · ${aReprendre.length} à reprendre` : ""}
+                    Prévu la semaine dernière · {aReprendre.length} à reprendre
                   </h2>
                   <a href={`/rapports/${precedent.rapport.id}`} className="lien-discret">
                     Voir ce rapport →
@@ -88,89 +147,41 @@ export default async function PageRapport() {
                         <span className="rangee__titre" style={l.dans ? { color: "var(--discret)" } : undefined}>
                           {l.texte}
                         </span>
-                        {l.dans ? <span className="rangee__sous ton-ok">Déjà dans « {LIBELLE[l.dans]} »</span> : null}
+                        {l.dans ? <span className="rangee__sous ton-ok">Déjà dans « {LIBELLE_RUBRIQUE_COURT[l.dans] ?? l.dans} »</span> : null}
                       </span>
                       {l.dans ? null : (
                         <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }} aria-label={`Reprendre « ${l.texte} »`}>
-                          <form action={reprendreLigne.bind(null, rapport.id, l.id, "fait")}>
-                            <button type="submit" className="bouton-mini">
-                              <Icone nom="coche" taille={14} /> Fait
-                            </button>
-                          </form>
-                          <form action={reprendreLigne.bind(null, rapport.id, l.id, "en_cours")}>
-                            <button type="submit" className="bouton-mini">
-                              En cours
-                            </button>
-                          </form>
-                          <form action={reprendreLigne.bind(null, rapport.id, l.id, "prochaine")}>
-                            <button type="submit" className="bouton-mini">
-                              <Icone nom="reprendre" taille={14} /> Reporter
-                            </button>
-                          </form>
+                          {cibles.map((r) => (
+                            <form key={r} action={reprendreLigne.bind(null, rapport.id, l.id, r)}>
+                              <button type="submit" className="bouton-mini">
+                                {r === "fait" ? <Icone nom="coche" taille={14} /> : r === "prochaine" ? <Icone nom="reprendre" taille={14} /> : null}
+                                {r === "fait" ? "Fait" : r === "en_cours" ? "En cours" : "Reporter"}
+                              </button>
+                            </form>
+                          ))}
                         </span>
                       )}
                     </li>
                   ))}
                 </ul>
                 <p className="note" style={{ margin: "10px 0 4px" }}>
-                  {aReprendre.length ? "Un clic ajoute la ligne à la partie choisie de ce rapport." : "Tout ce qui était prévu est déjà dans votre rapport."}
+                  Un clic ajoute la ligne à la partie choisie de ce rapport.
                 </p>
               </section>
             ) : null}
-            {PARTIES.map((p) => {
-              const siennes = lignes.filter((l) => l.partie === p.id);
-              return (
-                <section key={p.id} className="carte" aria-labelledby={`partie-${p.id}`} style={{ padding: "12px 20px 20px 28px", display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 16, minHeight: 48 }}>
-                    <span style={{ width: 32, fontSize: 32, lineHeight: "36px", fontWeight: 200 }} className={p.id === "bloque" && siennes.length ? "ton-veille" : undefined}>
-                      {siennes.length}
-                    </span>
-                    <h2 id={`partie-${p.id}`} style={{ flex: 1, margin: 0, fontSize: 16, lineHeight: "22px", fontWeight: 500 }}>
-                      {p.libelle}
-                    </h2>
-                    {brouillon ? <CasePartie rapportId={rapport.id} partie={p.id} relue={relues.has(p.id)} /> : null}
-                  </div>
-                  <ul className="liste" style={{ paddingLeft: 48 }}>
-                    {siennes.map((l) => (
-                      <LigneEditable key={l.id} ligne={l} projets={projets} modifiable={brouillon} />
-                    ))}
-                    {siennes.length === 0 ? <li style={{ borderTop: 0 }} className="vide">Rien cette semaine.</li> : null}
-                  </ul>
-                  {brouillon ? (
-                    <form action={ajouterLigne.bind(null, rapport.id, p.id)} style={{ paddingLeft: 48, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <label className="visuellement-cache" htmlFor={`ajout-${p.id}`}>
-                        Ajouter une ligne à « {p.libelle} »
-                      </label>
-                      <input id={`ajout-${p.id}`} name="texte" maxLength={500} placeholder="Ajouter une ligne" style={{ flex: "1 1 220px", minHeight: 40, padding: "0 12px", border: "1px solid var(--filet-fort)", background: "var(--champ)", fontSize: 14 }} />
-                      <label className="visuellement-cache" htmlFor={`ajout-projet-${p.id}`}>
-                        Projet de la ligne
-                      </label>
-                      <select id={`ajout-projet-${p.id}`} name="projetId" defaultValue="" style={{ minHeight: 40, border: "1px solid var(--filet-fort)", background: "var(--champ)", fontSize: 13, maxWidth: 200 }}>
-                        <option value="">Sans projet</option>
-                        {projets.map((pr) => (
-                          <option key={pr.id} value={pr.id}>
-                            {pr.code} · {pr.titre}
-                          </option>
-                        ))}
-                      </select>
-                      <button type="submit" className="bouton-contour">
-                        <Icone nom="ajouter" taille={16} /> Ajouter
-                      </button>
-                    </form>
-                  ) : null}
-                </section>
-              );
-            })}
+            {f.map((c) => (
+              <ChampRapport key={c.id} c={c} x={x} />
+            ))}
           </div>
           <div className="colonne-etroite">
-            <section className="carte" aria-labelledby="r-dest" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <section className="carte" id="envoi" aria-labelledby="r-dest" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
               <h2 id="r-dest" className="carte__titre" style={{ margin: 0 }}>
                 Destinataire
               </h2>
               {lecteurs.superieur ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <span className="mono" style={{ width: 40, height: 40, fontSize: 13 }} aria-hidden="true">
-                    {lecteurs.superieur.nom.split(" ").map((x) => x[0]).join("").slice(0, 2)}
+                    {lecteurs.superieur.nom.split(" ").map((s) => s[0]).join("").slice(0, 2)}
                   </span>
                   <span className="rangee__texte">
                     <span className="rangee__titre">{lecteurs.superieur.nom}</span>
@@ -180,6 +191,19 @@ export default async function PageRapport() {
               ) : (
                 <p className="note">Personne ne reçoit encore votre rapport.</p>
               )}
+              {brouillon && chef ? <p className="note" style={{ margin: 0 }}>Un seul envoi : votre travail, puis votre équipe.</p> : null}
+              {brouillon && manquants.length ? (
+                <div className={envoi === "incomplet" ? "erreur" : "note"} role={envoi === "incomplet" ? "alert" : undefined} style={{ margin: 0 }}>
+                  {envoi === "incomplet" ? "Il manque encore : " : "À remplir avant l'envoi : "}
+                  {manquants.map((c, i) => (
+                    <span key={c.id}>
+                      {i ? ", " : ""}
+                      <a href={`#c-${c.id}`}>{c.libelle}</a>
+                    </span>
+                  ))}
+                  .
+                </div>
+              ) : null}
               {brouillon ? (
                 <form action={envoyer.bind(null, rapport.id)}>
                   <button type="submit" className="bouton-ambre bouton-ambre--large" disabled={!lecteurs.superieur}>
@@ -190,12 +214,41 @@ export default async function PageRapport() {
                 <p className="succes">Rapport envoyé.</p>
               )}
             </section>
+            {equipe ? (
+              <section className="carte carte--liste" aria-labelledby="r-recus">
+                <h2 id="r-recus" className="carte__titre">
+                  Rapports reçus · {equipe.recus.length} sur {equipe.subordonnes.length}
+                </h2>
+                <ul className="liste">
+                  {equipe.subordonnes.map((p) => {
+                    const r = equipe.recus.find((x) => x.auteurId === p.id);
+                    return (
+                      <li key={p.id}>
+                        <a href={r ? `/rapports/${r.id}` : `/equipe/${p.id}`} className="rangee" style={{ minHeight: 52 }}>
+                          <span className="mono mono--petit" aria-hidden="true">
+                            {p.initiales}
+                          </span>
+                          <span className="rangee__texte">
+                            <span className="rangee__titre">{p.nom}</span>
+                            <span className={`rangee__sous ${r ? "" : "ton-veille"}`}>{r?.envoyeLe ? `Reçu le ${dateCourte(dateLocale(r.envoyeLe))} à ${heure(r.envoyeLe)}` : "Pas encore envoyé"}</span>
+                          </span>
+                          <span className="rangee__meta">{r ? "Lire" : "Voir"}</span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <p className="note" style={{ margin: "10px 0 4px" }}>
+                  Un rapport qui arrive après s'ajoute à votre brouillon ; rien ne change sans vous. Relancer depuis l&apos;onglet <a href="/equipe">Équipe</a>.
+                </p>
+              </section>
+            ) : null}
             <section className="carte carte--liste" aria-labelledby="r-qui">
               <h2 id="r-qui" className="carte__titre">
                 Qui voit quoi
               </h2>
               <p className="note" style={{ marginBottom: 8 }}>
-                Chaque chef de projet ne voit que les lignes marquées de son projet.
+                Réglé dans le modèle, champ par champ. Chaque chef de projet ne voit que les lignes et les feux de son projet.
               </p>
               <ul className="liste">
                 {lecteurs.superieur ? (
@@ -216,7 +269,7 @@ export default async function PageRapport() {
                       <span className="rangee__sous">Votre direction{d.poste ? ` · ${d.poste}` : ""}</span>
                     </span>
                     <span className="rangee__meta" style={{ fontSize: 12 }}>
-                      Tout le rapport
+                      {prives.some((c) => c.visibilite === "superieur") ? "Tout, sauf les champs réservés" : "Tout le rapport"}
                     </span>
                   </li>
                 ))}
@@ -226,7 +279,7 @@ export default async function PageRapport() {
                     <span className="rangee__sous">Toute la banque</span>
                   </span>
                   <span className="rangee__meta" style={{ fontSize: 12 }}>
-                    Tout le rapport
+                    {prives.some((c) => c.visibilite === "superieur") ? "Tout, sauf les champs réservés" : "Tout le rapport"}
                   </span>
                 </li>
                 {lecteurs.chefs.map((c) => (
@@ -241,6 +294,11 @@ export default async function PageRapport() {
                   </li>
                 ))}
               </ul>
+              {prives.length ? (
+                <p className="note" style={{ margin: "10px 0 4px" }}>
+                  {prives.map((c) => `« ${c.libelle} » : ${LIBELLE_VISIBILITE[c.visibilite ?? "tous"].court.toLowerCase()}`).join(" ; ")}.
+                </p>
+              ) : null}
             </section>
           </div>
         </div>

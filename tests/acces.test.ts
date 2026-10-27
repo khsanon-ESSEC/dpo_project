@@ -77,7 +77,7 @@ describe.skipIf(!URL_TEST)("accès, sur les données d'exemple", () => {
     const a = await accesDe("nadege.augustin");
     expect(a.toutVoir).toBe(false);
     expect(A.suitPersonne(a, qui("fabienne.michel").id)).toBe(true);
-    expect(A.suitPersonne(a, qui("nadia.laguerre").id)).toBe(true);
+    expect(A.suitPersonne(a, qui("thierry.lamy").id)).toBe(true);
     expect(A.suitPersonne(a, qui("frantz.desrosiers").id)).toBe(false);
     expect(await codesVisibles("nadege.augustin")).toContain("AE");
   });

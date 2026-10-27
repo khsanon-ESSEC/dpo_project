@@ -2230,3 +2230,613 @@ a.puce:hover {
   background: var(--choisi);
   border-color: var(--encre);
 }
+
+/* ==========================================================================
+   Rapport construit depuis un modèle : champs, parties, feux, choix segmentés
+   ========================================================================== */
+.champ-rapport {
+  padding: 12px 20px 20px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  scroll-margin-top: 24px;
+}
+.champ-rapport__tete {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 48px;
+}
+.champ-rapport__nombre {
+  width: 32px;
+  flex: none;
+  font-size: 32px;
+  line-height: 36px;
+  font-weight: 200;
+}
+.champ-rapport__titre {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.champ-rapport__titre h2,
+.champ-rapport__titre h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 500;
+  scroll-margin-top: 24px;
+}
+.champ-rapport__aide {
+  margin: -6px 0 4px 48px;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--discret);
+}
+.champ-rapport__corps {
+  padding-left: 48px;
+}
+.apercu {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--filet-fort);
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--discret);
+}
+.verrou {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--discret);
+}
+.partie {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  scroll-margin-top: 24px;
+}
+.partie:first-child {
+  margin-top: 0;
+}
+.partie__titre {
+  margin: 0;
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 200;
+  letter-spacing: -0.01em;
+}
+.initiales {
+  flex: none;
+  padding: 1px 4px;
+  background: var(--relief);
+  color: var(--relief-encre);
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.feu {
+  margin: 0;
+  padding: 12px 0;
+  min-width: 0;
+  border: 0;
+  border-top: 1px solid var(--filet);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.feu:first-child {
+  border-top: 0;
+  padding-top: 4px;
+}
+.feu__ligne {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+.feu__nom {
+  flex: 1 1 220px;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.feu__nom .etiquette-projet {
+  margin-top: 2px;
+}
+.feu__raison {
+  padding-left: 44px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.feu__raison label {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+}
+.pastille-sante {
+  min-width: 116px;
+  min-height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--filet-fort);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+}
+.pastille-sante--a_surveiller {
+  background: var(--relief);
+  color: var(--relief-encre);
+  box-shadow: inset 0 0 0 1px var(--veille-point);
+  border-color: transparent;
+}
+.pastille-sante--en_retard {
+  background: var(--retard);
+  border-color: var(--retard);
+  color: var(--fond);
+}
+.pastille-sante--vide {
+  color: var(--discret);
+  border-style: dashed;
+}
+/* Choix segmenté : de vrais boutons radio, dessinés en bande. */
+.segmente {
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.segmente--pleine {
+  display: flex;
+}
+.segmente__choix {
+  position: relative;
+  min-height: 40px;
+  padding: 4px 12px;
+  margin-left: -1px;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border: 1px solid var(--filet-fort);
+  color: var(--encre);
+  font-size: 13px;
+  line-height: 17px;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+.segmente__choix:first-child {
+  margin-left: 0;
+}
+.segmente--pleine .segmente__choix {
+  flex: 1 1 0;
+}
+.segmente__choix input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+.segmente__choix:hover {
+  background: var(--choisi);
+}
+.segmente__choix:has(input:checked) {
+  z-index: 1;
+  background: var(--arc);
+  border-color: var(--arc);
+  color: var(--surface);
+}
+.segmente__choix--retard:has(input:checked) {
+  background: var(--retard);
+  border-color: var(--retard);
+  color: var(--fond);
+}
+.segmente__choix:has(input:focus-visible) {
+  z-index: 2;
+  outline: 2px solid var(--arc);
+  outline-offset: 2px;
+}
+.segmente__choix:has(input:disabled) {
+  cursor: default;
+}
+.segmente__propose {
+  font-size: 11px;
+  line-height: 14px;
+  opacity: 0.8;
+}
+.recu {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 6px 0 8px;
+  border-top: 1px solid var(--filet);
+}
+.recu:first-child {
+  border-top: 0;
+}
+.recu__ligne {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.recu__ligne > .liste {
+  flex: 1;
+  min-width: 0;
+}
+.recu .liste > li {
+  padding: 0 !important;
+}
+.recu__actions {
+  padding-left: 40px;
+  display: flex;
+  justify-content: flex-end;
+}
+.groupe-projet + .groupe-projet {
+  margin-top: 12px;
+}
+.groupe-projet__titre {
+  margin: 4px 0 2px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--discret);
+}
+.retirees {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--discret);
+}
+.retirees summary {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+@media (max-width: 640px) {
+  .champ-rapport {
+    padding: 10px 16px 16px;
+  }
+  .champ-rapport__aide,
+  .champ-rapport__corps {
+    margin-left: 0;
+    padding-left: 0;
+  }
+  .feu__raison {
+    padding-left: 0;
+  }
+  .segmente {
+    display: flex;
+    width: 100%;
+  }
+  .segmente__choix {
+    flex: 1 1 0;
+    padding: 4px 6px;
+    font-size: 12px;
+  }
+  .partie__titre {
+    font-size: 24px;
+    line-height: 30px;
+  }
+}
+
+/* ==========================================================================
+   Modèles de rapport (administrateurs) : liste et éditeur
+   ========================================================================== */
+.grille-modeles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.tuile-modele {
+  flex: 1 1 240px;
+  min-width: 0;
+  min-height: 132px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--encre);
+  text-decoration: none;
+  transition: border-color 200ms ease, transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 220ms ease;
+}
+.tuile-modele:hover {
+  border-color: var(--filet-fort);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(20, 36, 88, 0.1);
+}
+.tuile-modele__nom {
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 500;
+}
+.tuile-modele__marques {
+  margin-top: auto;
+  padding-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.marque-modele {
+  padding: 2px 6px;
+  border: 1px solid var(--filet-fort);
+  color: var(--discret);
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.marque-modele--relief {
+  border-color: transparent;
+  background: var(--relief);
+  color: var(--relief-encre);
+}
+.marque-modele--ambre {
+  border-color: transparent;
+  background: var(--tag);
+  color: var(--tag-encre);
+}
+.choix-radio {
+  min-height: 44px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--surface-filet);
+  font-size: 14px;
+  line-height: 19px;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+.choix-radio input {
+  margin: 2px 0 0;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  accent-color: var(--arc);
+}
+.choix-radio:has(input:checked) {
+  border-color: var(--arc);
+  background: var(--choisi);
+}
+.editeur {
+  padding: 0;
+}
+.editeur__barre {
+  padding: 18px 24px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 14px;
+  border-bottom: 1px solid var(--surface-filet);
+}
+.editeur__publier {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.editeur__publier input {
+  min-height: 44px;
+  min-width: 220px;
+  padding: 0 12px;
+  border: 1px solid var(--controle);
+  background: var(--champ);
+  color: var(--encre);
+  font-size: 14px;
+}
+.editeur__colonnes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+.editeur__titre {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+}
+.editeur__palette {
+  flex: 1 1 220px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 20px;
+  border-right: 1px solid var(--surface-filet);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.editeur__groupe {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.editeur__groupe h3 {
+  margin: 0 0 2px;
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+.editeur__outil {
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--surface-filet);
+  background: var(--surface);
+  color: var(--encre);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  font: inherit;
+  cursor: grab;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.editeur__outil:hover {
+  background: var(--choisi);
+  border-color: var(--filet-fort);
+}
+.editeur__outil-nom {
+  font-size: 13px;
+  line-height: 17px;
+}
+.editeur__outil .rangee__sous {
+  font-size: 11px;
+  line-height: 15px;
+}
+.editeur__formulaire {
+  flex: 999 1 380px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 20px 24px 24px;
+  background: var(--fond);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.editeur__liste {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.editeur__liste > li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.editeur__repere {
+  display: block;
+  height: 3px;
+  background: var(--arc);
+}
+.editeur__champ {
+  padding: 8px 6px 8px 4px;
+  background: var(--surface);
+  border: 1px solid var(--surface-filet);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+.editeur__champ--choisi {
+  border-color: var(--arc);
+  box-shadow: 0 0 0 1px var(--arc);
+}
+.editeur__champ--partie {
+  background: var(--choisi);
+}
+.editeur__champ--partie .editeur__libelle {
+  font-size: 17px;
+  font-weight: 300;
+}
+.editeur__poignee {
+  width: 24px;
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--controle);
+  cursor: grab;
+}
+.editeur__numero {
+  width: 22px;
+  flex: none;
+  font-size: 18px;
+  font-weight: 200;
+  color: var(--discret);
+}
+.editeur__libelle {
+  color: var(--encre);
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.editeur__libelle:hover {
+  text-decoration: underline;
+}
+.editeur__boutons {
+  margin-left: auto;
+  flex: none;
+  display: flex;
+}
+.editeur__boutons .bouton-icone {
+  width: 40px;
+  height: 44px;
+}
+.editeur__boutons .bouton-icone:disabled {
+  opacity: 0.3;
+}
+.editeur__depot {
+  min-height: 64px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border: 1px dashed var(--filet-fort);
+  color: var(--discret);
+  font-size: 13px;
+  line-height: 18px;
+}
+.editeur__depot--actif {
+  border-color: var(--arc);
+  color: var(--encre);
+}
+.editeur__proprietes {
+  flex: 1 1 300px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 20px 24px 28px;
+  border-left: 1px solid var(--surface-filet);
+  scroll-margin-top: 16px;
+}
+.editeur__choix {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.editeur__choix legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+}
+@media (max-width: 900px) {
+  .editeur__palette,
+  .editeur__proprietes {
+    border: 0;
+    border-top: 1px solid var(--surface-filet);
+  }
+  .editeur__palette {
+    order: 2;
+  }
+}
