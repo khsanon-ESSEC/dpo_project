@@ -169,6 +169,7 @@ export default async function PageOrganisation({ searchParams }: { searchParams:
                   directeur: sel.directeur,
                   executif: sel.executif,
                   administrateur: sel.administrateur,
+                  capaciteHeures: sel.capaciteHeures,
                   actif: sel.actif,
                   nbRapports: sel.nbRapports,
                   projetsDiriges: sel.projetsDiriges,

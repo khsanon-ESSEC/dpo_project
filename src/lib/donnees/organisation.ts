@@ -10,6 +10,7 @@ import { initiales, libellesRoles, nomComplet, resoudreSuperieur, subordonnesDir
 export async function vueOrganisation() {
   const org = await chargerOrganisation();
   const projets = await db.select({ code: schema.projets.code, titre: schema.projets.titre, chefId: schema.projets.chefProjetId }).from(schema.projets).orderBy(asc(schema.projets.titre));
+  const caps = new Map((await db.select({ id: schema.personnes.id, c: schema.personnes.capaciteHeures }).from(schema.personnes)).map((x) => [x.id, x.c]));
   const equipes = [...org.equipes.values()].sort((a, b) => (a.equipeParenteId ? 1 : 0) - (b.equipeParenteId ? 1 : 0) || a.nom.localeCompare(b.nom, "fr"));
   const personnes = [...org.personnes.values()].sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
   const fiche = (id: string) => {
@@ -24,6 +25,7 @@ export async function vueOrganisation() {
       superieurVacant: !designe || !designe.actif,
       equipeNom: p.equipeId ? org.equipes.get(p.equipeId)?.nom ?? "" : "",
       nbRapports: subordonnesDirects(org, id).length,
+      capaciteHeures: caps.get(id) ?? 40,
       projetsDiriges: projets.filter((pr) => pr.chefId === id).map((pr) => pr.titre),
     };
   };
@@ -45,6 +47,7 @@ export async function vueOrganisation() {
 }
 
 export type ModificationPersonne = Roles & {
+  capaciteHeures: number;
   equipeId: string | null;
   superieurId: string | null;
   poste: string;
@@ -84,7 +87,7 @@ export async function modifierPersonne(parId: string, personneId: string, m: Mod
   await verifierDernierAdministrateur(personneId, m.administrateur && m.actif);
   await db
     .update(schema.personnes)
-    .set({ equipeId: m.equipeId, superieurId: m.superieurId, directeur: m.directeur, executif: m.executif, administrateur: m.administrateur, poste: m.poste.trim(), actif: m.actif, majLe: new Date() })
+    .set({ equipeId: m.equipeId, superieurId: m.superieurId, directeur: m.directeur, executif: m.executif, administrateur: m.administrateur, capaciteHeures: m.capaciteHeures, poste: m.poste.trim(), actif: m.actif, majLe: new Date() })
     .where(eq(schema.personnes.id, personneId));
   if (!m.actif) await db.delete(schema.sessions).where(eq(schema.sessions.personneId, personneId));
   await noter(parId, "personne_modifiee", personneId, m);

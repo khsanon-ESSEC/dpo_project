@@ -117,7 +117,7 @@ describe.skipIf(!URL_TEST)("accès, sur les données d'exemple", () => {
   it("seul un exécutif peut donner le rôle Exécutif", async () => {
     const jn = qui("jean-robert.noel");
     await expect(
-      O.modifierPersonne(jn.id, jn.id, { equipeId: null, superieurId: null, poste: "Analyste", actif: true, directeur: false, executif: true, administrateur: true }),
+      O.modifierPersonne(jn.id, jn.id, { equipeId: null, superieurId: null, poste: "Analyste", actif: true, directeur: false, executif: true, administrateur: true, capaciteHeures: 40 }),
     ).rejects.toThrow(/exécutif/);
   });
 });

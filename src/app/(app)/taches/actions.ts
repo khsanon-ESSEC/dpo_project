@@ -7,9 +7,20 @@ import { db, schema } from "@/db";
 import { acces, exigerTacheVisible, suitPersonne } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
+import { retourValide } from "@/lib/retour";
 
 type Statut = "a_faire" | "en_cours" | "bloquee" | "faite";
 const STATUTS: Statut[] = ["a_faire", "en_cours", "bloquee", "faite"];
+
+const lireDate = (v: FormDataEntryValue | null) => {
+  const s = String(v ?? "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+};
+/** Estimation en heures : entier de 1 à 400, sinon vide. */
+const lireHeures = (v: FormDataEntryValue | null) => {
+  const n = Math.round(Number(String(v ?? "").replace(",", ".")));
+  return Number.isFinite(n) && n >= 1 && n <= 400 ? n : null;
+};
 
 async function changerStatut(tacheId: string, statut: Statut, auteurId: string, blocage?: string | null) {
   const [t] = await db.select().from(schema.taches).where(eq(schema.taches.id, tacheId));
@@ -62,11 +73,17 @@ export async function enregistrerTache(_: EtatTache, form: FormData): Promise<Et
   if (statut === "bloquee" && !blocage) return { message: "Dites en une phrase ce qui bloque." };
   const note = String(form.get("note") ?? "").trim().slice(0, 500);
   const echeance = String(form.get("echeance") ?? "").trim();
+  const debut = lireDate(form.get("debut"));
+  const estimation = lireHeures(form.get("estimationHeures"));
+  if (debut && echeance && debut > echeance) return { message: "Le début doit précéder l'échéance." };
 
   await changerStatut(tacheId, statut, u.id, blocage);
   if (echeance && /^\d{4}-\d{2}-\d{2}$/.test(echeance) && echeance !== t.echeance) {
     await db.update(schema.taches).set({ echeance }).where(eq(schema.taches.id, tacheId));
     await db.insert(schema.evenementsTache).values({ tacheId, auteurId: u.id, type: "echeance", avant: t.echeance, apres: echeance });
+  }
+  if (debut !== t.debut || estimation !== t.estimationHeures) {
+    await db.update(schema.taches).set({ debut, estimationHeures: estimation }).where(eq(schema.taches.id, tacheId));
   }
   if (note) await db.insert(schema.evenementsTache).values({ tacheId, auteurId: u.id, type: "note", note });
 
@@ -78,7 +95,7 @@ export async function enregistrerTache(_: EtatTache, form: FormData): Promise<Et
   }
   await noter(u.id, "tache_modifiee", tacheId, { statut });
   revalidatePath("/", "layout");
-  redirect("/semaine");
+  redirect(retourValide(form.get("retour")) ?? "/semaine");
 }
 
 export type EtatNouvelleTache = { message: string | null };
@@ -89,18 +106,33 @@ export async function creerTache(_: EtatNouvelleTache, form: FormData): Promise<
   const titre = String(form.get("titre") ?? "").trim().slice(0, 200);
   const projetId = String(form.get("projetId") ?? "") || null;
   const assigneId = String(form.get("assigneId") ?? "") || u.id;
-  const echeance = String(form.get("echeance") ?? "") || null;
+  const echeance = lireDate(form.get("echeance"));
+  const debut = lireDate(form.get("debut"));
+  const estimationHeures = lireHeures(form.get("estimationHeures"));
   if (!titre) return { message: "Donnez un titre à la tâche." };
+  if (debut && echeance && debut > echeance) return { message: "Le début doit précéder l'échéance." };
   // On assigne une tâche à soi, à une personne de son équipe, ou sur un projet qu'on dirige.
   if (!suitPersonne(a, assigneId) && !(projetId && a.projetsDiriges.has(projetId))) return { message: "Vous ne pouvez pas assigner une tâche à cette personne." };
   const [t] = await db
     .insert(schema.taches)
-    .values({ titre, projetId, assigneId, echeance: echeance && /^\d{4}-\d{2}-\d{2}$/.test(echeance) ? echeance : null, creeParId: u.id })
+    .values({ titre, projetId, assigneId, echeance, debut, estimationHeures, creeParId: u.id })
     .returning({ id: schema.taches.id });
   await db.insert(schema.evenementsTache).values({ tacheId: t.id, auteurId: u.id, type: "creation" });
   if (assigneId !== u.id) {
     await db.insert(schema.notifications).values({ personneId: assigneId, type: "tache", texte: `${u.prenom} ${u.nom} vous a confié « ${titre} »`, lien: `/taches/${t.id}` });
   }
   revalidatePath("/", "layout");
-  redirect("/semaine");
+  redirect(retourValide(form.get("retour")) ?? "/semaine");
+}
+
+/** Tableau d'un projet : déplacer une carte vers une autre colonne. « Bloquée » passe par la fiche de la tâche (il faut dire ce qui bloque). */
+export async function deplacerTache(tacheId: string, statut: string): Promise<{ ok: boolean; message?: string }> {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const t = await exigerTacheVisible(a, tacheId);
+  if (statut !== "a_faire" && statut !== "en_cours" && statut !== "faite") return { ok: false, message: "Pour une tâche bloquée, dites ce qui bloque sur sa fiche." };
+  await changerStatut(tacheId, statut, u.id);
+  await noter(u.id, "tache_deplacee", tacheId, { statut });
+  if (t.projetId) revalidatePath(`/projets/${t.projetId}`, "layout");
+  return { ok: true };
 }

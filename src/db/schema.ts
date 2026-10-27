@@ -68,6 +68,8 @@ export const personnes = pgTable(
     echecsConnexion: integer("echecs_connexion").notNull().default(0),
     bloqueJusqua: timestamp("bloque_jusqua", { withTimezone: true }),
     theme: text().notNull().default("auto"),
+    /** Heures disponibles par semaine pour les tâches (charge de travail). */
+    capaciteHeures: integer("capacite_heures").notNull().default(40),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
     majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -115,7 +117,11 @@ export const taches = pgTable(
     titre: text().notNull(),
     assigneId: uuid("assigne_id").notNull().references(() => personnes.id),
     statut: statutTache().notNull().default("a_faire"),
+    /** Début prévu (facultatif). Sert au Gantt et au calcul de la charge. */
+    debut: date(),
     echeance: date(),
+    /** Temps de travail estimé, en heures (facultatif ; voir src/lib/charge.ts pour la valeur par défaut). */
+    estimationHeures: integer("estimation_heures"),
     blocage: text(),
     creeParId: uuid("cree_par_id").references(() => personnes.id, { onDelete: "set null" }),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),

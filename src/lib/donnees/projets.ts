@@ -107,3 +107,36 @@ export async function mettreAJourIndicateur(indicateurId: string, etat: "a_venir
     .set({ etat, atteintLe: etat === "atteint" ? sql`coalesce(${schema.indicateurs.atteintLe}, current_date)` : null })
     .where(eq(schema.indicateurs.id, indicateurId));
 }
+
+/** Toutes les tâches d'un projet, avec la personne et les dates utiles aux vues (liste, tableau, Gantt, calendrier). */
+export async function tachesDuProjet(projetId: string) {
+  const lignes = await db
+    .select({
+      id: schema.taches.id,
+      titre: schema.taches.titre,
+      statut: schema.taches.statut,
+      debut: schema.taches.debut,
+      echeance: schema.taches.echeance,
+      estimationHeures: schema.taches.estimationHeures,
+      assigneId: schema.taches.assigneId,
+      projetId: schema.taches.projetId,
+      blocage: schema.taches.blocage,
+      termineeLe: schema.taches.termineeLe,
+    })
+    .from(schema.taches)
+    .where(eq(schema.taches.projetId, projetId))
+    .orderBy(asc(schema.taches.echeance), asc(schema.taches.titre));
+  const org = await chargerOrganisation();
+  const jour = aujourdhui();
+  return lignes.map((t) => {
+    const p = org.personnes.get(t.assigneId);
+    return {
+      ...t,
+      personne: p ? nomComplet(p) : "?",
+      prenom: p?.prenom ?? "?",
+      initiales: p ? initiales(p) : "?",
+      retard: t.statut !== "faite" && t.statut !== "bloquee" && !!t.echeance && t.echeance < jour,
+    };
+  });
+}
+export type TacheDuProjet = Awaited<ReturnType<typeof tachesDuProjet>>[number];

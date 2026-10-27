@@ -3,6 +3,9 @@ import { acces } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { aujourdhui, dateCourte, dateLocale, heure, jourAbrege, jourComplet } from "@/lib/dates";
 import { monEquipe } from "@/lib/donnees/equipe";
+import { chargeDesPersonnes } from "@/lib/donnees/charge";
+import { Niveau } from "@/components/Charge";
+import { nombre } from "@/lib/charge";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { relancerEquipe } from "./actions";
@@ -26,7 +29,8 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
     );
   }
 
-  const e = await monEquipe(a);
+  const [e, ch] = await Promise.all([monEquipe(a), chargeDesPersonnes(a.equipeDirecte, 2)]);
+  const chargeDe = new Map(ch.lignes.map((l) => [l.id, l.charge.semaines]));
   const personnes = e.personnes.filter((p) => filtre === "tous" || (filtre === "sans" && !p.rapport) || (filtre === "bloc" && p.bloquees > 0));
   const filtres = [
     { id: "tous", libelle: `Tous · ${e.personnes.length}` },
@@ -64,6 +68,9 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
                 {f.libelle}
               </a>
             ))}
+            <a className="filtre" href="/charge">
+              Charge de travail →
+            </a>
           </nav>
           {relance ? (
             <span className="succes" role="status" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
@@ -89,27 +96,32 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
                   <span className="mono" style={{ width: 36, height: 36, fontSize: 12 }} aria-hidden="true">
                     {p.initiales}
                   </span>
-                  <span className="rangee__texte" style={{ flex: "1 1 200px" }}>
+                  <span className="rangee__texte" style={{ flex: "1 1 170px" }}>
                     <span className="rangee__titre">{p.nom}</span>
                     <span className="rangee__sous">{p.poste}</span>
                   </span>
-                  <span style={{ flex: "0 0 150px", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className={p.rapport ? "ton-ok" : "ton-retard"}>
+                  <span style={{ flex: "0 0 128px", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className={p.rapport ? "ton-ok" : "ton-retard"}>
                     <Icone nom={p.rapport ? "coche" : "horloge"} taille={16} />
                     {p.rapport ? (p.rapport.envoyeLe && dateLocale(p.rapport.envoyeLe) === jour ? `Reçu à ${heure(p.rapport.envoyeLe)}` : `Reçu ${p.rapport.envoyeLe ? jourAbrege(dateLocale(p.rapport.envoyeLe)).toLowerCase() : ""}`) : "Pas encore"}
                   </span>
-                  <span role="img" aria-label={`${p.faites} tâches faites sur ${p.total}`} style={{ flex: "0 0 140px", display: "flex", alignItems: "center", gap: 12 }}>
-                    <span className="barre" style={{ width: 88 }}>
+                  <span role="img" aria-label={`${p.faites} tâches faites sur ${p.total}`} style={{ flex: "0 0 112px", display: "flex", alignItems: "center", gap: 10 }}>
+                    <span className="barre" style={{ width: 64 }}>
                       <span style={{ width: `${p.total ? Math.round((p.faites / p.total) * 100) : 0}%` }} />
                     </span>
                     <span className="rangee__meta">
                       {p.faites}/{p.total}
                     </span>
                   </span>
-                  <span style={{ flex: "0 0 150px", fontSize: 13 }}>
+                  <span style={{ flex: "0 0 132px", fontSize: 13 }}>
                     {p.retard ? <span className="ton-retard">{p.retard} en retard</span> : null}
                     {p.retard && p.bloquees ? <span className="ton-discret"> · </span> : null}
                     {p.bloquees ? <span className="ton-veille">{p.bloquees} bloquée{p.bloquees > 1 ? "s" : ""}</span> : null}
                     {!p.retard && !p.bloquees ? <span className="ton-discret">—</span> : null}
+                  </span>
+                  <span style={{ flex: "0 0 168px", display: "flex", flexDirection: "column", gap: 4 }} aria-label="Charge">
+                    {(chargeDe.get(p.id) ?? []).map((w, i) => (
+                      <Niveau key={w.semaine} niveau={w.niveau} texte={`${i === 0 ? "Cette sem." : "Sem. proch."} ${nombre(w.heures)} / ${nombre(w.capacite)} h`} />
+                    ))}
                   </span>
                   <span style={{ flex: "0 0 auto", display: "flex", gap: 4 }}>
                     {p.projets.map((m) => (

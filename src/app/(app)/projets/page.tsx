@@ -5,6 +5,7 @@ import { aujourdhui, dateCourte, moisAnnee } from "@/lib/dates";
 import { portefeuille } from "@/lib/donnees/projets";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
+import { Chronologie } from "./Chronologie";
 
 export const metadata: Metadata = { title: "Projets" };
 
@@ -14,8 +15,9 @@ const SANTE = {
   dans_les_temps: { texte: "Dans les temps", classe: "ton-ok", point: "var(--ok-point)" },
 } as const;
 
-export default async function PagePortefeuille({ searchParams }: { searchParams: Promise<{ filtre?: string }> }) {
-  const { filtre = "tous" } = await searchParams;
+export default async function PagePortefeuille({ searchParams }: { searchParams: Promise<{ filtre?: string; vue?: string }> }) {
+  const { filtre = "tous", vue: v } = await searchParams;
+  const vue = v === "chronologie" ? "chronologie" : "cartes";
   const u = await exigerUtilisateur();
   const a = await acces(u);
   const tous = await portefeuille(a);
@@ -57,10 +59,18 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
         <div className="ligne-actions">
           <nav className="filtres" aria-label="Filtrer les projets">
             {filtres.map((f) => (
-              <a key={f.id} className="filtre" href={`/projets?filtre=${f.id}`} aria-current={filtre === f.id ? "true" : undefined}>
+              <a key={f.id} className="filtre" href={`/projets?filtre=${f.id}${vue === "chronologie" ? "&vue=chronologie" : ""}`} aria-current={filtre === f.id ? "true" : undefined}>
                 {f.libelle}
               </a>
             ))}
+          </nav>
+          <nav className="zoom" aria-label="Affichage">
+            <a href={`/projets?filtre=${filtre}`} aria-current={vue === "cartes" ? "true" : undefined}>
+              Cartes
+            </a>
+            <a href={`/projets?filtre=${filtre}&vue=chronologie`} aria-current={vue === "chronologie" ? "true" : undefined}>
+              Chronologie
+            </a>
           </nav>
           {a.toutVoir ? (
             <a href="/conseil" className="bouton-ambre">
@@ -68,7 +78,8 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
             </a>
           ) : null}
         </div>
-        <div className="grille-projets">
+        {vue === "chronologie" ? <Chronologie projets={projets} /> : null}
+        <div className="grille-projets" hidden={vue === "chronologie"}>
           {projets.map((p) => {
             const s = SANTE[p.sante];
             const glisse = p.glissementSemaines > 0;

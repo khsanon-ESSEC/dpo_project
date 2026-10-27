@@ -3,6 +3,8 @@ import { exigerUtilisateur } from "@/lib/auth/session";
 import { aujourdhui, echeanceRelative, jourComplet, lettreJour } from "@/lib/dates";
 import { activiteDeLaSemaine, compter, etatMonRapport, mesProjets, tachesDe, trier } from "@/lib/donnees/semaine";
 import { semaineCourante } from "@/lib/donnees/rapport";
+import { chargeDesPersonnes } from "@/lib/donnees/charge";
+import { Jauge } from "@/components/Charge";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { CaseTache } from "@/components/CaseTache";
 import { Icone } from "@/components/Icone";
@@ -19,7 +21,14 @@ export default async function PageSemaine() {
   const u = await exigerUtilisateur();
   const jour = aujourdhui();
   const semaine = semaineCourante();
-  const [taches, jours, projets, rapport] = await Promise.all([tachesDe([u.id]), activiteDeLaSemaine(u.id, semaine), mesProjets(u.id), etatMonRapport(u.id)]);
+  const [taches, jours, projets, rapport, maCharge] = await Promise.all([
+    tachesDe([u.id]),
+    activiteDeLaSemaine(u.id, semaine),
+    mesProjets(u.id),
+    etatMonRapport(u.id),
+    chargeDesPersonnes([u.id], 2),
+  ]);
+  const charge = maCharge.lignes[0]?.charge;
   const c = compter(taches, jour);
   const liste = trier(taches, jour);
   const envoye = rapport.rapport?.statut === "envoye";
@@ -111,6 +120,26 @@ export default async function PageSemaine() {
                 {envoye ? "Revoir" : "Relire et envoyer"}
               </a>
             </section>
+            {charge ? (
+              <section className="carte" aria-labelledby="t-charge">
+                <div className="carte__entete">
+                  <h2 id="t-charge" className="carte__titre">
+                    Ma charge
+                  </h2>
+                  <a href={`/equipe/${u.id}`} className="lien-discret">
+                    Détail →
+                  </a>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginTop: 12 }}>
+                  {charge.semaines.map((w, i) => (
+                    <div key={w.semaine} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <span className="rangee__sous">{i === 0 ? "Reste de la semaine" : "Semaine prochaine"}</span>
+                      <Jauge heures={w.heures} capacite={w.capacite} niveau={w.niveau} lien={`/equipe/${u.id}?semaine=${w.semaine}`} delai={i * 80} />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
             <section className="carte carte--liste" aria-labelledby="t-projets">
               <h2 id="t-projets" className="carte__titre">
                 Mes projets

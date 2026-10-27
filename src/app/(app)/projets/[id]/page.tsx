@@ -9,6 +9,7 @@ import { Anneau, Bandeau } from "@/components/Bandeau";
 import { CocheSeule } from "@/components/CaseTache";
 import { Icone } from "@/components/Icone";
 import { changerIndicateur, mettreAJourProjet } from "./actions";
+import { OngletsVues } from "./commun";
 
 export const metadata: Metadata = { title: "Projet" };
 
@@ -84,6 +85,12 @@ export default async function PageProjet({ params }: { params: Promise<{ id: str
         </div>
       </Bandeau>
       <div className="page">
+        <div className="ligne-actions">
+          <OngletsVues projetId={p.id} vue="apercu" />
+          <a href={`/taches/nouvelle?projet=${p.id}&retour=${encodeURIComponent(`/projets/${p.id}`)}`} className="bouton-contour">
+            <Icone nom="ajouter" taille={16} /> Nouvelle tâche
+          </a>
+        </div>
         <div className="colonnes">
           <div className="colonne-large">
             <section className="carte carte--liste" aria-labelledby="p-ind">
@@ -141,6 +148,9 @@ export default async function PageProjet({ params }: { params: Promise<{ id: str
                 <h2 id="p-taches" className="carte__titre">
                   Tâches · {f.nTaches}
                 </h2>
+                <a href={`/projets/${p.id}/liste`} className="lien-discret">
+                  Toutes les tâches →
+                </a>
               </div>
               <div role="img" aria-label={`${f.compte.faite} faites, ${f.compte.en_cours} en cours, ${f.compte.a_faire} à faire, ${f.compte.bloquee} bloquées`} style={{ margin: "14px 0 10px", display: "flex", height: 10, gap: 2 }}>
                 <span style={{ flex: f.compte.faite, background: "var(--arc)" }} />

@@ -83,6 +83,7 @@ export function FichePersonne({
     directeur: boolean;
     executif: boolean;
     administrateur: boolean;
+    capaciteHeures: number;
     actif: boolean;
     nbRapports: number;
     projetsDiriges: string[];
@@ -118,7 +119,15 @@ export function FichePersonne({
           <label htmlFor="poste">Poste</label>
           <input id="poste" name="poste" defaultValue={p.poste} disabled={!modifiable} maxLength={120} />
         </div>
-        <ChoixListe id="equipeId" nom="equipeId" libelle="Équipe" options={equipes} valeur={p.equipeId} vide="Sans équipe" desactive={!modifiable} />
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+          <div style={{ flex: "2 1 200px" }}>
+            <ChoixListe id="equipeId" nom="equipeId" libelle="Équipe" options={equipes} valeur={p.equipeId} vide="Sans équipe" desactive={!modifiable} />
+          </div>
+          <div className="champ" style={{ flex: "1 1 120px" }}>
+            <label htmlFor="capaciteHeures">Heures par semaine</label>
+            <input id="capaciteHeures" name="capaciteHeures" type="number" min={0} max={60} step={1} inputMode="numeric" defaultValue={p.capaciteHeures} disabled={!modifiable} />
+          </div>
+        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           <ChoixListe id="superieurId" nom="superieurId" libelle="Supérieur" options={personnes} valeur={p.superieurId} vide="Responsable de l'équipe" desactive={!modifiable} />
           <span className={p.superieurVacant && !p.superieurId ? "aide" : "aide"} style={{ fontSize: 12, color: "var(--discret)" }}>

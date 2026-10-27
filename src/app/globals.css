@@ -1549,3 +1549,663 @@ a.rangee:hover .rangee__titre {
     transform: none;
   }
 }
+
+/* ==========================================================================
+   Vues d'un projet, Gantt, tableau, calendrier, charge de travail
+   ========================================================================== */
+
+/* ---------- Onglets des vues ---------- */
+.vues {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--filet-fort);
+}
+.vues::-webkit-scrollbar {
+  display: none;
+}
+.vues a {
+  flex: none;
+  height: 44px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--discret);
+  font-size: 14px;
+  text-decoration: none;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.vues a:hover {
+  color: var(--encre);
+}
+.vues a[aria-current="page"] {
+  color: var(--encre);
+  font-weight: 500;
+  border-bottom-color: #f4b22d;
+}
+.zoom {
+  display: inline-flex;
+  border: 1px solid var(--controle);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+.zoom a {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--encre);
+  font-size: 13px;
+  text-decoration: none;
+}
+.zoom a[aria-current="true"] {
+  background: var(--actif);
+  color: var(--actif-encre);
+  font-weight: 500;
+}
+
+/* ---------- Niveaux de charge ---------- */
+.point-niveau {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  display: inline-block;
+  border-radius: 50%;
+}
+.point-niveau--libre {
+  border: 1px solid var(--controle);
+}
+.point-niveau--normale {
+  background: var(--ok-point);
+}
+.point-niveau--chargee {
+  background: var(--veille-point);
+}
+.point-niveau--surchargee {
+  background: var(--retard-point);
+}
+.niveau {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.niveau--normale,
+.niveau--libre {
+  color: var(--discret);
+}
+.niveau--chargee {
+  color: var(--veille);
+}
+.niveau--surchargee {
+  color: var(--retard);
+  font-weight: 500;
+}
+
+/* Tableau de charge : personnes × semaines */
+.defile-x {
+  overflow-x: auto;
+}
+.table-charge {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+.table-charge th,
+.table-charge td {
+  padding: 10px 8px;
+  border-top: 1px solid var(--filet);
+  text-align: left;
+  vertical-align: middle;
+  font-weight: 400;
+}
+.table-charge thead th {
+  border-top: 0;
+  padding-top: 0;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+.table-charge thead th small {
+  display: block;
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 400;
+}
+.table-charge .groupe th {
+  padding-top: 20px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--discret);
+  border-top: 0;
+}
+.table-charge th[scope="row"] {
+  min-width: 200px;
+}
+.personne-charge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--encre);
+  text-decoration: none;
+}
+a.personne-charge:hover .rangee__titre {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.jauge {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 72px;
+  color: var(--encre);
+  text-decoration: none;
+}
+.jauge__chiffre {
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: 300;
+  white-space: nowrap;
+}
+.jauge__chiffre small {
+  font-size: 11px;
+  color: var(--discret);
+}
+.jauge__piste {
+  position: relative;
+  height: 6px;
+  background: var(--piste);
+  overflow: hidden;
+}
+.jauge__rempli {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--ok-point);
+  transform-origin: left;
+  animation: remplir-jauge 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.jauge--chargee .jauge__rempli {
+  background: var(--veille-point);
+}
+.jauge--surchargee .jauge__rempli {
+  background: var(--retard-point);
+}
+.jauge--surchargee .jauge__chiffre {
+  color: var(--retard);
+  font-weight: 500;
+}
+.jauge--libre .jauge__chiffre {
+  color: var(--discret);
+}
+.jauge--choisie {
+  outline: 2px solid #f4b22d;
+  outline-offset: 4px;
+}
+@keyframes remplir-jauge {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* ---------- Gantt ---------- */
+.gantt {
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--surface-filet);
+}
+.gantt__interieur {
+  position: relative;
+  min-width: max-content;
+}
+.gantt__ligne {
+  position: relative;
+  display: flex;
+  min-height: 40px;
+  border-top: 1px solid var(--filet);
+}
+.gantt__ligne--entete {
+  border-top: 0;
+  min-height: 52px;
+}
+.gantt__nom {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  width: 260px;
+  flex: none;
+  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border-right: 1px solid var(--filet-fort);
+  font-size: 13px;
+  line-height: 17px;
+  color: var(--encre);
+  text-decoration: none;
+}
+.gantt__nom span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+a.gantt__nom:hover span {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.gantt__ligne--groupe {
+  background: var(--choisi);
+}
+.gantt__ligne--groupe .gantt__nom {
+  background: var(--choisi);
+  font-weight: 500;
+}
+.gantt__piste {
+  position: relative;
+  flex: none;
+}
+.gantt__repere {
+  position: absolute;
+  top: 52px;
+  bottom: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+.gantt__weekend {
+  background: var(--filet);
+  opacity: 0.55;
+}
+.gantt__aujourdhui {
+  top: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #f4b22d;
+  z-index: 2;
+}
+.gantt__fin {
+  width: 0;
+  border-left: 1.5px dashed var(--retard-point);
+  z-index: 1;
+}
+.gantt__mois,
+.gantt__graduation {
+  position: absolute;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--discret);
+  white-space: nowrap;
+}
+.gantt__mois {
+  top: 8px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding-left: 6px;
+  border-left: 1px solid var(--filet-fort);
+}
+.gantt__graduation {
+  top: 30px;
+  padding-left: 4px;
+}
+.gantt__barre {
+  position: absolute;
+  top: 10px;
+  height: 20px;
+  z-index: 1;
+  min-width: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 20px;
+  white-space: nowrap;
+  text-decoration: none;
+  border: 1.5px solid var(--arc);
+  background: var(--surface);
+  color: var(--encre);
+  transform-origin: left;
+  animation: remplir-jauge 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.gantt__barre--en_cours {
+  background: var(--arc);
+  color: var(--surface);
+}
+.gantt__barre--faite {
+  border-color: transparent;
+  background: var(--piste);
+  color: var(--discret);
+}
+.gantt__barre--bloquee {
+  border-color: var(--veille-point);
+  background: var(--veille-point);
+  color: #142458;
+}
+.gantt__barre--retard {
+  border-color: var(--retard-point);
+  background: var(--retard-point);
+  color: #ffffff;
+}
+.gantt__barre--projet {
+  top: 14px;
+  height: 12px;
+  border: 0;
+  background: var(--arc-2);
+  padding: 0;
+}
+.gantt__barre--prolongee {
+  top: 14px;
+  height: 12px;
+  border: 0;
+  padding: 0;
+  background: repeating-linear-gradient(135deg, var(--retard-point) 0 4px, transparent 4px 8px);
+}
+.gantt__jalon {
+  position: absolute;
+  top: 14px;
+  z-index: 2;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  transform: rotate(45deg);
+  background: var(--encre);
+}
+.gantt__jalon--initial {
+  background: var(--surface);
+  border: 1.5px solid var(--controle);
+}
+.gantt__jalon--lancement {
+  background: #f4b22d;
+}
+a.gantt__barre:hover,
+a.gantt__barre:focus-visible {
+  box-shadow: 0 0 0 2px var(--fond), 0 0 0 4px var(--arc-2);
+}
+.legende {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  font-size: 12px;
+  color: var(--discret);
+}
+.legende span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.legende i {
+  display: inline-block;
+  width: 18px;
+  height: 10px;
+  border: 1.5px solid var(--arc);
+}
+@media (max-width: 899px) {
+  .gantt__nom {
+    width: 150px;
+    padding: 6px 10px;
+  }
+}
+
+/* ---------- Tableau (colonnes par état) ---------- */
+.kanban {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+.kanban__colonne {
+  min-height: 260px;
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--choisi);
+  border: 1px solid var(--surface-filet);
+  transition: outline-color 160ms ease, background-color 160ms ease;
+  outline: 2px dashed transparent;
+  outline-offset: -2px;
+}
+.kanban__colonne[data-survol="true"] {
+  outline-color: var(--arc-2);
+  background: var(--relief);
+}
+.kanban__entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 4px;
+}
+.kanban__carte {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--surface-filet);
+  color: var(--encre);
+  animation: apparition 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.kanban__carte[draggable="true"] {
+  cursor: grab;
+}
+.kanban__carte[data-glisse="true"] {
+  opacity: 0.4;
+}
+.kanban__carte--retard {
+  box-shadow: inset 3px 0 0 var(--retard-point);
+}
+.kanban__carte--bloquee {
+  box-shadow: inset 3px 0 0 var(--veille-point);
+}
+.kanban__titre {
+  font-size: 14px;
+  line-height: 19px;
+  color: var(--encre);
+  text-decoration: none;
+}
+a.kanban__titre:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.kanban__pied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--discret);
+}
+.kanban__pied select {
+  flex: none;
+  margin-left: auto;
+  max-width: 120px;
+  min-height: 28px;
+  border: 1px solid var(--filet-fort);
+  background: transparent;
+  color: var(--encre);
+  font-size: 12px;
+}
+@media (max-width: 899px) {
+  .kanban {
+    grid-template-columns: repeat(4, 82%);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    margin: 0 -24px;
+    padding: 0 24px;
+  }
+  .kanban__colonne {
+    scroll-snap-align: start;
+  }
+}
+
+/* ---------- Calendrier ---------- */
+.calendrier {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) repeat(2, minmax(0, 0.55fr));
+  background: var(--surface);
+  border-top: 1px solid var(--surface-filet);
+  border-left: 1px solid var(--surface-filet);
+}
+.calendrier__tete {
+  padding: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--discret);
+  border-right: 1px solid var(--surface-filet);
+  border-bottom: 1px solid var(--surface-filet);
+}
+.calendrier__jour {
+  min-height: 116px;
+  min-width: 0;
+  padding: 6px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-right: 1px solid var(--surface-filet);
+  border-bottom: 1px solid var(--surface-filet);
+}
+.calendrier__jour--weekend {
+  background: var(--choisi);
+}
+.calendrier__jour--autre {
+  opacity: 0.45;
+}
+.calendrier__num {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--discret);
+}
+.calendrier__jour--aujourdhui .calendrier__num {
+  border-radius: 50%;
+  background: #f4b22d;
+  color: #142458;
+  font-weight: 600;
+}
+.puce {
+  display: block;
+  min-width: 0;
+  padding: 2px 6px;
+  overflow: hidden;
+  border-left: 3px solid var(--arc);
+  background: var(--relief);
+  color: var(--relief-encre);
+  font-size: 12px;
+  line-height: 17px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-decoration: none;
+}
+a.puce:hover {
+  text-decoration: underline;
+}
+.puce--faite {
+  border-left-color: transparent;
+  background: transparent;
+  color: var(--discret);
+  text-decoration: line-through;
+}
+.puce--bloquee {
+  border-left-color: var(--veille-point);
+}
+.puce--retard {
+  border-left-color: var(--retard-point);
+}
+.puce--jalon {
+  border-left-color: #f4b22d;
+  background: var(--tag);
+  color: var(--tag-encre);
+  font-weight: 500;
+}
+.agenda {
+  display: none;
+}
+@media (max-width: 899px) {
+  .calendrier {
+    display: none;
+  }
+  .agenda {
+    display: block;
+  }
+}
+
+/* ---------- Liste des tâches d'un projet ---------- */
+.liste-taches {
+  width: 100%;
+  border-collapse: collapse;
+}
+.liste-taches th,
+.liste-taches td {
+  padding: 12px 10px;
+  border-top: 1px solid var(--filet);
+  text-align: left;
+  vertical-align: middle;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 400;
+}
+.liste-taches thead th {
+  border-top: 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+.liste-taches .groupe th {
+  padding-top: 24px;
+  border-top: 0;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+.liste-taches a {
+  color: var(--encre);
+  text-decoration: none;
+}
+.liste-taches a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.liste-taches .nombre {
+  text-align: right;
+  white-space: nowrap;
+}
+@media (max-width: 899px) {
+  .liste-taches .facultatif {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jauge__rempli,
+  .gantt__barre,
+  .kanban__carte {
+    animation: none;
+  }
+}
+
+[hidden] {
+  display: none !important;
+}

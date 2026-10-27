@@ -8,6 +8,7 @@ import { aujourdhui, dateCourte, echeanceRelative, jourAbrege } from "@/lib/date
 import { dateLocale } from "@/lib/dates";
 import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet } from "@/lib/regles";
+import { retourValide } from "@/lib/retour";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { FormulaireTache } from "./FormulaireTache";
@@ -16,8 +17,10 @@ export const metadata: Metadata = { title: "Tâche" };
 
 const LIBELLE: Record<string, string> = { a_faire: "À faire", en_cours: "En cours", bloquee: "Bloquée", faite: "Faite" };
 
-export default async function PageTache({ params }: { params: Promise<{ id: string }> }) {
+export default async function PageTache({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ statut?: string; retour?: string }> }) {
   const { id } = await params;
+  const { statut: statutDemande, retour: retourDemande } = await searchParams;
+  const retour = retourValide(retourDemande);
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
   const a = await acces(u);
@@ -42,9 +45,16 @@ export default async function PageTache({ params }: { params: Promise<{ id: stri
         surtitre={projet?.titre ?? "Hors projet"}
         titre={t.titre}
         retour={
-          <a href="/semaine" className="retour">
-            <Icone nom="chevron-gauche" taille={18} /> Ma semaine
-          </a>
+          retour ? (
+            <a href={retour} className="retour">
+              <Icone nom="chevron-gauche" taille={18} />{" "}
+              {retour.startsWith("/projets/") && projet ? projet.titre : retour === "/charge" ? "Charge de travail" : retour.startsWith("/equipe") ? "Équipe" : "Ma semaine"}
+            </a>
+          ) : (
+            <a href="/semaine" className="retour">
+              <Icone nom="chevron-gauche" taille={18} /> Ma semaine
+            </a>
+          )
         }
       >
         <dl className="chiffres" style={{ marginTop: 20 }}>
@@ -58,6 +68,12 @@ export default async function PageTache({ params }: { params: Promise<{ id: stri
             <dt>chef de projet</dt>
             <dd style={{ fontSize: 22, lineHeight: "28px", fontWeight: 300 }}>{chef ? nomComplet(chef) : "—"}</dd>
           </div>
+          {t.estimationHeures ? (
+            <div className="chiffre">
+              <dt>temps estimé</dt>
+              <dd style={{ fontSize: 22, lineHeight: "28px", fontWeight: 300 }}>{t.estimationHeures} h</dd>
+            </div>
+          ) : null}
           {assigne.id !== u.id ? (
             <div className="chiffre">
               <dt>confiée à</dt>
@@ -67,7 +83,16 @@ export default async function PageTache({ params }: { params: Promise<{ id: stri
         </dl>
       </Bandeau>
       <div className="page" style={{ maxWidth: 760 }}>
-        <FormulaireTache tacheId={t.id} statut={t.statut} blocage={t.blocage ?? ""} echeance={t.echeance ?? ""} chefPrenom={chef && chef.id !== u.id ? nomComplet(chef) : null} />
+        <FormulaireTache
+          tacheId={t.id}
+          statut={statutDemande === "bloquee" ? "bloquee" : t.statut}
+          blocage={t.blocage ?? ""}
+          echeance={t.echeance ?? ""}
+          debut={t.debut ?? ""}
+          estimationHeures={t.estimationHeures}
+          chefPrenom={chef && chef.id !== u.id ? nomComplet(chef) : null}
+          retour={retour ?? null}
+        />
         <section aria-labelledby="t-historique">
           <h2 id="t-historique" className="carte__titre">
             Historique

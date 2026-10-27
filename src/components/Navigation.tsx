@@ -63,7 +63,7 @@ export function Onglets({ elements }: { elements: ElementNav[] }) {
 /** Écran courant, pour adapter les suggestions de l'assistant. */
 export function ecranDepuisChemin(pathname: string): string {
   if (pathname.startsWith("/rapport")) return "rapport";
-  if (pathname.startsWith("/equipe")) return "equipe";
+  if (pathname.startsWith("/equipe") || pathname.startsWith("/charge")) return "equipe";
   if (pathname.startsWith("/projets/")) return "projet";
   if (pathname.startsWith("/projets")) return "portefeuille";
   if (pathname.startsWith("/conseil")) return "conseil";

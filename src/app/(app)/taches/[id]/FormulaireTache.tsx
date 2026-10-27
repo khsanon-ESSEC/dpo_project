@@ -11,12 +11,31 @@ const ETATS = [
   { id: "faite", libelle: "Faite", icone: "coche" },
 ];
 
-export function FormulaireTache({ tacheId, statut, blocage, echeance, chefPrenom }: { tacheId: string; statut: string; blocage: string; echeance: string; chefPrenom: string | null }) {
+export function FormulaireTache({
+  tacheId,
+  statut,
+  blocage,
+  echeance,
+  debut,
+  estimationHeures,
+  chefPrenom,
+  retour,
+}: {
+  tacheId: string;
+  statut: string;
+  blocage: string;
+  echeance: string;
+  debut: string;
+  estimationHeures: number | null;
+  chefPrenom: string | null;
+  retour: string | null;
+}) {
   const [etat, action, enCours] = useActionState<EtatTache, FormData>(enregistrerTache, { message: null });
   const [choix, setChoix] = useState(statut);
   return (
     <form action={action} style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <input type="hidden" name="tacheId" value={tacheId} />
+      {retour ? <input type="hidden" name="retour" value={retour} /> : null}
       {etat.message ? (
         <p className="erreur" role="alert">
           {etat.message}
@@ -51,14 +70,22 @@ export function FormulaireTache({ tacheId, statut, blocage, echeance, chefPrenom
         </div>
       ) : null}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
-        <div className="champ" style={{ flex: "1 1 200px" }}>
+        <div className="champ" style={{ flex: "1 1 160px" }}>
+          <label htmlFor="debut">Début</label>
+          <input id="debut" name="debut" type="date" defaultValue={debut} />
+        </div>
+        <div className="champ" style={{ flex: "1 1 160px" }}>
           <label htmlFor="echeance">Échéance</label>
           <input id="echeance" name="echeance" type="date" defaultValue={echeance} />
         </div>
-        <div className="champ" style={{ flex: "2 1 300px" }}>
-          <label htmlFor="note">Où en êtes-vous ? (facultatif)</label>
-          <input id="note" name="note" type="text" maxLength={500} placeholder="Par exemple : aux trois quarts" />
+        <div className="champ" style={{ flex: "1 1 140px" }}>
+          <label htmlFor="estimationHeures">Temps estimé (heures)</label>
+          <input id="estimationHeures" name="estimationHeures" type="number" min={1} max={400} step={1} inputMode="numeric" defaultValue={estimationHeures ?? ""} />
         </div>
+      </div>
+      <div className="champ">
+        <label htmlFor="note">Où en êtes-vous ? (facultatif)</label>
+        <input id="note" name="note" type="text" maxLength={500} placeholder="Par exemple : aux trois quarts" />
       </div>
       <button type="submit" className="bouton-ambre bouton-ambre--large" disabled={enCours}>
         {enCours ? "Enregistrement…" : "Enregistrer"}

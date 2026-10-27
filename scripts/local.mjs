@@ -14,6 +14,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
 import postgres from "postgres";
+import { VERSION_DONNEES_EXEMPLE } from "./version-donnees.mjs";
 
 const racine = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const dossierLocal = path.join(racine, ".local");
@@ -122,9 +123,30 @@ try {
 }
 
 const admin = postgres(`postgres://dpo:${MOT_DE_PASSE_BASE}@127.0.0.1:${portBase}/postgres`, { max: 1, onnotice: () => {} });
-const [existe] = await admin`select 1 from pg_database where datname = 'dpo'`;
+let [existe] = await admin`select 1 from pg_database where datname = 'dpo'`;
+// Données de démonstration d'une version plus ancienne : on repart d'une base neuve.
+if (existe) {
+  const versionActuelle = await lireVersionDonnees();
+  if (versionActuelle !== null && versionActuelle < VERSION_DONNEES_EXEMPLE) {
+    dire("Nouvelles données de démonstration : la base locale est recréée.");
+    await admin.unsafe("drop database dpo with (force)");
+    existe = undefined;
+  }
+}
 if (!existe) await admin.unsafe("create database dpo");
 await admin.end();
+
+async function lireVersionDonnees() {
+  const c = postgres(`postgres://dpo:${MOT_DE_PASSE_BASE}@127.0.0.1:${portBase}/dpo`, { max: 1, onnotice: () => {} });
+  try {
+    const [r] = await c`select coalesce((details->>'version')::int, 1) as v from journal where action = 'donnees_exemple' order by id desc limit 1`;
+    return r ? r.v : null;
+  } catch {
+    return null; // base vide ou pas encore migrée
+  } finally {
+    await c.end();
+  }
+}
 
 // ---------- 2. Schéma et données de démonstration ----------
 const envScripts = { ...process.env, DATABASE_URL, DATE_DEMO };

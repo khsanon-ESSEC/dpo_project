@@ -7,6 +7,8 @@ import { monEquipe } from "@/lib/donnees/equipe";
 import { ficheProjet, portefeuille } from "@/lib/donnees/projets";
 import { lignesDuProjetCetteSemaine, lignesDuRapport, obtenirOuCreerRapport, PARTIES } from "@/lib/donnees/rapport";
 import { tachesDe } from "@/lib/donnees/semaine";
+import { chargeDesPersonnes } from "@/lib/donnees/charge";
+import { LIBELLE_NIVEAU } from "@/lib/charge";
 
 const STATUT: Record<string, string> = { a_faire: "à faire", en_cours: "en cours", bloquee: "bloquée", faite: "faite" };
 const SANTE: Record<string, string> = { dans_les_temps: "dans les temps", a_surveiller: "à surveiller", en_retard: "en retard" };
@@ -41,6 +43,18 @@ export async function contexteAssistant(u: Utilisateur, ecran: string, chemin: s
         e.personnes.map((p) => `- ${p.nom} : rapport ${p.rapport ? "reçu" : "non reçu"}, ${p.faites}/${p.total} tâches faites, ${p.retard} en retard, ${p.bloquees} bloquée(s)`).join("\n") +
         (e.blocages.length ? "\nBlocages :\n" + e.blocages.map((b) => `- ${b.titre} (${b.qui}, ${b.projet ?? "hors projet"})`).join("\n") : ""),
     );
+  }
+
+  // Charge de travail des personnes que je suis (écran Équipe ou Charge).
+  if (ecran === "equipe" && (a.toutVoir || a.directeur || a.equipeDirecte.length)) {
+    const ids = a.suivis === "toutes" ? null : [...a.suivis];
+    if (ids) {
+      const { semaines, lignes } = await chargeDesPersonnes(ids, 3);
+      blocs.push(
+        `Charge de travail (heures de tâches prévues / heures disponibles ; semaines du ${semaines.map((x) => dateLongue(x)).join(", du ")}) :\n` +
+          lignes.map((l) => `- ${l.nom} : ${l.charge.semaines.map((w) => `${w.heures}/${w.capacite} h (${LIBELLE_NIVEAU[w.niveau].toLowerCase()})`).join(" ; ")}`).join("\n"),
+      );
+    }
   }
 
   const id = chemin.match(/^\/projets\/([0-9a-f-]{36})/)?.[1];

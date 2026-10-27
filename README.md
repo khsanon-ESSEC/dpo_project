@@ -7,7 +7,9 @@ Application web de suivi des projets de la DPO (UNIBANK) :
 - **Mon équipe** : qui a envoyé son rapport, les blocages, les retards, avec relance.
 - **Projets** : portefeuille, fiches projet, indicateurs vérifiables, glissement des dates.
 - **Rapport au conseil** : rapport mensuel des projets stratégiques, au format du tableau Word de la banque.
-- **Organisation** : personnes, équipes, supérieurs et rôles.
+- **Vues d'un projet** : vue d'ensemble, liste, tableau (colonnes par état, avec glisser-déposer), Gantt (jours, semaines ou mois), calendrier des échéances, charge de l'équipe du projet. Le portefeuille a aussi une chronologie de tous les projets.
+- **Charge de travail** : les heures de tâches prévues pour chaque personne, semaine par semaine, comparées à ses heures disponibles ; repère qui est chargé ou surchargé, et l'indique au moment de confier une tâche.
+- **Organisation** : personnes, équipes, supérieurs, rôles et heures disponibles par semaine.
 - **Assistant** (facultatif) : un bouton flottant sur chaque écran, branché sur le fournisseur d'IA choisi par la banque.
 
 Application multipage (chaque écran est une page rendue par le serveur), en français, avec thème clair et sombre. Elle fonctionne sur ordinateur et sur téléphone.
@@ -30,6 +32,19 @@ Les rôles se cumulent. Chaque personne a **un seul** supérieur. Si le poste de
 Ces règles sont écrites dans `src/lib/regles.ts` et vérifiées par les tests (`tests/`).
 
 ---
+
+## Charge de travail : comment elle est calculée
+
+- Chaque tâche peut avoir un **début** et un **temps estimé** (en heures). Sans estimation, elle compte pour 4 heures, et l'écran le signale.
+- Les heures sont réparties sur les jours ouvrés (lundi à vendredi) entre le début et l'échéance. Sans début, la tâche commence assez tôt pour tenir à 8 heures par jour.
+- Rien n'est placé dans le passé : une tâche en retard est à rattraper tout de suite ; cette semaine, seules les heures des jours qui restent sont disponibles.
+- Les tâches bloquées ne comptent pas tant qu'elles le restent (elles attendent quelqu'un d'autre).
+- Chaque personne a ses **heures disponibles par semaine** (40 par défaut), réglées dans *Organisation*.
+- Niveaux : jusqu'à 85 % des heures disponibles, charge normale ; de 85 à 100 %, chargée ; au-delà, surchargée.
+
+L'écran *Charge* est ouvert aux chefs d'équipe, directeurs et exécutifs, pour les personnes qu'ils suivent. Dans la vue *Charge* d'un projet, le chef de projet voit les heures de chacun sur son projet et seulement le **niveau** de charge totale des personnes qu'il ne suit pas, sans le détail de leurs autres projets.
+
+Ces règles sont écrites dans `src/lib/charge.ts` et vérifiées par les tests.
 
 ## Installation (service informatique)
 
@@ -190,6 +205,7 @@ src/components/     navigation, assistant, cases à cocher, thème
 src/db/             schéma de la base (Drizzle)
 src/lib/regles.ts   qui voit quoi (sans base, testé)
 src/lib/acces.ts    couche d'accès utilisée par toutes les pages
+src/lib/charge.ts   calcul de la charge de travail (sans base, testé)
 src/lib/donnees/    lectures et écritures par domaine
 src/lib/ia.ts       connecteur d'IA interchangeable
 scripts/            migration, création d'utilisateur, données de démonstration

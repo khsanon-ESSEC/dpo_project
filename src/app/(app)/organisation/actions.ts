@@ -13,6 +13,11 @@ async function exigerAdministrateur() {
 }
 
 const ou = (v: FormDataEntryValue | null) => (v ? String(v) : null);
+/** Heures disponibles par semaine pour les tâches : de 0 à 60, 40 par défaut. */
+const capacite = (v: FormDataEntryValue | null) => {
+  const n = Math.round(Number(String(v ?? "").replace(",", ".")));
+  return Number.isFinite(n) && n >= 0 && n <= 60 ? n : 40;
+};
 
 export type EtatFiche = { message: string | null; ok?: boolean; provisoire?: string };
 
@@ -27,6 +32,7 @@ export async function enregistrerPersonne(_: EtatFiche, form: FormData): Promise
       directeur: form.get("directeur") === "on",
       executif: form.get("executif") === "on",
       administrateur: form.get("administrateur") === "on",
+      capaciteHeures: capacite(form.get("capaciteHeures")),
       actif: form.get("actif") === "on",
     });
   } catch (e) {
