@@ -7,8 +7,8 @@ export function FormulaireConnexion() {
   const [etat, action, enCours] = useActionState<EtatConnexion, FormData>(seConnecter, { message: null });
   const [visible, setVisible] = useState(false);
   return (
-    <form action={action} style={{ width: "100%", maxWidth: 380, display: "flex", flexDirection: "column", gap: 28 }}>
-      <h2 style={{ margin: 0, fontSize: 34, lineHeight: "40px", fontWeight: 200, letterSpacing: "-0.01em" }}>Connexion</h2>
+    <form action={action} className="connexion__formulaire">
+      <h2 className="connexion__soustitre">Connexion</h2>
       {etat.message ? (
         <p className="erreur" role="alert">
           {etat.message}
@@ -16,7 +16,7 @@ export function FormulaireConnexion() {
       ) : null}
       <div className="champ">
         <label htmlFor="courriel">Adresse courriel</label>
-        <input id="courriel" name="courriel" type="email" autoComplete="username" required placeholder="prenom.nom@unibankhaiti.com" />
+        <input id="courriel" name="courriel" type="email" autoComplete="username" required placeholder="prenom.nom@unibankhaiti.com" defaultValue={etat.courriel ?? ""} key={etat.courriel ?? ""} />
       </div>
       <div className="champ">
         <label htmlFor="motDePasse">Mot de passe</label>
