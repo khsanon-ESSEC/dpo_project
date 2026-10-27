@@ -8,7 +8,7 @@
 // Paramètres facultatifs dans .env.local (même format que .env.example), par exemple IA_FOURNISSEUR.
 // Jamais en production : voir README.md, « Installation ».
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, cpSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, cpSync, statSync } from "node:fs";
 import { createServer } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,13 +52,28 @@ function portLibre(depart) {
 
 const envLocal = lireEnvLocal();
 const vraieDate = process.argv.includes("--vraie-date");
-const portBase = Number(envLocal.PORT_BASE_LOCALE || 54329);
+// Ports libres : on part des valeurs par défaut et on avance si un autre programme les occupe déjà.
+const portBase = await portLibre(Number(envLocal.PORT_BASE_LOCALE || 54329));
 const portApp = await portLibre(Number(envLocal.PORT || 3000));
 const MOT_DE_PASSE_BASE = "dpo-local";
 const DATABASE_URL = `postgres://dpo:${MOT_DE_PASSE_BASE}@127.0.0.1:${portBase}/dpo`;
 const DATE_DEMO = vraieDate ? "" : envLocal.DATE_DEMO ?? "2026-10-30";
 
 // ---------- 1. Base PostgreSQL embarquée ----------
+const journalPg = [];
+const fichierJournalPg = path.join(dossierLocal, "postgres.log");
+function noterPg(m) {
+  const texte = String(m ?? "").trim();
+  if (!texte) return;
+  journalPg.push(texte);
+  if (journalPg.length > 200) journalPg.shift();
+  try {
+    appendFileSync(fichierJournalPg, texte + "\n");
+  } catch {
+    /* journal facultatif */
+  }
+}
+const derniersMessagesPg = () => journalPg.slice(-25).join("\n");
 const pg = new EmbeddedPostgres({
   databaseDir: dossierBase,
   user: "dpo",
@@ -66,11 +81,11 @@ const pg = new EmbeddedPostgres({
   port: portBase,
   persistent: true,
   initdbFlags: ["--encoding=UTF8", "--locale=C"],
-  onLog: () => {},
-  onError: (e) => {
-    const m = String(e ?? "").trim();
-    if (m && !/^(LOG|DEBUG|NOTICE):/.test(m) && !m.includes(" LOG: ")) console.error(`  [postgres] ${m}`);
-  },
+  // TCP sur 127.0.0.1 seulement, sans socket Unix : rien d'exposé hors du poste, pas de conflit dans /tmp.
+  postgresFlags: ["-c", "listen_addresses=127.0.0.1", "-c", "unix_socket_directories="],
+  // Messages de PostgreSQL : gardés en mémoire et dans .local/postgres.log, affichés en cas d'échec.
+  onLog: (m) => noterPg(m),
+  onError: (e) => noterPg(e instanceof Error ? e.message : e),
 });
 
 let serveur = null;
@@ -91,13 +106,19 @@ for (const s of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(s, () => arreter(0))
 
 if (!existsSync(path.join(dossierBase, "PG_VERSION"))) {
   dire("Création de la base locale (première fois seulement)…");
-  await pg.initialise();
+  try {
+    await pg.initialise();
+  } catch (e) {
+    console.error(derniersMessagesPg());
+    echouer(`La base locale n'a pas pu être créée${e?.message ? ` : ${e.message}` : ""}.`);
+  }
 }
 dire(`Démarrage de PostgreSQL sur le port ${portBase}…`);
 try {
   await pg.start();
 } catch (e) {
-  echouer(`PostgreSQL n'a pas démarré : ${e?.message ?? e}. Un autre lancement tourne peut-être déjà ; fermez-le et réessayez.`);
+  console.error(derniersMessagesPg());
+  echouer(`PostgreSQL n'a pas démarré${e?.message ? ` : ${e.message}` : ""}. Messages ci-dessus, et dans .local/postgres.log.`);
 }
 
 const admin = postgres(`postgres://dpo:${MOT_DE_PASSE_BASE}@127.0.0.1:${portBase}/postgres`, { max: 1, onnotice: () => {} });
