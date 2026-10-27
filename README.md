@@ -137,6 +137,15 @@ Choisir le fournisseur avec la Direction des risques et la conformité : les don
 
 ---
 
+## Essai sur un poste (sans Docker ni PostgreSQL)
+
+Pour essayer l'application sur un ordinateur, avec les données de démonstration :
+
+- **Mac** : double-cliquer sur `lancer-sur-mac.command` dans le Finder. La première fois, il installe Node.js 22 si besoin (via nvm s'il est présent, sinon une copie rangée dans le dossier), les dépendances et une base PostgreSQL embarquée, compile l'application (quelques minutes) puis l'ouvre dans le navigateur. Les fois suivantes, il démarre en quelques secondes.
+- **Autre système**, avec Node.js 22 : `npm ci` puis `npm run local`.
+
+Tout reste dans le dossier `.local/` du projet : la base, le journal du lancement (`.local/lancement.log`). Ctrl+C dans la fenêtre arrête l'application et la base. Pour repartir de données neuves : supprimer `.local/postgres` et relancer. La date est figée au vendredi 30 octobre 2026 pour que la démonstration ait du sens ; `npm run local -- --vraie-date` utilise la date du jour. Pour essayer l'assistant, mettre les paramètres `IA_…` dans un fichier `.env.local`.
+
 ## Démonstration
 
 Sur une base **vide** et jamais en production :

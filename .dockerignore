@@ -9,3 +9,4 @@ tests
 *.log
 *.tsbuildinfo
 .DS_Store
+.local

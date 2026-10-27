@@ -1,0 +1,198 @@
+// Lance l'application sur un poste, pour essai, sans installer PostgreSQL :
+// une base PostgreSQL 16 embarquée (paquet embedded-postgres) vit dans le dossier .local/.
+// Au premier lancement, la base est créée et remplie avec les données de démonstration.
+//
+// Usage : npm run local            (Ctrl+C pour arrêter)
+//         npm run local -- --vraie-date   pour ne pas figer la date au vendredi 30 octobre 2026
+//
+// Paramètres facultatifs dans .env.local (même format que .env.example), par exemple IA_FOURNISSEUR.
+// Jamais en production : voir README.md, « Installation ».
+import { spawn, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, readdirSync, cpSync, statSync } from "node:fs";
+import { createServer } from "node:net";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import EmbeddedPostgres from "embedded-postgres";
+import postgres from "postgres";
+
+const racine = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+const dossierLocal = path.join(racine, ".local");
+const dossierBase = path.join(dossierLocal, "postgres");
+mkdirSync(dossierLocal, { recursive: true });
+
+const dire = (m) => console.log(`\x1b[36m▸\x1b[0m ${m}`);
+const echouer = (m) => {
+  console.error(`\x1b[31m✗ ${m}\x1b[0m`);
+  process.exit(1);
+};
+
+// ---------- Paramètres ----------
+function lireEnvLocal() {
+  const f = path.join(racine, ".env.local");
+  if (!existsSync(f)) return {};
+  const vals = {};
+  for (const ligne of readFileSync(f, "utf8").split("\n")) {
+    const m = ligne.match(/^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)\s*$/);
+    if (m) vals[m[1]] = m[2].replace(/^["']|["']$/g, "");
+  }
+  return vals;
+}
+
+function portLibre(depart) {
+  return new Promise((resolve) => {
+    const essayer = (p) => {
+      const s = createServer();
+      s.once("error", () => essayer(p + 1));
+      s.once("listening", () => s.close(() => resolve(p)));
+      s.listen(p, "127.0.0.1");
+    };
+    essayer(depart);
+  });
+}
+
+const envLocal = lireEnvLocal();
+const vraieDate = process.argv.includes("--vraie-date");
+const portBase = Number(envLocal.PORT_BASE_LOCALE || 54329);
+const portApp = await portLibre(Number(envLocal.PORT || 3000));
+const MOT_DE_PASSE_BASE = "dpo-local";
+const DATABASE_URL = `postgres://dpo:${MOT_DE_PASSE_BASE}@127.0.0.1:${portBase}/dpo`;
+const DATE_DEMO = vraieDate ? "" : envLocal.DATE_DEMO ?? "2026-10-30";
+
+// ---------- 1. Base PostgreSQL embarquée ----------
+const pg = new EmbeddedPostgres({
+  databaseDir: dossierBase,
+  user: "dpo",
+  password: MOT_DE_PASSE_BASE,
+  port: portBase,
+  persistent: true,
+  initdbFlags: ["--encoding=UTF8", "--locale=C"],
+  onLog: () => {},
+  onError: (e) => {
+    const m = String(e ?? "").trim();
+    if (m && !/^(LOG|DEBUG|NOTICE):/.test(m) && !m.includes(" LOG: ")) console.error(`  [postgres] ${m}`);
+  },
+});
+
+let serveur = null;
+let arretEnCours = false;
+async function arreter(code = 0) {
+  if (arretEnCours) return;
+  arretEnCours = true;
+  dire("Arrêt…");
+  if (serveur && serveur.exitCode === null) serveur.kill("SIGTERM");
+  try {
+    await pg.stop();
+  } catch {
+    /* déjà arrêtée */
+  }
+  process.exit(code);
+}
+for (const s of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(s, () => arreter(0));
+
+if (!existsSync(path.join(dossierBase, "PG_VERSION"))) {
+  dire("Création de la base locale (première fois seulement)…");
+  await pg.initialise();
+}
+dire(`Démarrage de PostgreSQL sur le port ${portBase}…`);
+try {
+  await pg.start();
+} catch (e) {
+  echouer(`PostgreSQL n'a pas démarré : ${e?.message ?? e}. Un autre lancement tourne peut-être déjà ; fermez-le et réessayez.`);
+}
+
+const admin = postgres(`postgres://dpo:${MOT_DE_PASSE_BASE}@127.0.0.1:${portBase}/postgres`, { max: 1, onnotice: () => {} });
+const [existe] = await admin`select 1 from pg_database where datname = 'dpo'`;
+if (!existe) await admin.unsafe("create database dpo");
+await admin.end();
+
+// ---------- 2. Schéma et données de démonstration ----------
+const envScripts = { ...process.env, DATABASE_URL, DATE_DEMO };
+const lancer = (script) => spawnSync(process.execPath, [path.join(racine, "scripts", script)], { cwd: racine, env: envScripts, stdio: "inherit" }).status;
+
+dire("Mise à jour du schéma…");
+if (lancer("migrer.mjs") !== 0) await arreter(1);
+
+const base = postgres(DATABASE_URL, { max: 1, onnotice: () => {} });
+const [{ n }] = await base`select count(*)::int as n from personnes`;
+await base.end();
+if (n === 0) {
+  dire("Données de démonstration…");
+  if (lancer("semer.mjs") !== 0) await arreter(1);
+}
+
+// ---------- 3. Application compilée ----------
+const standalone = path.join(racine, ".next", "standalone");
+const buildId = path.join(racine, ".next", "BUILD_ID");
+// Recompiler si rien n'est compilé, ou si le code a changé depuis (après une mise à jour, par exemple).
+const plusRecent = () => {
+  const reference = statSync(buildId).mtimeMs;
+  for (const dossier of ["src", "public"]) {
+    for (const f of readdirSync(path.join(racine, dossier), { recursive: true })) {
+      if (statSync(path.join(racine, dossier, String(f))).mtimeMs > reference) return true;
+    }
+  }
+  return ["package.json", "next.config.ts"].some((f) => statSync(path.join(racine, f)).mtimeMs > reference);
+};
+if (!existsSync(path.join(standalone, "server.js")) || !existsSync(buildId) || plusRecent()) {
+  dire("Compilation de l'application (quelques minutes)…");
+  const r = spawnSync("npm", ["run", "build"], { cwd: racine, stdio: "inherit", env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" } });
+  if (r.status !== 0) await arreter(1);
+}
+// Le serveur autonome a besoin des fichiers publics et statiques à côté de lui.
+cpSync(path.join(racine, "public"), path.join(standalone, "public"), { recursive: true });
+cpSync(path.join(racine, ".next", "static"), path.join(standalone, ".next", "static"), { recursive: true });
+
+const adresse = `http://localhost:${portApp}`;
+dire(`Démarrage de l'application sur ${adresse}…`);
+serveur = spawn(process.execPath, [path.join(standalone, "server.js")], {
+  cwd: standalone,
+  stdio: ["ignore", "ignore", "inherit"],
+  env: {
+    ...process.env,
+    IA_FOURNISSEUR: "aucun",
+    ...envLocal,
+    NODE_ENV: "production",
+    DATABASE_URL,
+    DATE_DEMO,
+    PORT: String(portApp),
+    HOSTNAME: "127.0.0.1",
+    APP_URL: adresse,
+    COOKIE_SECURISE: "0",
+    APP_TZ: envLocal.APP_TZ || "America/Port-au-Prince",
+  },
+});
+serveur.on("exit", (code, signal) => {
+  if (arretEnCours) return;
+  if (signal) return arreter(0); // Ctrl+C ou fermeture de la fenêtre
+  console.error(`L'application s'est arrêtée (code ${code}).`);
+  arreter(code ?? 1);
+});
+
+// Attendre que l'application réponde, puis ouvrir le navigateur.
+let prete = false;
+for (let i = 0; i < 60 && !prete; i++) {
+  await new Promise((r) => setTimeout(r, 500));
+  prete = await fetch(`${adresse}/api/sante`).then((r) => r.ok).catch(() => false);
+}
+if (!prete) echouer("L'application ne répond pas. Voir les messages ci-dessus.");
+
+console.log(`
+\x1b[32m✓ Pilotage des projets DPO est prêt : ${adresse}\x1b[0m
+${DATE_DEMO ? `  Date figée au ${DATE_DEMO} (démonstration). Pour la vraie date : npm run local -- --vraie-date\n` : ""}
+  Comptes de démonstration (mot de passe : Demo-DPO-2026)
+    daphnee.joseph@demo.dpo.local       chargée de projets
+    myriam.valcin@demo.dpo.local        cheffe d'équipe et cheffe de projet
+    marc-antoine.louis@demo.dpo.local   directeur (Solutions technologiques)
+    nadege.augustin@demo.dpo.local      directrice de la division, administratrice
+    frantz.desrosiers@demo.dpo.local    exécutif et administrateur
+    jean-robert.noel@demo.dpo.local     analyste et administrateur
+
+  Pour arrêter : Ctrl+C dans cette fenêtre (ou fermez-la).
+  Pour repartir de zéro : supprimez le dossier .local/postgres, puis relancez.
+`);
+
+if (process.platform === "darwin" && !process.argv.includes("--sans-navigateur")) spawn("open", [adresse], { stdio: "ignore", detached: true }).unref();
+else if (process.platform === "win32" && !process.argv.includes("--sans-navigateur")) spawn("cmd", ["/c", "start", "", adresse], { stdio: "ignore", detached: true }).unref();
+
+// Garder le processus en vie tant que l'application tourne.
+await new Promise(() => {});

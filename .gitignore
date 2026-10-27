@@ -9,3 +9,6 @@ next-env.d.ts
 coverage/
 *.log
 .DS_Store
+
+# Essai local (base embarquée, journaux)
+.local/
