@@ -95,6 +95,20 @@ Construite après la revue, avec les mêmes exigences. `src/lib/auth/google.ts`,
 - **[vérifié]** contre un fournisseur OpenID factice local (même protocole, jetons signés RS256) : connexion d'un compte inscrit ; refus d'un compte personnel, d'un compte de la banque non inscrit, d'une personne hors division sans accès, d'un `state` falsifié, d'un retour sans début ; annulation ; pas de détour par le mot de passe provisoire après Google ; 8 tests unitaires des exigences sur le jeton (`tests/google.test.ts`).
 - **[à vérifier]** avec le vrai client OAuth de la banque, une fois créé par l'informatique : l'essai ci-dessus n'a pas pu passer par les serveurs de Google.
 
+## Connexion avec le compte Windows de la banque (Active Directory, ajoutée le 27 octobre 2026)
+
+`src/lib/auth/ad.ts`, `src/lib/auth/ad-regles.ts`, action `seConnecterAD` (`src/app/connexion/actions.ts`).
+
+- **Transport** : LDAPS seulement (une adresse `ldap://` est ignorée), certificat du serveur vérifié (autorité de la banque dans `AD_CA`), TLS 1.2 au moins, délais de connexion et de réponse bornés, plusieurs contrôleurs essayés dans l'ordre.
+- **Liaison** : la personne se lie avec son propre identifiant ; aucun compte de service n'est stocké ; le mot de passe n'est ni gardé ni journalisé.
+- **Liaison anonyme** : un mot de passe vide n'est **jamais** envoyé. Active Directory accepte une liaison sans mot de passe comme anonyme ; sans ce garde-fou, n'importe qui ouvrirait n'importe quel compte.
+- **Injection LDAP** : l'identifiant est limité à lettres, chiffres, point et tirets ; le filtre de recherche est construit par la bibliothèque (`ldapts`), jamais par concaténation.
+- **Refus** : identifiant inconnu et mauvais mot de passe ont la même réponse ; compte désactivé, verrouillé, expiré ou au mot de passe à changer : message clair, à partir du code de diagnostic d'AD ; groupe AD facultatif (`AD_GROUPE`, groupes imbriqués acceptés).
+- **Verrouillage** : trois échecs par identifiant mettent cet identifiant en attente 15 minutes (`AD_ESSAIS_MAX`), sous le seuil de verrouillage d'AD : l'application ne peut pas servir à verrouiller des comptes Windows. Le compteur est en mémoire (un seul serveur d'application).
+- **Comptes** : aucun compte créé ; l'adresse AD doit être celle d'une personne existante et active ; hors division seulement avec un accès ouvert. Connexions et refus au journal, avec la méthode et l'identifiant (jamais le mot de passe).
+- **[vérifié]** 9 tests unitaires (`tests/ad.test.ts`) et 11 tests d'intégration contre un annuaire factice en LDAPS (`tests/ad-annuaire.test.ts`, `scripts/essai/annuaire-factice.mjs`) : connexion sous les trois formes d'identifiant ; mauvais mot de passe ; mot de passe vide jamais transmis (l'annuaire factice, comme AD, l'aurait accepté) ; compte désactivé ; mot de passe expiré ; groupe exigé ; UPN sans adresse ; limite d'essais ; bascule vers le second contrôleur ; **certificat d'une autre autorité refusé**, et sans autorité configurée ; LDAP en clair ignoré ; saisie d'injection rejetée sans rien envoyer. Parcours de bout en bout (17 vérifications, ordinateur et téléphone).
+- **[à vérifier]** avec l'annuaire réel de la banque : l'annuaire factice se lie par DN (`AD_LIAISON`), alors que la configuration par défaut se lie par UPN, comme Active Directory l'accepte ; la recherche par groupes imbriqués (`LDAP_MATCHING_RULE_IN_CHAIN`) n'existe que dans AD.
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.

@@ -26,7 +26,7 @@ export type Utilisateur = {
   externe?: boolean;
   theme: string;
   doitChangerMotDePasse: boolean;
-  /** Comment la session en cours a été ouverte : « mot_de_passe » ou « google ». */
+  /** Comment la session en cours a été ouverte : « mot_de_passe », « google » ou « ad » (compte Windows). */
   connexion?: string;
 };
 
@@ -47,7 +47,9 @@ async function poserCookie(jeton: string, expire: Date) {
   (await cookies()).set(COOKIE, jeton, { httpOnly: true, sameSite: "lax", secure: SECURISE, path: "/", expires: expire });
 }
 
-export async function ouvrirSession(personneId: string, methode: "mot_de_passe" | "google" = "mot_de_passe") {
+export type MethodeConnexion = "mot_de_passe" | "google" | "ad";
+
+export async function ouvrirSession(personneId: string, methode: MethodeConnexion = "mot_de_passe") {
   const jeton = randomBytes(32).toString("base64url");
   const expire = new Date(Date.now() + HEURES * 3_600_000);
   const h = await headers();
@@ -126,18 +128,18 @@ let leurre: Promise<string> | null = null;
 const empreinteLeurre = () => (leurre ??= hacherMotDePasse(randomBytes(16).toString("hex")));
 
 /**
- * Connexion avec le compte Google de la banque, une fois l'adresse vérifiée par Google
- * (src/lib/auth/google.ts). La personne doit exister, être active, et, si elle est hors division,
- * avoir un accès ouvert. Aucun compte n'est créé ici.
+ * Connexion une fois l'identité vérifiée par l'annuaire de la banque : son compte Google
+ * (src/lib/auth/google.ts) ou son compte Windows (src/lib/auth/ad.ts). La personne doit exister avec
+ * cette adresse, être active, et, si elle est hors division, avoir un accès ouvert. Aucun compte n'est créé.
  */
-export async function connecterAvecGoogle(courriel: string): Promise<{ ok: true } | { ok: false }> {
-  const [p] = await db.select().from(schema.personnes).where(eq(schema.personnes.courriel, courriel)).limit(1);
+export async function connecterIdentiteVerifiee(courriel: string, methode: "google" | "ad", details: Record<string, unknown> = {}): Promise<{ ok: true } | { ok: false }> {
+  const [p] = await db.select().from(schema.personnes).where(eq(schema.personnes.courriel, courriel.trim().toLowerCase())).limit(1);
   if (!p || !p.actif || (p.externe && !p.motDePasseHash)) {
-    await noter(null, "connexion_refusee", courriel, { methode: "google" });
+    await noter(null, "connexion_refusee", courriel, { methode, ...details });
     return { ok: false };
   }
-  await ouvrirSession(p.id, "google");
-  await noter(p.id, "connexion", courriel, { methode: "google" });
+  await ouvrirSession(p.id, methode);
+  await noter(p.id, "connexion", courriel, { methode, ...details });
   return { ok: true };
 }
 

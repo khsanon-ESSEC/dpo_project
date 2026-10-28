@@ -10,3 +10,4 @@ tests
 *.tsbuildinfo
 .DS_Store
 .local
+scripts/essai

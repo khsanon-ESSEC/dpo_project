@@ -156,6 +156,7 @@ Lancer le serveur par un gestionnaire de services (systemd, par exemple) pour qu
 | `IA_FOURNISSEUR` | `aucun`, `openai-compatible` ou `anthropic` |
 | `IA_URL`, `IA_CLE`, `IA_MODELE`, `IA_DELAI` | Connexion au fournisseur d'IA (voir plus bas) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_DOMAINE` | Connexion avec le compte Google de la banque (voir plus bas). Sans elles, connexion par mot de passe seulement |
+| `AD_URL`, `AD_DOMAINE`, `AD_BASE_DN`, `AD_CA`, `AD_GROUPE`, `AD_LIAISON`, `AD_ESSAIS_MAX` | Connexion avec le compte Windows de la banque (Active Directory, voir plus bas) |
 
 ### Mise à jour
 
@@ -217,12 +218,26 @@ Le bouton « Continuer avec le compte Google UNIBANK » s'active quand `GOOGLE_C
 
 1. Dans la console Google Cloud, sur un projet de l'organisation Google Workspace de la banque : écran de consentement OAuth de type **Interne** (seuls les comptes de la banque), puis un identifiant client OAuth de type **Application Web**.
 2. Adresse de redirection autorisée : `<APP_URL>/api/auth/google/retour` (par exemple `https://pilotage.dpo.unibank.local/api/auth/google/retour`). Elle doit correspondre exactement à `APP_URL` : la connexion Google ne fonctionne qu'à cette adresse.
-3. Mettre l'identifiant et le secret dans `.env`, avec `GOOGLE_DOMAINE` (le domaine Workspace de la banque ; plusieurs, séparés par des virgules), puis redémarrer.
+3. Mettre l’identifiant et le secret dans `.env`, avec `GOOGLE_DOMAINE=unibankhaiti.com` (le domaine Workspace de la banque ; plusieurs, séparés par des virgules), puis redémarrer.
 4. Le serveur doit pouvoir joindre `accounts.google.com`, `oauth2.googleapis.com` et `www.googleapis.com` en HTTPS.
 
 Ce que l'application vérifie : flux OpenID Connect avec PKCE, état et nonce ; jeton d'identité signé par Google (clés publiées), destiné à cette application, non expiré ; adresse vérifiée ; compte de l'organisation de la banque (revendication `hd` **et** domaine de l'adresse parmi `GOOGLE_DOMAINE`). Un compte Gmail personnel est refusé.
 
 **Aucun compte n'est créé par Google** : la personne doit déjà exister dans *Organisation*, active, avec la même adresse. Une personne hors division ne se connecte avec Google que si son accès est ouvert. La connexion par mot de passe reste possible (personnes hors division sans compte Google, secours) ; un mot de passe provisoire n'est demandé à changer qu'à la connexion par mot de passe. Chaque connexion est notée au journal avec sa méthode.
+
+### Connexion avec le compte Windows de la banque (Active Directory)
+
+Quand `AD_URL`, `AD_DOMAINE` et `AD_BASE_DN` sont renseignés, la page de connexion propose d'abord « Compte Windows » : la personne tape son identifiant Windows (`jdupont`, `UNIBANK\jdupont` ou `jdupont@<AD_DOMAINE>`) et le mot de passe de sa session Windows. L'onglet « Mot de passe de l'application » reste disponible (personnes hors division, secours) ; Google aussi, s'il est activé. Pour l'informatique :
+
+1. **LDAPS seulement** : `AD_URL=ldaps://dc1.unibank.local:636,ldaps://dc2.unibank.local:636` (l'application n'utilise jamais LDAP en clair ; une adresse `ldap://` est ignorée). Les contrôleurs sont essayés dans l'ordre.
+2. **Certificat** : si l'autorité qui signe les certificats des contrôleurs de domaine est interne à la banque, fournir son certificat (PEM) et l'indiquer dans `AD_CA`. Avec Docker, monter le fichier en lecture seule (exemple commenté dans `docker-compose.yml`). Le certificat est toujours vérifié.
+3. **Domaine et base** : `AD_DOMAINE=unibank.local` (suffixe des noms d'utilisateur), `AD_BASE_DN=DC=unibank,DC=local`. Si la banque préfère `UNIBANK\identifiant`, mettre `AD_LIAISON=UNIBANK\{identifiant}`.
+4. **Groupe** (recommandé) : créer un groupe AD, par exemple `App-Pilotage-DPO`, et l'indiquer en DN complet dans `AD_GROUPE` ; seuls ses membres (même par des groupes imbriqués) peuvent se connecter.
+5. **Verrouillage** : `AD_ESSAIS_MAX` (3 par défaut) met un identifiant en attente 15 minutes après trois échecs ; le garder sous le seuil de verrouillage d'AD, pour que l'application ne verrouille jamais un compte Windows.
+
+Ce que fait l'application : la personne se lie à l'annuaire avec **son propre** identifiant et mot de passe (aucun compte de service n'est stocké) ; le mot de passe n'est ni gardé ni écrit au journal ; un mot de passe vide n'est jamais envoyé (AD accepterait une liaison anonyme) ; l'identifiant est filtré et la recherche construite par la bibliothèque (pas d'injection LDAP) ; un compte désactivé, verrouillé ou au mot de passe expiré est refusé avec un message clair ; un identifiant inconnu et un mauvais mot de passe ont la même réponse.
+
+**Aucun compte n'est créé** : l'adresse du compte AD (`mail`, sinon `userPrincipalName`) doit être celle d'une personne existante et active dans *Organisation*. Une personne hors division ne se connecte ainsi que si son accès est ouvert. Le mot de passe provisoire de l'application n'est demandé qu'à la connexion par mot de passe.
 
 ---
 
@@ -271,6 +286,8 @@ TEST_DATABASE_URL=postgres://dpo:dpo@localhost:5432/dpo_test npm test
 
 Les tests de règles tournent sans base. Les tests d'accès vident puis remplissent la base `TEST_DATABASE_URL` : ne jamais la faire pointer vers une base réelle.
 
+Connexion Windows : les tests contre un annuaire en LDAPS ne tournent que si `AD_TEST_URL` est renseigné, avec l'annuaire factice de `scripts/essai/annuaire-factice.mjs` (préparation en tête du fichier) : `AD_TEST_URL=ldaps://127.0.0.1:6360 AD_TEST_CA=…/ac.pem AD_TEST_AUTRE_CA=…/autre-ac.pem npm test`. Connexion Google : `scripts/essai/google-factice.mjs` permet d'essayer le parcours complet sans Google.
+
 Après une modification de `src/db/schema.ts` : `npm run db:generate`, puis vérifier la migration produite dans `drizzle/`.
 
 ### Organisation du code
@@ -288,9 +305,10 @@ src/lib/projets.ts  gestion des projets et des tâches : qui assigne, gère, dé
 src/lib/bilan.ts    bilan d'activité par période (sans base, testé)
 src/lib/donnees/    lectures et écritures par domaine
 src/lib/ia.ts       connecteur d'IA interchangeable
-src/lib/auth/       session, mots de passe, connexion Google (google-regles.ts : sans base, testé)
+src/lib/auth/       session, mots de passe, connexion Google et Windows (google-regles.ts, ad-regles.ts : sans base, testés)
+scripts/essai/      fournisseur Google et annuaire AD factices, pour les essais seulement (exclus de l'image Docker)
 scripts/            migration, création d'utilisateur, données de démonstration
 drizzle/            migrations SQL
 ```
 
-Pile : Next.js 16, React 19, TypeScript, PostgreSQL, Drizzle ORM, Argon2, jose (jetons Google), docx.
+Pile : Next.js 16, React 19, TypeScript, PostgreSQL, Drizzle ORM, Argon2, jose (jetons Google), ldapts (Active Directory), docx.

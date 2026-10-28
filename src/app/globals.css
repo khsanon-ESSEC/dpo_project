@@ -2930,6 +2930,36 @@ a.puce:hover {
   flex-direction: column;
   gap: 28px;
 }
+/* Choix de la méthode de connexion (compte Windows ou mot de passe de l'application) */
+.connexion__choix {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--controle);
+  border-radius: 9999px;
+  padding: 3px;
+  gap: 3px;
+}
+.connexion__choix button {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: var(--encre);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 16px;
+  cursor: pointer;
+}
+.connexion__choix button[aria-pressed="true"] {
+  background: var(--encre);
+  color: var(--fond);
+}
+.connexion__choix button:focus-visible {
+  outline: 2px solid var(--arc);
+  outline-offset: 2px;
+}
 .connexion__soustitre {
   margin: 0;
   font-size: 34px;

@@ -34,6 +34,10 @@ services:
       DATABASE_URL: postgres://dpo:${POSTGRES_PASSWORD}@base:5432/dpo
     ports:
       - "3000:3000"
+    # Connexion Windows (Active Directory) : certificat de l'autorité de la banque, lu par l'application
+    # (AD_CA=/certificats/ac-banque.pem dans .env). Décommenter et placer le fichier à côté de ce fichier.
+    # volumes:
+    #   - ./certificats/ac-banque.pem:/certificats/ac-banque.pem:ro
 
 volumes:
   donnees-dpo:

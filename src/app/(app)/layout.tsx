@@ -10,8 +10,8 @@ import { Onglets, Rail, type ElementNav } from "@/components/Navigation";
 
 export default async function LayoutApplication({ children }: { children: React.ReactNode }) {
   const u = await exigerUtilisateur();
-  // Le mot de passe provisoire se change à la connexion par mot de passe ; avec Google, il ne sert pas.
-  if (u.doitChangerMotDePasse && u.connexion !== "google") redirect("/mot-de-passe");
+  // Le mot de passe provisoire se change à la connexion par mot de passe ; avec Google ou Windows, il ne sert pas.
+  if (u.doitChangerMotDePasse && (u.connexion ?? "mot_de_passe") === "mot_de_passe") redirect("/mot-de-passe");
   const a = await acces(u);
   // Heures du rapport (prêt à relire, rappel, retard de l'équipe) : alertes créées au passage, une fois par semaine.
   await rappelsDuMoment(u.id, redigeUnRapport(u)).catch((e) => console.error("Rappels du rapport :", e));

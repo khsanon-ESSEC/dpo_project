@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_GOOGLE, finConnexion, googleActive } from "@/lib/auth/google";
-import { connecterAvecGoogle } from "@/lib/auth/session";
+import { connecterIdentiteVerifiee } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
 
 const base = () => process.env.APP_URL || "http://localhost:3000";
@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
       await noter(null, "connexion_refusee", null, { methode: "google", raison: r.refus });
       return fin(`/connexion?google=${r.refus === "domaine" ? "domaine" : "echec"}`);
     }
-    const c = await connecterAvecGoogle(r.courriel);
+    const c = await connecterIdentiteVerifiee(r.courriel, "google");
     if (!c.ok) return fin("/connexion?google=sans_acces");
     return fin("/semaine");
   } catch (e) {

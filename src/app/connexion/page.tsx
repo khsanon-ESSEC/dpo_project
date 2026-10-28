@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { utilisateurCourant } from "@/lib/auth/session";
 import { googleActive } from "@/lib/auth/google";
+import { adActive } from "@/lib/auth/ad";
 import { MESSAGES_GOOGLE } from "@/lib/auth/google-regles";
 import { FormulaireConnexion } from "./FormulaireConnexion";
 
@@ -41,7 +42,7 @@ export default async function PageConnexion({ searchParams }: { searchParams: Pr
       </section>
       <main className="connexion__panneau">
         <div className="connexion__centre">
-          <FormulaireConnexion google={googleActive()} erreurGoogle={erreurGoogle} />
+          <FormulaireConnexion google={googleActive()} ad={adActive()} erreurGoogle={erreurGoogle} />
         </div>
         <p className="note" style={{ textAlign: "center", fontSize: 12 }}>
           Réservé au personnel UNIBANK
