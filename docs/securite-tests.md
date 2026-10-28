@@ -12,7 +12,7 @@ Chaque constat est marqué **[vérifié]** (observé directement) ou **[déducti
 
 ## Résultat global
 
-Première passe : un défaut d'autorisation important corrigé, deux points plus faibles renforcés, une dépendance critique mise à jour. Seconde passe : deux défauts sur les rapports ponctuels au conseil, un accès trop large des personnes hors division, une règle des directeurs resserrée et cinq points mineurs, tous corrigés. Après correction, la suite de tests et les parcours passent, et `npm audit` ne signale **aucune** vulnérabilité dans les dépendances de production.
+Première passe : un défaut d'autorisation important corrigé, deux points plus faibles renforcés, une dépendance critique mise à jour. Seconde passe : deux défauts sur les rapports ponctuels au conseil, un accès trop large des personnes hors division, une règle des directeurs resserrée et quatre points mineurs, tous corrigés. Après correction, la suite de tests et les parcours passent, et `npm audit` ne signale **aucune** vulnérabilité dans les dépendances de production.
 
 ## Corrections apportées
 
@@ -82,7 +82,7 @@ Un directeur pouvait modifier, archiver ou réorganiser tout projet qu'il voyait
 - **Tâche annulée** : elle n'ouvre plus le projet à son ancien titulaire (avant, retirer quelqu'un de l'équipe ne lui fermait pas le projet s'il y gardait une tâche annulée).
 - **Assistant** : il ne crée plus de brouillon de rapport pour une personne qui n'en rédige pas (exécutif, hors division).
 - **Connexion** : la réponse prend le même temps que l'adresse existe ou non **[vérifié]** (environ 100 ms dans les deux cas) ; on ne peut plus deviner les adresses valides au chronomètre. Après cinq échecs, le message de blocage reste propre aux comptes existants : compromis volontaire pour l'utilisateur.
-- **Image Docker** : le dossier `.local` (base de l'essai local) en est exclu.
+- **Image Docker** : **[vérifié]** le dossier `.local` (base de l'essai local) en était déjà exclu par `.dockerignore` ; rien à corriger.
 
 ## Recommandations restantes
 
