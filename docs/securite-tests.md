@@ -164,6 +164,29 @@ Restent à décider **[à confirmer]** (points de règle, pas des failles) :
 - La page d'un employé et la question « réunions de … » montrent l'intitulé des réunions des personnes suivies (supérieur, direction, exécutifs).
 - Les plages occupées (sans intitulé) de toute personne active peuvent être consultées par une personne interne au moment de noter une réunion.
 
+## Rapport reconduit, aperçu, lecture, « Lu par » et « Répondre » (ajoutés le 28 octobre 2026)
+
+- Le brouillon se complète à chaque ouverture (tâches de la semaine, blocages et décisions non résolus de la semaine dernière). Deux ouvertures au même moment n'ajoutent pas deux fois la même ligne (deux index uniques partiels, écritures sans effet en cas de doublon) **[vérifié par tests]**.
+- Une ligne reconduite ou reprise reste dans son champ s'il existe encore, sinon dans un champ de la même rubrique **au moins aussi fermé** (une ligne « supérieur seulement » ne devient pas lisible par la direction ou un chef de projet) ; sa visibilité propre est copiée ; son projet n'est gardé que si l'auteur le voit encore **[vérifié par tests]**.
+- Toutes les actions du brouillon (reprendre, tout reconduire, résolu, annuler résolu, reprendre un commentaire) passent par la vérification d'origine : le brouillon de la personne connectée, encore non envoyé ; on ne reprend que ses propres lignes ; rubrique et champ sont validés.
+- **Aperçu** : il montre ce que lit le supérieur (sans les éléments retirés ni ce qui reste à l'auteur), avec le même filtre que la lecture.
+- **Comparaison avec la semaine dernière** (chiffres, tendance des feux, « Depuis la semaine dernière ») : seulement pour qui lit le rapport en entier, sur le rapport précédent **tel que ce lecteur peut le lire** (la direction ne voit pas les champs réservés au supérieur) ; rien pour un chef de projet **[vérifié par tests]**.
+- **« Lu par »** : seule la première ouverture par le destinataire du rapport est notée **[vérifié par tests]**.
+- **« Répondre »** : un échange entre l'auteur et son supérieur seulement (ni la direction, ni les exécutifs, ni les chefs de projet : les mots peuvent porter sur des champs réservés). Texte de 1000 caractères au plus, échappé à l'affichage ; alertes à l'auteur, au destinataire et à ceux qui ont écrit, s'ils peuvent encore lire le rapport ; journal de chaque mot **[vérifié par tests]**.
+- « Résolu » sur un blocage lié à une tâche débloque la tâche seulement si la personne peut la modifier ; « annuler » la rebloque avec son texte, seulement si rien n'a bougé depuis.
+
+### Relecture indépendante (28 octobre 2026, troisième) et corrections
+
+Une relecture faite sans voir ce travail n'a trouvé **aucune faille d'accès** (pas de lecture ni d'écriture du brouillon d'un autre). Corrigé :
+
+- **[Élevé] Un blocage résolu restait traité comme ouvert ailleurs** (repris « à décider » chez le chef, dans la synthèse par projet, sur la fiche du projet, dans les propositions de décision et les comptes) : il en est retiré partout.
+- **[Moyen] Reconduire pouvait ouvrir une ligne réservée** quand un modèle a deux champs de la même rubrique : corrigé comme dit plus haut **[vérifié par tests]**.
+- **[Moyen] « Résolu » sur un blocage de tâche** : l'annulation rebloque la tâche ; une tâche bloquée de nouveau la même semaine a sa nouvelle ligne.
+- **[Moyen-faible] Doublons à l'ouverture simultanée** : index uniques **[vérifié par tests]**.
+- **[Faible]** alertes « Répondre » limitées à qui peut encore lire ; pastille « Envoyé en retard » cachée à un chef de projet ; texte gardé si l'envoi d'une réponse échoue ; ancienneté affichée seulement pour les blocages et décisions ; décisions remontées comptées comme nouvelles ; un blocage de tâche encore bloquée se reconduit même si le champ n'est pas prérempli.
+
+Restent à décider **[à confirmer]** : « Répondre » est fermé à la direction ; à ouvrir si la banque le souhaite (avec le risque dit plus haut). « Lu par » est visible de l'auteur : à confirmer avec la DRH si un accusé de lecture pose question.
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.

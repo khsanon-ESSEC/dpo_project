@@ -2239,49 +2239,67 @@ a.puce:hover {
    Rapport construit depuis un modèle : champs, parties, feux, choix segmentés
    ========================================================================== */
 .champ-rapport {
-  padding: 12px 20px 20px 28px;
+  padding: 18px 24px 20px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   scroll-margin-top: 24px;
 }
 .champ-rapport__tete {
   display: flex;
   align-items: center;
-  gap: 16px;
-  min-height: 48px;
-}
-.champ-rapport__nombre {
-  width: 32px;
-  flex: none;
-  font-size: 32px;
-  line-height: 36px;
-  font-weight: 200;
+  gap: 12px;
+  min-height: 32px;
 }
 .champ-rapport__titre {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 12px;
+  align-items: baseline;
+  gap: 4px 10px;
 }
 .champ-rapport__titre h2,
 .champ-rapport__titre h3 {
   margin: 0;
-  font-size: 16px;
-  line-height: 22px;
+  font-size: 17px;
+  line-height: 24px;
   font-weight: 500;
   scroll-margin-top: 24px;
 }
+/* Le nombre de lignes, discret, à côté du titre. */
+.champ-rapport__compte {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--discret);
+  font-variant-numeric: tabular-nums;
+}
+.champ-rapport__compte.ton-veille {
+  color: var(--veille);
+  font-weight: 600;
+}
+/* En lecture : le titre de la partie en petites capitales, « BLOQUÉ · 2 ». */
+.champ-rapport__etiquette {
+  margin: 0;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
 .champ-rapport__aide {
-  margin: -6px 0 4px 48px;
+  margin: -2px 0 4px;
   font-size: 13px;
   line-height: 19px;
   color: var(--discret);
 }
 .champ-rapport__corps {
-  padding-left: 48px;
+  padding-left: 0;
+}
+/* Ce qui attend une réponse du lecteur : un filet ambre à gauche. */
+.champ-rapport--attention {
+  box-shadow: inset 3px 0 0 var(--veille-point);
 }
 .apercu {
   margin: 0;
@@ -4423,4 +4441,787 @@ a.lien-projet:focus-visible {
 /* Les ancres (#documents, #noter…) ne passent pas sous la barre collante du haut. */
 .contenu [id] {
   scroll-margin-top: 96px;
+}
+
+/* ==========================================================================
+   Rapport : saisie allégée, aperçu et lecture
+   ========================================================================== */
+
+/* Témoin « Relu » dans l'en-tête d'une partie. */
+.temoin-relu {
+  flex: none;
+  min-height: 32px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  color: var(--discret);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.temoin-relu__rond {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--controle);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--case-coche);
+}
+.temoin-relu__rond svg {
+  width: 10px;
+  height: 10px;
+}
+.temoin-relu[aria-pressed="true"] {
+  color: var(--ok);
+}
+.temoin-relu[aria-pressed="true"] .temoin-relu__rond {
+  background: var(--ok-point);
+  border-color: var(--ok-point);
+}
+.temoin-relu:hover {
+  color: var(--encre);
+}
+.temoin-relu:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+/* Une ligne du brouillon : code projet, texte modifiable sur place, ancienneté, « Résolu », retrait. */
+.ligne-rapport {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+.liste > li.ligne-rapport:first-child {
+  border-top: 0;
+}
+.ligne-rapport__texte {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  padding: 9px 8px;
+  margin-left: -8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--encre);
+  font: inherit;
+  font-size: 15px;
+  line-height: 20px;
+  resize: none;
+  overflow: hidden;
+  box-sizing: border-box;
+  field-sizing: content;
+}
+.ligne-rapport__texte:hover {
+  border-color: var(--filet-fort);
+}
+.ligne-rapport__texte:focus {
+  border-color: var(--controle);
+  background: var(--champ);
+  outline: none;
+}
+.ligne-rapport--resolue .ligne-rapport__texte {
+  color: var(--discret);
+}
+.ligne-rapport__retirer {
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  color: var(--discret);
+  border-radius: 50%;
+}
+.ligne-rapport__retirer:hover {
+  background: var(--choisi);
+  color: var(--encre);
+}
+.bouton-mini--resolu {
+  border-color: var(--ok-point);
+  color: var(--ok);
+}
+.age-ligne {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--relief);
+  color: var(--relief-encre);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.age-ligne--ancien {
+  background: rgba(192, 71, 58, 0.12);
+  color: var(--retard);
+}
+.age-ligne--resolu {
+  background: rgba(46, 125, 87, 0.12);
+  color: var(--ok);
+}
+
+/* Le code projet d'une ligne se change d'un clic (sans liste déroulante). */
+.choix-code {
+  position: relative;
+  flex: none;
+}
+.choix-code__bouton {
+  min-height: 24px;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+.choix-code__bouton:hover,
+.choix-code__bouton[aria-expanded="true"] {
+  border-color: var(--encre);
+  color: var(--encre);
+}
+.choix-code__liste {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 280px;
+  max-width: calc(100vw - 48px);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--panneau);
+  border: 1px solid var(--filet-fort);
+  box-shadow: 0 12px 28px rgba(20, 36, 88, 0.16);
+}
+.choix-code__liste input {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--controle);
+  background: var(--champ);
+  color: var(--encre);
+  font: inherit;
+  font-size: 14px;
+}
+.choix-code__option {
+  min-height: 36px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--encre);
+  cursor: pointer;
+}
+.choix-code__option .mono {
+  width: auto;
+  min-width: 32px;
+  height: 22px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+.choix-code__option:hover,
+.choix-code__option[aria-selected="true"] {
+  background: var(--choisi);
+}
+
+/* « + Ajouter » : ouvre la ligne de saisie. */
+.lien-ajout {
+  align-self: flex-start;
+  min-height: 36px;
+  margin-top: 2px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  color: var(--arc);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.lien-ajout:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lien-bouton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--encre);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* Charge, réunions, pièces jointes : une seule ligne. */
+.champ-rapport--compact {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.champ-compact {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  min-height: 40px;
+}
+.champ-compact .temoin-relu {
+  margin-left: auto;
+}
+.champ-compact__titre {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+}
+.champ-compact__resume {
+  font-size: 13px;
+  color: var(--encre-2);
+}
+.champ-compact__lien {
+  font-size: 13px;
+}
+.champ-compact .segmente__choix {
+  min-height: 34px;
+  padding: 2px 10px;
+  font-size: 13px;
+}
+.champ-compact__detail summary {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--arc);
+  cursor: pointer;
+}
+.champ-compact__detail[open] summary {
+  margin-bottom: 6px;
+}
+
+/* Lecture des lignes. */
+.lignes-lues .ligne-lue {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 0;
+  font-size: 15px;
+  line-height: 22px;
+}
+.liste.lignes-lues > li:first-child {
+  border-top: 0;
+}
+.ligne-lue .etiquette-projet {
+  position: relative;
+  top: -1px;
+}
+.ligne-lue__texte {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+.ligne-lue__sous {
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--discret);
+}
+.ligne-lue--resolue .ligne-lue__texte {
+  color: var(--discret);
+}
+.lignes-lues--puces .ligne-lue {
+  padding-left: 16px;
+  position: relative;
+}
+.lignes-lues--puces .ligne-lue::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 18px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--controle);
+}
+.feu__lu {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.tendance {
+  font-size: 12px;
+  color: var(--discret);
+  white-space: nowrap;
+}
+.tendance--pire {
+  color: var(--retard);
+}
+.tendance--mieux {
+  color: var(--ok);
+}
+
+/* En un coup d'œil. */
+.coup-doeil {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  background: var(--surface);
+  border: 1px solid var(--surface-filet);
+}
+.coup-doeil__tuile {
+  padding: 16px 20px 18px;
+  border-left: 1px solid var(--filet);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.coup-doeil__tuile:first-child {
+  border-left: 0;
+}
+.coup-doeil dt {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--discret);
+}
+.coup-doeil dd {
+  margin: 0;
+}
+.coup-doeil__valeur {
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 200;
+  font-variant-numeric: tabular-nums;
+}
+.coup-doeil__valeur--texte {
+  font-size: 24px;
+  line-height: 36px;
+}
+.coup-doeil__valeur.ton-veille {
+  color: var(--veille);
+}
+.coup-doeil__valeur.ton-retard {
+  color: var(--retard);
+}
+.coup-doeil__sous {
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--discret);
+}
+
+/* Depuis la semaine dernière. */
+.depuis__ligne {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--encre-2);
+}
+.depuis__ligne strong {
+  font-weight: 600;
+  color: var(--encre);
+}
+.depuis__signe {
+  flex: none;
+  width: 14px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--discret);
+}
+.depuis__ligne--moins_bien .depuis__signe {
+  color: var(--retard);
+}
+.depuis__ligne--alerte .depuis__signe {
+  color: var(--veille-point);
+}
+.depuis__ligne--mieux .depuis__signe {
+  color: var(--ok-point);
+}
+
+/* En-tête de lecture : monogramme, envoi, lecture. */
+.titre-avatar {
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+}
+.titre-avatar__mono {
+  width: 52px;
+  height: 52px;
+  background: #24478e;
+  color: #ffffff;
+  font-size: 15px;
+}
+.titre-avatar a {
+  color: inherit;
+}
+.tete-lecture__poste {
+  margin: 0 0 0 70px;
+  font-size: 14px;
+}
+.tete-lecture,
+.tete-rapport {
+  margin: 10px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.tete-rapport {
+  font-size: 14px;
+}
+.tete-lecture strong,
+.tete-rapport strong {
+  color: #ffffff;
+  font-weight: 500;
+}
+.tete-rapport a {
+  color: #ffffff;
+}
+.ton-retard-clair,
+.ton-retard-clair strong {
+  color: #ffb4a6 !important;
+}
+.pastille-envoi {
+  padding: 2px 10px;
+  border-radius: 9999px;
+  background: rgba(46, 125, 87, 0.28);
+  color: #c9ead8;
+  font-size: 12px;
+  font-weight: 500;
+}
+.pastille-envoi--retard {
+  background: rgba(192, 71, 58, 0.3);
+  color: #ffd2ca;
+}
+.pastille-envoi--apercu {
+  background: rgba(244, 178, 45, 0.22);
+  color: #ffe2a8;
+}
+.nav-lecture {
+  justify-content: space-between;
+}
+.nav-lecture__groupe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Répondre. */
+.reponses {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.reponses .carte__titre {
+  margin: 0;
+}
+.message-rapport {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+}
+.liste.messages-rapport > li:first-child {
+  border-top: 0;
+}
+.message-rapport__corps {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.message-rapport__qui {
+  font-size: 12px;
+  color: var(--discret);
+}
+.message-rapport__texte {
+  font-size: 14px;
+  line-height: 20px;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.repondre {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.repondre textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--controle);
+  background: var(--champ);
+  color: var(--encre);
+  font: inherit;
+  font-size: 15px;
+  line-height: 22px;
+  resize: vertical;
+}
+.repondre__boutons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Relire et envoyer (colonne de droite). */
+.envoi {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.envoi__progression {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--discret);
+}
+.envoi__jauge {
+  flex: 1;
+  height: 6px;
+  background: var(--piste);
+  display: flex;
+}
+.envoi__jauge span {
+  background: var(--ok-point);
+  transition: width 300ms ease;
+}
+.envoi__boutons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.envoi__boutons > * {
+  flex: 1 1 96px;
+  min-width: 0;
+}
+.envoi__boutons > .envoi__form {
+  flex: 999 1 170px;
+}
+.envoi__form {
+  display: flex;
+}
+.envoi__form .bouton-ambre {
+  flex: 1;
+  min-width: 0;
+  padding: 0 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.envoi__boutons .bouton-contour {
+  height: 44px;
+}
+
+/* La semaine dernière (colonne de droite). */
+.semaine-derniere__titre {
+  margin: 14px 0 2px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+.prec-ligne {
+  padding: 8px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.prec-ligne__texte {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.prec-ligne__champ {
+  display: block;
+  font-size: 11px;
+  color: var(--discret);
+}
+.prec-ligne__note {
+  color: var(--discret);
+}
+.prec-ligne--faite .prec-ligne__texte {
+  color: var(--discret);
+}
+.prec-ligne__actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.prec-ligne__actions .bouton-mini {
+  height: 28px;
+  padding: 0 10px;
+}
+.qui-lit summary {
+  min-height: 24px;
+  margin: 0;
+  cursor: pointer;
+}
+.qui-lit[open] summary {
+  margin-bottom: 4px;
+}
+
+/* Téléphone : relire et envoyer d'abord ; Aperçu et Envoyer restent au pied de l'écran. */
+.barre-envoi {
+  display: none;
+}
+@media (max-width: 899px) {
+  .saisie-rapport__cote {
+    order: -1;
+  }
+  /* Lecture au téléphone : « Depuis la semaine dernière » d'abord, « Répondre » après le rapport. */
+  .lecture__cote {
+    display: contents;
+  }
+  .lecture__cote > * {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .lecture__cote > .depuis {
+    order: -1;
+  }
+  .lecture__cote > :not(.depuis) {
+    order: 1;
+  }
+  .saisie-rapport__cote .envoi__boutons {
+    display: none;
+  }
+  .barre-envoi {
+    position: sticky;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    z-index: 15;
+    display: flex;
+    gap: 8px;
+    padding: 10px 24px 12px;
+    background: var(--fond);
+    border-top: 1px solid var(--filet);
+  }
+  .barre-envoi > * {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .barre-envoi .bouton-contour {
+    height: 44px;
+  }
+  .barre-envoi .envoi__form .bouton-ambre {
+    height: 44px;
+  }
+  /* Le bouton de l'assistant passe au-dessus de la barre d'envoi. */
+  .coquille:has(.barre-envoi) .fab {
+    bottom: calc(152px + env(safe-area-inset-bottom));
+  }
+  .coup-doeil {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .coup-doeil__tuile {
+    border-left: 0;
+    border-top: 1px solid var(--filet);
+  }
+  .coup-doeil__tuile:nth-child(-n + 2) {
+    border-top: 0;
+  }
+  .coup-doeil__tuile:nth-child(even) {
+    border-left: 1px solid var(--filet);
+  }
+  .titre-avatar__mono {
+    width: 40px;
+    height: 40px;
+    font-size: 13px;
+  }
+  .tete-lecture__poste {
+    margin-left: 58px;
+  }
+}
+@media (max-width: 640px) {
+  .champ-rapport {
+    padding: 14px 16px 16px;
+  }
+  .ligne-rapport {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+  }
+  .ligne-rapport__texte {
+    flex-basis: calc(100% - 90px);
+  }
+  .barre-envoi {
+    padding: 10px 16px 12px;
+  }
+}
+
+/* Impression d'un rapport : le contenu seul, sur fond blanc. */
+@media print {
+  .rail,
+  .onglets,
+  .barre-globale,
+  .bandeau__barres,
+  .nav-lecture,
+  .repondre,
+  .barre-envoi,
+  .retour,
+  .fab,
+  .sous-onglets {
+    display: none !important;
+  }
+  .coquille,
+  .contenu,
+  body {
+    background: #ffffff !important;
+  }
+  .bandeau {
+    background: #ffffff;
+    color: #142458;
+  }
+  .bandeau .discret,
+  .tete-lecture strong {
+    color: #3a3936 !important;
+  }
+  .pastille-envoi {
+    color: #1e6b45;
+    border: 1px solid currentColor;
+    background: none;
+  }
+  .page,
+  .bandeau__corps {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .carte,
+  .coup-doeil {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+  .colonnes {
+    display: block;
+  }
+  .colonne-large,
+  .colonne-etroite {
+    margin-bottom: 16px;
+  }
+  *,
+  *::before {
+    animation: none !important;
+    transition: none !important;
+  }
 }

@@ -158,7 +158,7 @@ export default async function PageModele({ params, searchParams }: { params: Pro
                           <span>{LIBELLE_RUBRIQUE[r]}</span>
                         </label>
                       ))}
-                      <span className="note">Sert au préremplissage, à « Prévu la semaine dernière » et au rapport du chef.</span>
+                      <span className="note">Sert au préremplissage, au panneau « La semaine dernière » et au rapport du chef.</span>
                     </fieldset>
                   ) : null}
                   {PREREMPLI[sel.type] ? (

@@ -204,7 +204,7 @@ await sql.begin(async (tx) => {
   const T = {};
   T.audit3 = await tache("dj", "UR", "Point 3 de l'audit de sécurité", "en_cours", jour(2), [[2, "statut", "a_faire", "en_cours"]], null, { debut: jour(2), h: 6 });
   T.accueil = await tache("dj", "UN", "Maquettes de l'accueil", "en_cours", jour(3), [[0, "statut", "a_faire", "en_cours"], [3, "note", null, null, "Aux trois quarts"]], null, { debut: jour(0), h: 10 });
-  await tache("dj", "UN", "Accès de test DTI", "bloquee", jour(2), [[1, "statut", "en_cours", "bloquee", "Identifiants demandés à la DTI"], [3, "note", null, null, "Relance faite"]], "Identifiants de test demandés à la DTI mardi ; relance faite jeudi.", { h: 2 });
+  T.acces = await tache("dj", "UN", "Accès de test DTI", "bloquee", jour(2), [[-3, "statut", "en_cours", "bloquee", "Identifiants demandés à la DTI"], [3, "note", null, null, "Relance faite"]], "Identifiants de test demandés à la DTI le 23 octobre ; relance faite jeudi.", { h: 2 });
   T.cdc = await tache("dj", "PR", "Cahier des charges, version 1", "a_faire", jour(4), [], null, { h: 6 });
   await tache("dj", "PR", "Fiches de poste", "a_faire", jour(7), [], null, { h: 8 });
   await tache("dj", "PR", "Ateliers avec les utilisateurs de la DRH", "a_faire", jour(10), [], null, { debut: jour(8), h: 16 });
@@ -451,9 +451,9 @@ await sql.begin(async (tx) => {
         const c = formulaire.find((f) => f.id === champ);
         const lid = randomUUID();
         lignes[extra.cle ?? lid] = lid;
-        await tx`insert into lignes_rapport (id, rapport_id, champ_id, partie, texte, projet_id, ordre, origines, auteurs_origine, remonte, visibilite)
+        await tx`insert into lignes_rapport (id, rapport_id, champ_id, partie, texte, projet_id, ordre, origines, auteurs_origine, remonte, visibilite, depuis_semaine)
           values (${lid}, ${id}, ${champ}, ${extra.partie ?? (c.rubrique && c.rubrique !== "autre" ? c.rubrique : null)}, ${texte}, ${pj ? PJ[pj] : null}, ${o},
-                  ${`{${(extra.origines ?? []).join(",")}}`}::text[], ${`{${(extra.auteurs ?? []).map((k) => P[k]).join(",")}}`}::uuid[], ${extra.remonte ?? false}, ${extra.visibilite ?? null})`;
+                  ${`{${(extra.origines ?? []).join(",")}}`}::text[], ${`{${(extra.auteurs ?? []).map((k) => P[k]).join(",")}}`}::uuid[], ${extra.remonte ?? false}, ${extra.visibilite ?? null}, ${extra.depuis ?? null})`;
       } else if (x[0] === "feu") {
         const [, pj, valeur, phrase = "", champ = "sante", propose = valeur] = x;
         await tx`insert into reponses_rapport (rapport_id, champ_id, projet_id, valeur, commentaire, propose) values (${id}, ${champ}, ${PJ[pj]}, ${valeur}, ${phrase}, ${propose})`;
@@ -486,7 +486,8 @@ await sql.begin(async (tx) => {
   ]);
   await rapport("lp", "ml", 9, ST_V2, V.st2, [
     ["ligne", "en_cours", "UN", "Plan de migration des données"],
-    ["ligne", "bloque", "CR", "Serveur de recette demandé à la DTI lundi"],
+    // Un blocage qui dure : signalé il y a deux semaines, reconduit depuis.
+    ["ligne", "bloque", "CR", "Serveur de recette demandé à la DTI lundi", { depuis: jour(-14) }],
     ["ligne", "prochaine", "UN", "Valider le plan de migration avec la DTI"],
     ["feu", "UN", "a_surveiller", "Plan de migration à valider avec la DTI", "sante", "a_surveiller"],
     ["feu", "CR", "en_retard", "Le serveur de recette n'est toujours pas là", "sante", "dans_les_temps"],
@@ -654,10 +655,18 @@ await sql.begin(async (tx) => {
           ["prochaine", "Relancer la DTI pour les accès de test", "UN", null],
         ];
       }
+      // La semaine dernière de Daphnée : son accès de test était déjà bloqué (il revient, « 2ᵉ semaine »).
+      if (qui === "dj" && w === 1) lignes.push(["bloque", "Accès de test DTI : identifiants demandés à la DTI", "UN", T.acces]);
+      // La semaine dernière de Ludovic : le serveur de recette déjà bloqué, et ses feux (la tendance se lit cette semaine).
+      if (qui === "lp" && w === 1) {
+        lignes.push(["bloque", "Serveur de recette Credos : relance faite à la DTI", "CR", null, jour(-14)]);
+        await tx`update rapports_hebdo set formulaire = ${sql.json(DEFAUT_V2)}, version_modele_id = ${V.st1} where id = ${id}`;
+        await tx`insert into reponses_rapport (rapport_id, champ_id, projet_id, valeur, commentaire, propose) values (${id}, 'sante', ${PJ.CR}, 'dans_les_temps', '', 'dans_les_temps'), (${id}, 'sante', ${PJ.UN}, 'a_surveiller', 'Plan de migration à valider avec la DTI', 'a_surveiller')`;
+      }
       let o = 0;
-      for (const [partie, texte, pj, tacheId] of lignes) {
+      for (const [partie, texte, pj, tacheId, depuis = null] of lignes) {
         o += 1;
-        await tx`insert into lignes_rapport (rapport_id, champ_id, partie, texte, projet_id, tache_id, ordre) values (${id}, ${partie}, ${partie}, ${texte}, ${pj ? PJ[pj] : null}, ${tacheId}, ${o})`;
+        await tx`insert into lignes_rapport (rapport_id, champ_id, partie, texte, projet_id, tache_id, ordre, depuis_semaine) values (${id}, ${partie}, ${partie}, ${texte}, ${pj ? PJ[pj] : null}, ${tacheId}, ${o}, ${depuis})`;
       }
     }
   }

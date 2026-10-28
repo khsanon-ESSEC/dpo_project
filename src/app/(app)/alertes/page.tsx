@@ -9,7 +9,7 @@ import { Icone } from "@/components/Icone";
 
 export const metadata: Metadata = { title: "Alertes" };
 
-const ICONE: Record<string, string> = { relance: "horloge", blocage: "interdit", rapport_recu: "document", tache: "calendrier" };
+const ICONE: Record<string, string> = { relance: "horloge", blocage: "interdit", rapport_recu: "document", rapport_message: "envoyer", tache: "calendrier" };
 
 async function toutMarquerLu() {
   "use server";

@@ -319,10 +319,28 @@ export const rapportsHebdo = pgTable(
     completeLe: timestamp("complete_le", { withTimezone: true }),
     /** Lignes de tâches que l'auteur a retirées (« tâche:rubrique ») : on ne les remet pas en complétant. */
     ecartees: text().array().notNull().default(sql`'{}'::text[]`),
+    /** Première ouverture du rapport envoyé par son destinataire (« Lu par … »). */
+    luLe: timestamp("lu_le", { withTimezone: true }),
+    luPar: uuid("lu_par").references(() => personnes.id, { onDelete: "set null" }),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
     majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [unique("rapport_auteur_semaine").on(t.auteurId, t.semaine), index("rapports_destinataire_idx").on(t.destinataireId)],
+);
+
+/** « Répondre » : un mot sur un rapport envoyé, entre son auteur et ceux qui le lisent en entier. */
+export const messagesRapport = pgTable(
+  "messages_rapport",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    rapportId: uuid("rapport_id")
+      .notNull()
+      .references(() => rapportsHebdo.id, { onDelete: "cascade" }),
+    auteurId: uuid("auteur_id").notNull().references(() => personnes.id),
+    texte: text().notNull(),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("messages_rapport_idx").on(t.rapportId, t.creeLe)],
 );
 
 export const lignesRapport = pgTable(
@@ -350,8 +368,20 @@ export const lignesRapport = pgTable(
     remonte: boolean().notNull().default(false),
     /** Le chef l'a retiré de son rapport (gardé pour ne pas le reprendre une seconde fois). */
     retiree: boolean().notNull().default(false),
+    /** Ligne reconduite d'un rapport précédent de la même personne (blocage non résolu, « Reconduire »). */
+    repriseDeId: uuid("reprise_de_id").references((): AnyPgColumn => lignesRapport.id, { onDelete: "set null" }),
+    /** Première semaine où l'élément est apparu (« 2ᵉ semaine » pour un blocage qui dure). */
+    depuisSemaine: date("depuis_semaine"),
+    /** Blocage ou décision marqué « Résolu » : il ne revient plus la semaine suivante. */
+    resolu: boolean().notNull().default(false),
   },
-  (t) => [index("lignes_rapport_idx").on(t.rapportId), index("lignes_rapport_projet_idx").on(t.projetId)],
+  (t) => [
+    index("lignes_rapport_idx").on(t.rapportId),
+    index("lignes_rapport_projet_idx").on(t.projetId),
+    // Le brouillon se complète à chaque ouverture : deux ouvertures simultanées n'ajoutent pas deux fois la même ligne.
+    uniqueIndex("lignes_rapport_reprise_unique").on(t.rapportId, t.repriseDeId).where(sql`${t.repriseDeId} is not null`),
+    uniqueIndex("lignes_rapport_tache_unique").on(t.rapportId, t.champId, t.tacheId).where(sql`${t.tacheId} is not null and not ${t.resolu}`),
+  ],
 );
 
 /** Réponses autres que des lignes : feux par projet, charge, textes, choix, nombres, dates. */

@@ -2,13 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { acces, idsProjetsVisibles } from "@/lib/acces";
+import { acces, idsProjetsVisibles, peutModifierTache } from "@/lib/acces";
 import { exigerInterne, exigerUtilisateur } from "@/lib/auth/session";
 import {
-  champDeRubrique,
+  champPourReprise,
+  sansDoublon,
   completerBrouillon,
+  dejaReprise,
+  lignesDuRapport,
+  monRapportPrecedent,
+  RUBRIQUES_RECONDUITES,
   envoyerRapport,
   formulaireDe,
   matierePourSynthese,
@@ -68,7 +73,8 @@ export async function supprimerLigne(ligneId: string) {
   if (l.origines.length) await db.update(schema.lignesRapport).set({ retiree: true, remonte: false }).where(eq(schema.lignesRapport.id, ligneId));
   else {
     await db.delete(schema.lignesRapport).where(eq(schema.lignesRapport.id, ligneId));
-    if (l.tacheId && l.partie) await db.update(schema.rapportsHebdo).set({ ecartees: [...new Set([...r.ecartees, `${l.tacheId}:${l.partie}`])] }).where(eq(schema.rapportsHebdo.id, r.id));
+    const ecartees = [...r.ecartees, ...(l.tacheId && l.partie ? [`${l.tacheId}:${l.partie}`] : []), ...(l.repriseDeId ? [`r:${l.repriseDeId}`] : [])];
+    if (ecartees.length !== r.ecartees.length) await db.update(schema.rapportsHebdo).set({ ecartees: [...new Set(ecartees)] }).where(eq(schema.rapportsHebdo.id, r.id));
   }
   revalidatePath("/rapport");
 }
@@ -157,28 +163,150 @@ export async function envoyer(rapportId: string) {
 export async function reprendreLigne(rapportId: string, ligneId: string, rubrique: Rubrique) {
   const { u, f } = await monBrouillon(rapportId);
   if (!RUBRIQUES.includes(rubrique)) return;
-  const c = champDeRubrique(f, rubrique);
-  if (!c) return;
   const [l] = await db
-    .select({ texte: schema.lignesRapport.texte, projetId: schema.lignesRapport.projetId, tacheId: schema.lignesRapport.tacheId, auteurId: schema.rapportsHebdo.auteurId })
+    .select({
+      texte: schema.lignesRapport.texte,
+      projetId: schema.lignesRapport.projetId,
+      tacheId: schema.lignesRapport.tacheId,
+      partie: schema.lignesRapport.partie,
+      champId: schema.lignesRapport.champId,
+      visibilite: schema.lignesRapport.visibilite,
+      depuisSemaine: schema.lignesRapport.depuisSemaine,
+      semaine: schema.rapportsHebdo.semaine,
+      auteurId: schema.rapportsHebdo.auteurId,
+      formulaire: schema.rapportsHebdo.formulaire,
+    })
     .from(schema.lignesRapport)
     .innerJoin(schema.rapportsHebdo, eq(schema.rapportsHebdo.id, schema.lignesRapport.rapportId))
     .where(eq(schema.lignesRapport.id, ligneId));
   if (!l || l.auteurId !== u.id) return; // seulement mes propres lignes
-  await db.insert(schema.lignesRapport).values({ rapportId, champId: c.id, partie: rubrique, texte: l.texte, projetId: c.parProjet === false ? null : l.projetId, tacheId: l.tacheId, ordre: await ordreSuivant(rapportId) });
+  // Pas dans un champ plus ouvert que celui d'où vient la ligne.
+  const c = champPourReprise(f, l, rubrique, formulaireDe(l));
+  if (!c) return;
+  await db
+    .insert(schema.lignesRapport)
+    .values({
+      rapportId,
+      champId: c.id,
+      partie: rubrique,
+      texte: l.texte,
+      projetId: c.parProjet === false ? null : await projetDeLigne(u, l.projetId),
+      tacheId: l.tacheId,
+      ordre: await ordreSuivant(rapportId),
+      repriseDeId: ligneId,
+      visibilite: l.visibilite,
+      depuisSemaine: rubrique === l.partie && RUBRIQUES_RECONDUITES.has(rubrique) ? (l.depuisSemaine ?? l.semaine) : null,
+    })
+    .onConflictDoNothing();
+  revalidatePath("/rapport");
+}
+
+/** « Tout reconduire » : les lignes d'une rubrique de mon rapport précédent qui ne sont pas encore dans celui-ci. */
+export async function reconduireTout(rapportId: string, rubrique: Rubrique) {
+  const { u, r, f } = await monBrouillon(rapportId);
+  if (!RUBRIQUES.includes(rubrique)) return;
+  const prec = await monRapportPrecedent(u.id, r.semaine);
+  if (!prec) return;
+  const fPrec = formulaireDe(prec.rapport);
+  const actuelles = (await lignesDuRapport(rapportId)).filter((l) => l.origines.length === 0);
+  const ecartees = new Set(r.ecartees);
+  let ordre = await ordreSuivant(rapportId);
+  for (const l of prec.lignes.filter((x) => x.partie === rubrique && !x.resolu)) {
+    if (ecartees.has(`r:${l.id}`) || actuelles.some((a) => a.repriseDeId === l.id) || dejaReprise(l, actuelles)) continue;
+    const c = champPourReprise(f, l, rubrique, fPrec);
+    if (!c) continue;
+    await db
+      .insert(schema.lignesRapport)
+      .values({
+        rapportId,
+        champId: c.id,
+        partie: rubrique,
+        texte: l.texte,
+        projetId: c.parProjet === false ? null : await projetDeLigne(u, l.projetId),
+        tacheId: l.tacheId,
+        ordre: ordre++,
+        repriseDeId: l.id,
+        visibilite: l.visibilite,
+        depuisSemaine: RUBRIQUES_RECONDUITES.has(rubrique) ? (l.depuisSemaine ?? prec.rapport.semaine) : null,
+      })
+      .onConflictDoNothing();
+  }
+  revalidatePath("/rapport");
+}
+
+/** La note laissée sur la tâche débloquée depuis le rapport ; elle garde le texte du blocage pour l'annulation. */
+const NOTE_DEBLOCAGE = "Débloquée depuis le rapport";
+
+/**
+ * « Résolu » sur un blocage ou une décision attendue : la ligne reste où elle est, marquée résolue (le lecteur
+ * le voit), et ne reviendra pas la semaine suivante. Un blocage lié à une de mes tâches débloque aussi la tâche
+ * (elle repasse « en cours ») quand je peux la modifier.
+ */
+export async function marquerResolu(ligneId: string) {
+  const { u, l, r } = await maLigne(ligneId);
+  if (l.origines.length || l.resolu || !l.partie || !RUBRIQUES_RECONDUITES.has(l.partie)) return;
+  await db.update(schema.lignesRapport).set({ resolu: true }).where(eq(schema.lignesRapport.id, l.id));
+  const ecartees = [...r.ecartees, ...(l.repriseDeId ? [`r:${l.repriseDeId}`] : [])];
+  await db.update(schema.rapportsHebdo).set({ ecartees: [...new Set(ecartees)], majLe: new Date() }).where(eq(schema.rapportsHebdo.id, r.id));
+  if (l.tacheId && l.partie === "bloque") {
+    const [t] = await db.select().from(schema.taches).where(eq(schema.taches.id, l.tacheId));
+    if (t && t.statut === "bloquee" && !t.annuleeLe && peutModifierTache(await acces(u), t)) {
+      await db.update(schema.taches).set({ statut: "en_cours", blocage: null, majLe: new Date() }).where(eq(schema.taches.id, t.id));
+      await db.insert(schema.evenementsTache).values({ tacheId: t.id, auteurId: u.id, type: "statut", avant: "bloquee", apres: "en_cours", note: t.blocage ? `${NOTE_DEBLOCAGE} — ${t.blocage}` : NOTE_DEBLOCAGE });
+    }
+  }
+  await noter(u.id, "rapport_resolu", l.id, { rapport: r.id, partie: l.partie });
+  revalidatePath("/rapport");
+  revalidatePath("/", "layout");
+}
+
+/**
+ * Annuler « Résolu » : la ligne redevient un blocage (ou une décision) ouvert, qui reviendra la semaine prochaine.
+ * Si « Résolu » avait débloqué la tâche et que rien n'a bougé depuis, la tâche redevient bloquée, avec son texte.
+ */
+export async function annulerResolu(ligneId: string) {
+  const { u, l, r } = await maLigne(ligneId);
+  if (!l.resolu) return;
+  // Bloquée de nouveau entre-temps : le blocage est déjà là, ouvert ; celui-ci reste résolu.
+  if (!(await sansDoublon(db.update(schema.lignesRapport).set({ resolu: false }).where(eq(schema.lignesRapport.id, l.id))))) return;
+  if (l.repriseDeId) await db.update(schema.rapportsHebdo).set({ ecartees: r.ecartees.filter((e) => e !== `r:${l.repriseDeId}`) }).where(eq(schema.rapportsHebdo.id, r.id));
+  if (l.tacheId && l.partie === "bloque") {
+    const [t] = await db.select().from(schema.taches).where(eq(schema.taches.id, l.tacheId));
+    const [dernier] = await db
+      .select()
+      .from(schema.evenementsTache)
+      .where(and(eq(schema.evenementsTache.tacheId, l.tacheId), eq(schema.evenementsTache.type, "statut")))
+      .orderBy(desc(schema.evenementsTache.creeLe))
+      .limit(1);
+    if (t && t.statut === "en_cours" && !t.annuleeLe && dernier?.auteurId === u.id && dernier.note?.startsWith(NOTE_DEBLOCAGE) && peutModifierTache(await acces(u), t)) {
+      const blocage = dernier.note.slice(NOTE_DEBLOCAGE.length).replace(/^ — /, "") || null;
+      await db.update(schema.taches).set({ statut: "bloquee", blocage, majLe: new Date() }).where(eq(schema.taches.id, t.id));
+      await db.insert(schema.evenementsTache).values({ tacheId: t.id, auteurId: u.id, type: "statut", avant: "en_cours", apres: "bloquee", note: "« Résolu » annulé dans le rapport" });
+    }
+  }
+  revalidatePath("/rapport");
+  revalidatePath("/", "layout");
+}
+
+/** Reprendre la réponse écrite la semaine dernière dans un champ de texte encore vide. */
+export async function reprendreReponse(rapportId: string, champId: string) {
+  const { u, r, f } = await monBrouillon(rapportId);
+  const c = f.find((x) => x.id === champId);
+  if (!c || (c.type !== "texte" && c.type !== "texte_long") || c.partie === "equipe") return;
+  const prec = await monRapportPrecedent(u.id, r.semaine);
+  const avant = prec?.reponses.find((x) => x.champId === champId && !x.projetId)?.valeur?.trim();
+  if (!avant) return;
+  const cible = and(eq(schema.reponsesRapport.rapportId, rapportId), eq(schema.reponsesRapport.champId, champId), isNull(schema.reponsesRapport.projetId));
+  const [deja] = await db.select().from(schema.reponsesRapport).where(cible);
+  if (deja?.valeur.trim()) return;
+  if (deja) await db.update(schema.reponsesRapport).set({ valeur: avant, majLe: new Date() }).where(cible);
+  else await db.insert(schema.reponsesRapport).values({ rapportId, champId, valeur: avant, commentaire: "" });
   revalidatePath("/rapport");
 }
 
 // ---------------------------------------------------------------------------
 // Compléter avec mes tâches, pièces jointes, propositions de l'assistant
 // ---------------------------------------------------------------------------
-
-/** « Mettre à jour avec mes tâches » : ce qui a changé depuis la préparation du brouillon. */
-export async function completerAvecMesTaches(rapportId: string) {
-  const { r } = await monBrouillon(rapportId);
-  await completerBrouillon(r);
-  revalidatePath("/rapport");
-}
 
 export async function deposer(rapportId: string, champId: string, form: FormData) {
   const { u, f } = await monBrouillon(rapportId);

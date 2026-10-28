@@ -24,6 +24,14 @@ export function maintenantLocal(): { jour: string; minutes: number } {
   return { jour: aujourdhui(), minutes: h * 60 + m };
 }
 
+/** Jour et minutes depuis minuit d'un instant, dans le fuseau de la division. */
+export function momentLocal(d: Date): { jour: string; minutes: number } {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d);
+  const h = Number(parts.find((x) => x.type === "hour")?.value ?? 0);
+  const m = Number(parts.find((x) => x.type === "minute")?.value ?? 0);
+  return { jour: dateLocale(d), minutes: h * 60 + m };
+}
+
 /** Jour (AAAA-MM-JJ) d'un instant, dans le fuseau de la division. */
 export function dateLocale(d: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(d);

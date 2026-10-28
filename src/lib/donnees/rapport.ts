@@ -6,7 +6,7 @@ import "server-only";
 import { reunionsDeLaSemaine } from "./reunions";
 import { and, asc, desc, eq, inArray, isNull, lt, max, ne, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { ajouterJours, aujourdhui, dateLocale, lundiDe, maintenantLocal } from "@/lib/dates";
+import { ajouterJours, aujourdhui, dateLocale, lundiDe, maintenantLocal, momentLocal } from "@/lib/dates";
 import { noter } from "@/lib/journal";
 import { chargerOrganisation } from "@/lib/organisation";
 import { estSuperieurDe, initiales, membresDeLaDirection, nomComplet, peutVoirRapportComplet, resoudreSuperieur, subordonnesDirects, voitTout } from "@/lib/regles";
@@ -37,7 +37,7 @@ import {
   type Visibilite,
   type VisibiliteLigne,
 } from "@/lib/modeles";
-import type { Acces } from "@/lib/acces";
+import { acces, idsProjetsVisibles, type Acces } from "@/lib/acces";
 
 export type Partie = "fait" | "en_cours" | "bloque" | "prochaine";
 export const PARTIES: { id: Partie; libelle: string }[] = [
@@ -206,6 +206,9 @@ export async function lignesDuRapport(rapportId: string) {
       visibilite: schema.lignesRapport.visibilite,
       remonte: schema.lignesRapport.remonte,
       retiree: schema.lignesRapport.retiree,
+      repriseDeId: schema.lignesRapport.repriseDeId,
+      depuisSemaine: schema.lignesRapport.depuisSemaine,
+      resolu: schema.lignesRapport.resolu,
       projetCode: schema.projets.code,
       projetTitre: schema.projets.titre,
       // Le chef de projet qui lit ses lignes : le référent DPO quand le chef est hors division.
@@ -284,7 +287,7 @@ async function rapportsRecus(chefId: string, semaine: string) {
     .orderBy(asc(schema.rapportsHebdo.envoyeLe));
 }
 
-type Element = { origine: string; texte: string; projetId: string | null; partie: string | null; visibilite: string | null; auteurs: string[] };
+type Element = { origine: string; texte: string; projetId: string | null; partie: string | null; visibilite: string | null; auteurs: string[]; depuis?: string | null };
 
 const RUBRIQUES_A_DECIDER = new Set(["bloque", "decision"]);
 const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
@@ -297,18 +300,19 @@ function elementsDe(recu: typeof schema.rapportsHebdo.$inferSelect, lignes: Lign
   const sortie: Element[] = [];
   for (const l of lignes) {
     const c = champs.get(l.champId);
-    if (!c || l.retiree) continue;
+    // Un blocage marqué « Résolu » n'attend plus rien : il ne remonte pas.
+    if (!c || l.retiree || l.resolu) continue;
     if (c.type === "lignes" && c.partie !== "equipe" && estPropre(l)) {
       const r = c.rubrique ?? "autre";
       const pour = reprise === "a_decider" ? RUBRIQUES_A_DECIDER.has(r) : r === reprise;
       if (!pour) continue;
       // Ce qui est réservé au supérieur ne remonte dans les listes que comme élément à décider.
       if (reprise !== "a_decider" && (c.visibilite ?? "tous") === "superieur") continue;
-      sortie.push({ origine: `l:${l.id}`, texte: l.texte, projetId: l.projetId, partie: r, visibilite: prive(c), auteurs: [recu.auteurId] });
+      sortie.push({ origine: `l:${l.id}`, texte: l.texte, projetId: l.projetId, partie: r, visibilite: prive(c), auteurs: [recu.auteurId], depuis: l.depuisSemaine });
     } else if (c.type === "reprise" && c.reprise === reprise && !estPropre(l)) {
       // Rapport de chef reçu : ce qu'il a gardé (et, pour « à décider », seulement ce qu'il fait remonter).
       if (reprise === "a_decider" && !l.remonte) continue;
-      sortie.push({ origine: `l:${l.id}`, texte: l.texte, projetId: l.projetId, partie: l.partie, visibilite: l.remonte ? null : l.visibilite, auteurs: l.auteursOrigine });
+      sortie.push({ origine: `l:${l.id}`, texte: l.texte, projetId: l.projetId, partie: l.partie, visibilite: l.remonte ? null : l.visibilite, auteurs: l.auteursOrigine, depuis: l.depuisSemaine });
     }
   }
   if (reprise === "a_decider") {
@@ -353,7 +357,7 @@ export async function synchroniserReprises(rapport: typeof schema.rapportsHebdo.
         ordre += 1;
         const [n] = await db
           .insert(schema.lignesRapport)
-          .values({ rapportId: rapport.id, champId: c.id, partie: e.partie, texte: e.texte, projetId: e.projetId, ordre, origines: [e.origine], auteursOrigine: e.auteurs, visibilite: e.visibilite })
+          .values({ rapportId: rapport.id, champId: c.id, partie: e.partie, texte: e.texte, projetId: e.projetId, ordre, origines: [e.origine], auteursOrigine: e.auteurs, visibilite: e.visibilite, depuisSemaine: e.depuis ?? null })
           .returning();
         existantes.push({ ...n, projetCode: null, projetTitre: null, projetChefId: null });
         ajoutees += 1;
@@ -606,6 +610,7 @@ export async function lignesDuProjetCetteSemaine(projetId: string, auteurs: "tou
       texte: schema.lignesRapport.texte,
       ordre: schema.lignesRapport.ordre,
       origines: schema.lignesRapport.origines,
+      resolu: schema.lignesRapport.resolu,
     })
     .from(schema.lignesRapport)
     .innerJoin(schema.rapportsHebdo, eq(schema.rapportsHebdo.id, schema.lignesRapport.rapportId))
@@ -616,6 +621,7 @@ export async function lignesDuProjetCetteSemaine(projetId: string, auteurs: "tou
   for (const l of lignes) {
     if (auteurs !== "toutes" && !auteurs.has(l.auteurId)) continue;
     if (l.origines.length) continue; // les reprises d'un rapport de chef répètent les rapports de l'équipe
+    if (l.resolu) continue; // un blocage résolu ne bloque plus le projet
     const c = formulaireDe({ formulaire: l.formulaire }).find((x) => x.id === l.champId);
     if (!c || c.type !== "lignes" || (c.visibilite ?? "tous") !== "tous") continue;
     const p = org.personnes.get(l.auteurId)!;
@@ -655,7 +661,7 @@ export type ResumeRapport = {
 async function resumes(rapports: (typeof schema.rapportsHebdo.$inferSelect)[]): Promise<ResumeRapport[]> {
   if (!rapports.length) return [];
   const lignes = await db
-    .select({ rapportId: schema.lignesRapport.rapportId, partie: schema.lignesRapport.partie, texte: schema.lignesRapport.texte, ordre: schema.lignesRapport.ordre, origines: schema.lignesRapport.origines })
+    .select({ rapportId: schema.lignesRapport.rapportId, partie: schema.lignesRapport.partie, texte: schema.lignesRapport.texte, ordre: schema.lignesRapport.ordre, origines: schema.lignesRapport.origines, resolu: schema.lignesRapport.resolu })
     .from(schema.lignesRapport)
     .where(inArray(schema.lignesRapport.rapportId, rapports.map((r) => r.id)))
     .orderBy(asc(schema.lignesRapport.ordre));
@@ -663,7 +669,7 @@ async function resumes(rapports: (typeof schema.rapportsHebdo.$inferSelect)[]): 
     // Ses propres lignes seulement : les reprises d'un rapport de chef sont comptées chez leurs auteurs.
     const siennes = lignes.filter((l) => l.rapportId === r.id && l.origines.length === 0);
     const comptes = { fait: 0, en_cours: 0, bloque: 0, prochaine: 0 } as Record<Partie, number>;
-    for (const l of siennes) if (l.partie && l.partie in comptes) comptes[l.partie as Partie] += 1;
+    for (const l of siennes) if (l.partie && l.partie in comptes && !(l.partie === "bloque" && l.resolu)) comptes[l.partie as Partie] += 1;
     return {
       id: r.id,
       auteurId: r.auteurId,
@@ -754,6 +760,91 @@ export async function rapportsVoisins(a: Acces, rapport: { id: string; auteurId:
   return { precedent: i > 0 ? lisibles[i - 1] : null, suivant: i >= 0 && i < lisibles.length - 1 ? lisibles[i + 1] : null };
 }
 
+/**
+ * Le rapport envoyé juste avant celui-ci par le même auteur, tel que ce lecteur peut le lire (pour comparer :
+ * feux, blocages, temps en réunion). Rien pour un lecteur qui ne voit qu'une partie des rapports.
+ */
+export async function rapportPrecedentLisible(a: Acces, rapport: { auteurId: string; semaine: string }) {
+  const org = await chargerOrganisation();
+  const avant = await db
+    .select()
+    .from(schema.rapportsHebdo)
+    .where(and(eq(schema.rapportsHebdo.auteurId, rapport.auteurId), eq(schema.rapportsHebdo.statut, "envoye"), lt(schema.rapportsHebdo.semaine, rapport.semaine)))
+    .orderBy(desc(schema.rapportsHebdo.semaine))
+    .limit(1);
+  const r = avant[0];
+  if (!r || (r.auteurId !== a.moi.id && !peutVoirRapportComplet(org, a.moi, r))) return null;
+  const lu = await lireRapport(a, r.id);
+  return lu?.complet ? lu : null;
+}
+
+/** Envoyé avant l'heure limite du modèle ? (null : pas d'heure limite, ou pas encore envoyé) */
+export async function envoyeALHeure(rapport: typeof schema.rapportsHebdo.$inferSelect): Promise<boolean | null> {
+  if (!rapport.envoyeLe) return null;
+  const h = await horairesDuRapport(rapport);
+  if (!h.limite) return null;
+  const limite = `${ajouterJours(rapport.semaine, h.limite.jour - 1)} ${String(Number(h.limite.heure.slice(0, 2)) * 60 + Number(h.limite.heure.slice(3, 5))).padStart(4, "0")}`;
+  const m = momentLocal(rapport.envoyeLe);
+  return `${m.jour} ${String(m.minutes).padStart(4, "0")}` < limite;
+}
+
+/** « Lu par » : la première ouverture du rapport par son destinataire est notée. */
+export async function noterLecture(a: Acces, rapport: typeof schema.rapportsHebdo.$inferSelect) {
+  if (rapport.statut !== "envoye" || rapport.luLe || !rapport.destinataireId || rapport.destinataireId !== a.moi.id) return;
+  await db
+    .update(schema.rapportsHebdo)
+    .set({ luLe: new Date(), luPar: a.moi.id })
+    .where(and(eq(schema.rapportsHebdo.id, rapport.id), isNull(schema.rapportsHebdo.luLe)));
+}
+
+/**
+ * « Répondre » est un échange entre l'auteur et son supérieur (le destinataire du rapport) : la direction lit
+ * le rapport mais pas ces mots, qui peuvent porter sur des champs réservés au supérieur.
+ */
+export const peutEchanger = (lecteur: Lecteur) => lecteur === "auteur" || lecteur === "superieur";
+
+/** Les mots échangés sur un rapport (« Répondre »), du plus ancien au plus récent. */
+export async function messagesDuRapport(rapportId: string) {
+  const org = await chargerOrganisation();
+  const m = await db.select().from(schema.messagesRapport).where(eq(schema.messagesRapport.rapportId, rapportId)).orderBy(asc(schema.messagesRapport.creeLe));
+  return m.map((x) => {
+    const p = org.personnes.get(x.auteurId);
+    return { id: x.id, texte: x.texte, creeLe: x.creeLe, auteurId: x.auteurId, nom: p ? nomComplet(p) : "Ancien utilisateur", initiales: p ? initiales(p) : "?" };
+  });
+}
+
+/**
+ * Écrire un mot sur un rapport envoyé. Seuls son auteur et ceux qui le lisent en entier le peuvent ;
+ * l'auteur, son destinataire et ceux qui ont déjà écrit reçoivent une alerte (sauf celui qui écrit).
+ */
+export async function ecrireMessage(a: Acces, rapportId: string, texte: string): Promise<{ ok: true } | { ok: false; erreur: string }> {
+  const t = texte.trim().slice(0, 1000);
+  if (!t) return { ok: false, erreur: "Écrivez quelques mots." };
+  const lu = await lireRapport(a, rapportId);
+  if (!lu || !peutEchanger(lu.lecteur) || lu.rapport.statut !== "envoye") return { ok: false, erreur: "Ce rapport ne peut pas recevoir de réponse." };
+  const [m] = await db.insert(schema.messagesRapport).values({ rapportId, auteurId: a.moi.id, texte: t }).returning();
+  const deja = await db.selectDistinct({ id: schema.messagesRapport.auteurId }).from(schema.messagesRapport).where(eq(schema.messagesRapport.rapportId, rapportId));
+  const org = await chargerOrganisation();
+  const moi = org.personnes.get(a.moi.id);
+  // Ceux qui peuvent encore lire le rapport en entier (un ancien supérieur ne reçoit plus rien).
+  const a_prevenir = [...new Set([lu.rapport.auteurId, ...(lu.rapport.destinataireId ? [lu.rapport.destinataireId] : []), ...deja.map((x) => x.id)])].filter((id) => {
+    const p = org.personnes.get(id);
+    if (id === a.moi.id || !p?.actif) return false;
+    return id === lu.rapport.auteurId || id === lu.rapport.destinataireId || estSuperieurDe(org, id, lu.rapport.auteurId);
+  });
+  if (a_prevenir.length)
+    await db.insert(schema.notifications).values(
+      a_prevenir.map((id) => ({
+        personneId: id,
+        type: "rapport_message",
+        texte: `${moi ? nomComplet(moi) : "Quelqu'un"} sur le rapport de la semaine du ${lu.rapport.semaine.split("-").reverse().slice(0, 2).join("/")} : « ${t.length > 80 ? `${t.slice(0, 77)}…` : t} »`,
+        lien: `/rapports/${rapportId}#reponses`,
+      })),
+    );
+  await noter(a.moi.id, "rapport_message", m.id, { rapport: rapportId });
+  return { ok: true };
+}
+
 /** Mon dernier rapport envoyé avant cette semaine, avec mes propres lignes (pour reprendre ce qui était prévu). */
 export async function monRapportPrecedent(auteurId: string, semaine = semaineCourante()) {
   const [r] = await db
@@ -771,13 +862,19 @@ export async function monRapportPrecedent(auteurId: string, semaine = semaineCou
       tacheId: schema.lignesRapport.tacheId,
       projetId: schema.lignesRapport.projetId,
       projetCode: schema.projets.code,
+      projetTitre: schema.projets.titre,
       origines: schema.lignesRapport.origines,
+      champId: schema.lignesRapport.champId,
+      depuisSemaine: schema.lignesRapport.depuisSemaine,
+      resolu: schema.lignesRapport.resolu,
+      visibilite: schema.lignesRapport.visibilite,
     })
     .from(schema.lignesRapport)
     .leftJoin(schema.projets, eq(schema.projets.id, schema.lignesRapport.projetId))
     .where(eq(schema.lignesRapport.rapportId, r.id))
     .orderBy(asc(schema.lignesRapport.ordre));
-  return { rapport: r, lignes: lignes.filter((l) => l.origines.length === 0) };
+  const reponses = await db.select({ champId: schema.reponsesRapport.champId, projetId: schema.reponsesRapport.projetId, valeur: schema.reponsesRapport.valeur }).from(schema.reponsesRapport).where(eq(schema.reponsesRapport.rapportId, r.id));
+  return { rapport: r, lignes: lignes.filter((l) => l.origines.length === 0), reponses };
 }
 
 /** Une ligne prévue la semaine dernière est-elle déjà dans le rapport de cette semaine ? (même tâche, ou même texte) */
@@ -785,6 +882,19 @@ export function dejaReprise(prevue: { texte: string; tacheId: string | null }, a
   const t = norm(prevue.texte);
   const trouvee = actuelles.find((l) => (prevue.tacheId && l.tacheId === prevue.tacheId) || norm(l.texte) === t || (t.length > 12 && norm(l.texte).startsWith(t)));
   return trouvee ? (trouvee.partie ?? "autre") : null;
+}
+
+/**
+ * Où reprendre une ligne d'un rapport précédent : son champ s'il existe encore avec la même rubrique, sinon le
+ * premier champ de cette rubrique au moins aussi fermé (une ligne réservée au supérieur ne devient pas lisible
+ * par la direction ou un chef de projet). Rien si aucun ne convient.
+ */
+export function champPourReprise(f: Champ[], l: { champId: string; visibilite?: string | null }, rubrique: Rubrique, formulaireOrigine: Champ[]): Champ | undefined {
+  const origine = formulaireOrigine.find((c) => c.id === l.champId);
+  const source: VisibiliteLigne = origine?.visibilite ?? "tous";
+  // Une ligne qui porte sa propre visibilité la garde (elle est copiée) ; sinon le champ doit être au moins aussi fermé.
+  const candidats = f.filter((c) => c.type === "lignes" && c.partie !== "equipe" && c.rubrique === rubrique && (!!l.visibilite || RANG_VISIBILITE[c.visibilite ?? "tous"] >= RANG_VISIBILITE[source]));
+  return candidats.find((c) => c.id === l.champId) ?? candidats[0];
 }
 
 /** Le champ de lignes qui reçoit une rubrique (mon travail, pas la partie équipe). */
@@ -811,7 +921,7 @@ const RUBRIQUES_DE_STATUT = new Set(["fait", "en_cours", "bloque"]);
  * dans « Fait » (la ligne existante est déplacée, son texte gardé), une nouvelle tâche s'ajoute, un
  * nouveau projet reçoit son feu. Ce que la personne a retiré ne revient pas. Rien n'est supprimé.
  */
-export async function completerBrouillon(rapport: typeof schema.rapportsHebdo.$inferSelect): Promise<number> {
+export async function completerBrouillon(rapport: typeof schema.rapportsHebdo.$inferSelect, o: { marquer?: boolean } = { marquer: true }): Promise<number> {
   if (rapport.statut !== "brouillon") return 0;
   const f = formulaireDe(rapport);
   const prevues = await brouillonParRegles(rapport.auteurId, rapport.semaine);
@@ -824,11 +934,13 @@ export async function completerBrouillon(rapport: typeof schema.rapportsHebdo.$i
     const c = champDe(p.partie);
     if (!c || ecartees.has(`${p.tacheId}:${p.partie}`)) continue;
     const memeTache = lignes.filter((l) => l.tacheId === p.tacheId);
-    if (memeTache.some((l) => l.champId === c.id)) continue;
+    // Bloquée de nouveau après un « Résolu » : le nouveau blocage a sa ligne, l'ancien reste résolu.
+    if (memeTache.some((l) => l.champId === c.id && !(p.partie === "bloque" && l.resolu))) continue;
     // La tâche a changé d'état : sa ligne la suit (en cours → fait, en cours → bloqué…).
-    const aDeplacer = RUBRIQUES_DE_STATUT.has(p.partie) ? memeTache.find((l) => l.partie && RUBRIQUES_DE_STATUT.has(l.partie)) : undefined;
+    // Un blocage marqué « Résolu » reste tel quel : la tâche débloquée reçoit sa propre ligne.
+    const aDeplacer = RUBRIQUES_DE_STATUT.has(p.partie) ? memeTache.find((l) => !l.resolu && l.partie && RUBRIQUES_DE_STATUT.has(l.partie)) : undefined;
     if (aDeplacer) {
-      await db.update(schema.lignesRapport).set({ champId: c.id, partie: p.partie }).where(eq(schema.lignesRapport.id, aDeplacer.id));
+      if (!(await sansDoublon(db.update(schema.lignesRapport).set({ champId: c.id, partie: p.partie }).where(eq(schema.lignesRapport.id, aDeplacer.id))))) continue;
       aDeplacer.champId = c.id;
       aDeplacer.partie = p.partie;
     } else {
@@ -836,7 +948,9 @@ export async function completerBrouillon(rapport: typeof schema.rapportsHebdo.$i
       const [n] = await db
         .insert(schema.lignesRapport)
         .values({ rapportId: rapport.id, champId: c.id, partie: p.partie, texte: p.texte, projetId: c.parProjet === false ? null : p.projetId, tacheId: p.tacheId, ordre })
+        .onConflictDoNothing()
         .returning();
+      if (!n) continue; // ajoutée au même moment par une autre ouverture du brouillon
       lignes.push({ ...n, projetCode: null, projetTitre: null, projetChefId: null });
     }
     changes += 1;
@@ -853,8 +967,103 @@ export async function completerBrouillon(rapport: typeof schema.rapportsHebdo.$i
       }
     }
   }
-  await db.update(schema.rapportsHebdo).set({ completeLe: new Date(), majLe: new Date() }).where(eq(schema.rapportsHebdo.id, rapport.id));
+  changes += await suivreLaSemaineDerniere(rapport, f);
+  if (o.marquer) await db.update(schema.rapportsHebdo).set({ completeLe: new Date(), majLe: new Date() }).where(eq(schema.rapportsHebdo.id, rapport.id));
+  else if (changes) await db.update(schema.rapportsHebdo).set({ majLe: new Date() }).where(eq(schema.rapportsHebdo.id, rapport.id));
   return changes;
+}
+
+/** Ce qui se reconduit seul d'une semaine à l'autre tant que ce n'est pas marqué « Résolu ». */
+export const RUBRIQUES_RECONDUITES = new Set(["bloque", "decision"]);
+
+/**
+ * La semaine dernière, dans le brouillon de cette semaine :
+ * - un blocage ou une décision attendue écrits à la main, non résolus, reviennent d'eux-mêmes (avec la semaine
+ *   où ils sont apparus) ; une décision liée à une tâche revient tant que la tâche est ouverte ;
+ * - un blocage lié à une tâche suit la tâche (encore bloquée : la règle l'ajoute ; débloquée : il est résolu) ;
+ *   on lui garde seulement la semaine où il est apparu ;
+ * - ce que la personne a retiré ou marqué « Résolu » ne revient pas.
+ */
+async function suivreLaSemaineDerniere(rapport: typeof schema.rapportsHebdo.$inferSelect, f: Champ[]): Promise<number> {
+  const prec = await monRapportPrecedent(rapport.auteurId, rapport.semaine);
+  if (!prec) return 0;
+  const fPrec = formulaireDe(prec.rapport);
+  const actuelles = (await lignesDuRapport(rapport.id)).filter((l) => l.origines.length === 0);
+  const ecartees = new Set(rapport.ecartees);
+  const idsTaches = [...new Set(prec.lignes.map((l) => l.tacheId).filter((x): x is string => !!x))];
+  const taches = idsTaches.length
+    ? new Map((await db.select({ id: schema.taches.id, statut: schema.taches.statut, annuleeLe: schema.taches.annuleeLe }).from(schema.taches).where(inArray(schema.taches.id, idsTaches))).map((t) => [t.id, t]))
+    : new Map();
+  let visibles: Set<string> | "tous" | null = null;
+  let ordre = actuelles.reduce((m, l) => Math.max(m, l.ordre), 0);
+  let n = 0;
+  for (const l of prec.lignes) {
+    if (!l.partie || !RUBRIQUES_RECONDUITES.has(l.partie) || l.resolu) continue;
+    const depuis = l.depuisSemaine ?? prec.rapport.semaine;
+    // Blocage d'une tâche : il suit la tâche ; on retrouve seulement sa ligne de cette semaine pour l'ancienneté.
+    if (l.tacheId && l.partie === "bloque") {
+      const ici = actuelles.find((a) => a.tacheId === l.tacheId && a.partie === "bloque");
+      if (ici) {
+        if (!ici.depuisSemaine) {
+          const lier = !actuelles.some((a) => a.repriseDeId === l.id);
+          await sansDoublon(db.update(schema.lignesRapport).set({ depuisSemaine: depuis, ...(lier ? { repriseDeId: l.id } : {}) }).where(eq(schema.lignesRapport.id, ici.id)));
+          ici.depuisSemaine = depuis;
+          if (lier) ici.repriseDeId = l.id;
+        }
+        continue;
+      }
+      // Débloquée, terminée ou annulée : le blocage est levé. Encore bloquée sans ligne (champ non prérempli) :
+      // elle se reconduit comme un blocage écrit à la main, sauf si on l'a retirée.
+      const t = taches.get(l.tacheId);
+      if (!t || t.annuleeLe || t.statut !== "bloquee" || ecartees.has(`${l.tacheId}:bloque`)) continue;
+    }
+    if (ecartees.has(`r:${l.id}`)) continue;
+    if (l.tacheId) {
+      const t = taches.get(l.tacheId);
+      if (!t || t.annuleeLe || t.statut === "faite") continue;
+    }
+    if (actuelles.some((a) => a.repriseDeId === l.id) || dejaReprise(l, actuelles.filter((a) => a.partie === l.partie))) continue;
+    // Le même champ s'il existe encore, sinon un champ de la même rubrique au moins aussi fermé.
+    const c = champPourReprise(f, l, l.partie as Rubrique, fPrec);
+    if (!c) continue;
+    // Le projet seulement si l'auteur le voit encore.
+    let projetId = c.parProjet === false ? null : l.projetId;
+    if (projetId) {
+      visibles ??= await projetsVisiblesDe(rapport.auteurId);
+      if (visibles !== "tous" && !visibles.has(projetId)) projetId = null;
+    }
+    ordre += 1;
+    const [nouvelle] = await db
+      .insert(schema.lignesRapport)
+      .values({ rapportId: rapport.id, champId: c.id, partie: l.partie, texte: l.texte, projetId, tacheId: l.tacheId, ordre, repriseDeId: l.id, depuisSemaine: depuis, visibilite: l.visibilite })
+      .onConflictDoNothing()
+      .returning();
+    if (!nouvelle) continue;
+    actuelles.push({ ...nouvelle, projetCode: null, projetTitre: null, projetChefId: null });
+    n += 1;
+  }
+  return n;
+}
+
+/** Les projets qu'une personne voit (une ligne reconduite ne garde son projet que s'il lui est encore ouvert). */
+async function projetsVisiblesDe(personneId: string): Promise<Set<string> | "tous"> {
+  const [p] = await db.select().from(schema.personnes).where(eq(schema.personnes.id, personneId));
+  if (!p) return new Set();
+  return idsProjetsVisibles(
+    await acces({ id: p.id, prenom: p.prenom, nom: p.nom, poste: p.poste, directeur: p.directeur, executif: p.executif, administrateur: p.administrateur, externe: p.externe, theme: p.theme, doitChangerMotDePasse: false }),
+  );
+}
+
+/** Une écriture qui heurterait une ligne déjà là (ouverture simultanée du brouillon) est sans effet : false. */
+export async function sansDoublon(q: PromiseLike<unknown>): Promise<boolean> {
+  try {
+    await q;
+    return true;
+  } catch (e) {
+    const code = (e as { code?: string; cause?: { code?: string } }).code ?? (e as { cause?: { code?: string } }).cause?.code;
+    if (code === "23505") return false;
+    throw e;
+  }
 }
 
 /** Où en est la semaine de ce rapport (prêt à relire, rappel, en retard) et ses heures. */
@@ -905,7 +1114,7 @@ export async function matierePourSynthese(rapport: typeof schema.rapportsHebdo.$
   }
   const f = formulaireDe(rapport);
   for (const l of await lignesDuRapport(rapport.id)) {
-    if (l.origines.length || !l.projetId || l.retiree) continue;
+    if (l.origines.length || !l.projetId || l.retiree || l.resolu) continue;
     const c = f.find((k) => k.id === l.champId);
     if (!c || c.type !== "lignes" || c.partie === "equipe" || !compatible(c.visibilite ?? "tous", cible)) continue;
     groupe(l.projetId).elements.push({ rubrique: c.rubrique ?? l.partie, texte: l.texte, qui: prenom(rapport.auteurId) });
@@ -957,7 +1166,7 @@ export async function suggestionsPourDecision(rapport: typeof schema.rapportsHeb
   const f = formulaireDe(rapport);
   const [lignes, reponses] = await Promise.all([lignesDuRapport(rapport.id), reponsesDuRapport(rapport.id)]);
   const propres = lignes.filter((l) => l.origines.length === 0);
-  const bloquees = propres.filter((l) => l.partie === "bloque" && f.find((c) => c.id === l.champId)?.partie !== "equipe").map((l) => l.texte);
+  const bloquees = propres.filter((l) => l.partie === "bloque" && !l.resolu && f.find((c) => c.id === l.champId)?.partie !== "equipe").map((l) => l.texte);
   const deja = [...propres.filter((l) => l.champId === champ.id).map((l) => l.texte), ...reponses.filter((x) => x.champId === champ.id).flatMap((x) => x.valeur.split("\n"))];
   const textes = suggestionsDecision(taches, bloquees, aujourdhui(), deja);
   // Le projet d'une proposition : celui de la tâche dont elle parle.

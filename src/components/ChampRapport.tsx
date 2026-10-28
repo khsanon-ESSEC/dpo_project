@@ -20,7 +20,8 @@ import {
   type Champ,
   type ReunionsFigees,
 } from "@/lib/modeles";
-import { jourAbrege } from "@/lib/dates";
+import { dateCourte, jourAbrege } from "@/lib/dates";
+import { semainesDepuis } from "@/lib/lecture-rapport";
 import { dureeTexte } from "@/lib/projets";
 import type { AvisSante, ChargeMembre, LigneLue, MatiereSynthese, ReponseLue } from "@/lib/donnees/rapport";
 import type { PieceLue } from "@/lib/donnees/pieces";
@@ -64,6 +65,8 @@ export type ContexteRapport = {
   projetsVisibles?: "tous" | Set<string>;
   /** Code → projet, pour les éléments qui ne gardent que le code (réunions figées dans le rapport). */
   codesProjets?: Map<string, { id: string; titre: string }>;
+  /** Lecture : le rapport précédent existe (badges « Nouveau ») ; ses feux par projet (tendance). */
+  precedent?: { sante: Map<string, string> } | null;
 };
 
 const voitProjet = (x: ContexteRapport, id: string | null | undefined) => !!id && !!x.projetsVisibles && (x.projetsVisibles === "tous" || x.projetsVisibles.has(id));
@@ -81,19 +84,131 @@ function Verrou({ c }: { c: Champ }) {
   );
 }
 
-function Titre({ c, x, id, nombre, ton, glyphe }: { c: Champ; x: ContexteRapport; id: string; nombre?: number | null; ton?: string; glyphe?: boolean }) {
+function Titre({ c, x, id, nombre, ton }: { c: Champ; x: ContexteRapport; id: string; nombre?: number | string | null; ton?: string; glyphe?: boolean }) {
   const H = x.niveauTitre === 3 ? "h3" : "h2";
   const remplissable = !estDecoratif(c) && !(c.type === "reprise" && (c.reprise === "sante" || c.reprise === "charge"));
+  const montre = nombre !== undefined && nombre !== null && nombre !== 0 && nombre !== "";
+  if (x.mode === "lecture") {
+    return (
+      <div className="champ-rapport__tete">
+        <H id={id} className="champ-rapport__etiquette">
+          {c.libelle}
+          {montre ? <span className={ton}> · {nombre}</span> : null}
+        </H>
+        <Verrou c={c} />
+      </div>
+    );
+  }
   return (
     <div className="champ-rapport__tete">
-      {nombre !== undefined && nombre !== null ? <span className={`champ-rapport__nombre ${ton ?? ""}`}>{nombre}</span> : glyphe ? <span className="champ-rapport__nombre" aria-hidden="true" /> : null}
       <div className="champ-rapport__titre">
         <H id={id}>{c.libelle}</H>
+        {nombre !== undefined && nombre !== null ? <span className={`champ-rapport__compte ${ton ?? ""}`}>{nombre}</span> : null}
         <Verrou c={c} />
-        {!c.obligatoire && x.mode !== "lecture" && !estDecoratif(c) && c.type !== "reprise" ? <span className="ton-discret" style={{ fontSize: 12 }}>Facultatif</span> : null}
+        {!c.obligatoire && !estDecoratif(c) && c.type !== "reprise" ? <span className="ton-discret" style={{ fontSize: 12 }}>Facultatif</span> : null}
       </div>
       {x.mode === "saisie" && remplissable ? <CasePartie rapportId={x.rapportId} champId={c.id} relue={x.relues.has(c.id)} libelle={c.libelle} /> : null}
     </div>
+  );
+}
+
+/** Une ligne compacte (charge, réunions, pièces jointes) : titre, résumé et témoin « Relu » sur une seule ligne. */
+function TeteCompacte({ c, x, id, children }: { c: Champ; x: ContexteRapport; id: string; children: React.ReactNode }) {
+  const H = x.niveauTitre === 3 ? "h3" : "h2";
+  return (
+    <div className="champ-compact">
+      <H id={id} className="champ-compact__titre">
+        {c.libelle}
+      </H>
+      <Verrou c={c} />
+      {children}
+      <CasePartie rapportId={x.rapportId} champId={c.id} relue={x.relues.has(c.id)} libelle={c.libelle} />
+    </div>
+  );
+}
+
+/** Lecture des lignes : les blocages et décisions avec leur ancienneté ; le reste regroupé par projet. */
+function LignesLues({ c, x, lignes }: { c: Champ; x: ContexteRapport; lignes: LigneLue[] }) {
+  const parProjet = c.parProjet !== false;
+  const H = x.niveauTitre === 3 ? "h4" : "h3";
+  const code = (l: { projetId: string | null; projetCode: string | null; projetTitre: string | null }) => (parProjet ? <CodeProjet id={l.projetId} code={l.projetCode ?? "—"} titre={l.projetTitre ?? "Sans projet"} visible={voitProjet(x, l.projetId)} /> : null);
+  if (!lignes.length) {
+    return (
+      <p className="vide champ-rapport__corps" style={{ margin: 0 }}>
+        {c.rubrique === "bloque" ? "Rien de bloqué." : c.rubrique === "decision" ? "Aucune décision attendue." : "Rien cette semaine."}
+      </p>
+    );
+  }
+  if (c.rubrique === "bloque" || c.rubrique === "decision") {
+    const tri = [...lignes].sort((p, q) => Number(p.resolu) - Number(q.resolu));
+    return (
+      <ul className="liste champ-rapport__corps lignes-lues">
+        {tri.map((l) => {
+          const n = semainesDepuis(l.depuisSemaine, x.semaine);
+          return (
+            <li key={l.id} className={`ligne-lue${l.resolu ? " ligne-lue--resolue" : ""}`}>
+              {code(l)}
+              <span className="ligne-lue__texte">
+                {l.texte}
+                {l.resolu ? (
+                  <span className="ligne-lue__sous">{n > 1 ? `Résolu cette semaine, après ${n} semaines` : "Résolu cette semaine"}</span>
+                ) : n > 1 && l.depuisSemaine ? (
+                  <span className="ligne-lue__sous">Reconduit · signalé pour la première fois la semaine du {dateCourte(l.depuisSemaine)}</span>
+                ) : null}
+              </span>
+              {l.resolu ? (
+                <span className="age-ligne age-ligne--resolu">Résolu</span>
+              ) : n > 1 ? (
+                <span className="age-ligne age-ligne--ancien">{n}ᵉ semaine</span>
+              ) : x.precedent ? (
+                <span className="age-ligne">Nouveau</span>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+  const projets = new Set(lignes.map((l) => l.projetId ?? ""));
+  if (parProjet && (c.rubrique === "fait" || c.rubrique === "en_cours") && lignes.length > 1 && projets.size < lignes.length) {
+    const groupes = new Map<string, { id: string | null; code: string; titre: string; lignes: LigneLue[] }>();
+    for (const l of lignes) {
+      const k = l.projetId ?? "";
+      const g = groupes.get(k) ?? { id: l.projetId, code: l.projetCode ?? "—", titre: l.projetTitre ?? "Sans projet", lignes: [] };
+      g.lignes.push(l);
+      groupes.set(k, g);
+    }
+    return (
+      <div className="champ-rapport__corps">
+        {[...groupes.values()].map((g) => (
+          <div key={g.code + g.titre} className="groupe-projet">
+            <H className="groupe-projet__titre">
+              <CodeProjet id={g.id} code={g.code} titre={g.titre} visible={voitProjet(x, g.id)} />
+              <LienProjet id={g.id} visible={voitProjet(x, g.id)}>
+                {g.titre}
+              </LienProjet>
+            </H>
+            <ul className="liste lignes-lues lignes-lues--puces">
+              {g.lignes.map((l) => (
+                <li key={l.id} className="ligne-lue">
+                  <span className="ligne-lue__texte">{l.texte}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <ul className="liste champ-rapport__corps lignes-lues">
+      {lignes.map((l) => (
+        <li key={l.id} className="ligne-lue">
+          {code(l)}
+          <span className="ligne-lue__texte">{l.texte}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -131,10 +246,12 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
 
   // ---------- Lignes ----------
   if (c.type === "lignes") {
-    const propres = lignes.filter((l) => l.origines.length === 0);
+    const propres = lignes.filter((l) => l.origines.length === 0 && !l.retiree);
+    const ouvertes = c.rubrique === "bloque" || c.rubrique === "decision" ? propres.filter((l) => !l.resolu) : propres;
+    const attention = x.mode === "lecture" && c.rubrique === "decision" && ouvertes.length > 0;
     return (
-      <section className="carte champ-rapport" aria-labelledby={idT}>
-        <Titre c={c} x={x} id={idT} nombre={x.mode === "apercu" ? null : propres.length} ton={c.rubrique === "bloque" && propres.length ? "ton-veille" : ""} glyphe={x.mode === "apercu"} />
+      <section className={`carte champ-rapport${attention ? " champ-rapport--attention" : ""}`} aria-labelledby={idT}>
+        <Titre c={c} x={x} id={idT} nombre={x.mode === "apercu" ? null : ouvertes.length} ton={c.rubrique === "bloque" && ouvertes.length ? "ton-veille" : ""} />
         <Aide c={c} id={idA} x={x} />
         <PropositionsDecision c={c} x={x} />
         {x.mode === "apercu" ? (
@@ -142,20 +259,20 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
             {c.prerempli && c.rubrique && c.rubrique !== "autre" ? `Préparé à partir des tâches : ${LIBELLE_RUBRIQUE[c.rubrique].toLowerCase()}.` : "La personne écrit ses lignes."}
             {c.parProjet !== false ? " Chaque ligne porte son projet." : ""}
             {c.rubrique === "decision" ? " Des propositions sont faites à partir des tâches bloquées et des échéances dépassées." : ""}
+            {c.rubrique === "bloque" || c.rubrique === "decision" ? " Ce qui n'est pas marqué « Résolu » revient de lui-même la semaine suivante." : ""}
           </p>
+        ) : saisie ? (
+          propres.length ? (
+            <ul className="liste champ-rapport__corps">
+              {propres.map((l) => (
+                <LigneEditable key={l.id} ligne={l} projets={x.projets} modifiable parProjet={c.parProjet !== false} projetVisible={voitProjet(x, l.projetId)} semaine={x.semaine} />
+              ))}
+            </ul>
+          ) : null
         ) : (
-          <ul className="liste champ-rapport__corps">
-            {propres.map((l) => (
-              <LigneEditable key={l.id} ligne={l} projets={x.projets} modifiable={saisie} parProjet={c.parProjet !== false} projetVisible={voitProjet(x, l.projetId)} />
-            ))}
-            {propres.length === 0 ? (
-              <li style={{ borderTop: 0 }} className="vide">
-                Rien cette semaine.
-              </li>
-            ) : null}
-          </ul>
+          <LignesLues c={c} x={x} lignes={propres} />
         )}
-        {saisie ? <AjoutLigne rapportId={x.rapportId} champId={c.id} libelle={c.libelle} projets={x.projets} parProjet={c.parProjet !== false} /> : null}
+        {saisie ? <AjoutLigne rapportId={x.rapportId} champId={c.id} libelle={c.libelle} projets={x.projets} parProjet={c.parProjet !== false} replie={propres.length > 0} /> : null}
       </section>
     );
   }
@@ -164,7 +281,7 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
   if (c.type === "sante") {
     return (
       <section className="carte champ-rapport" aria-labelledby={idT}>
-        <Titre c={c} x={x} id={idT} nombre={x.mode === "apercu" ? null : reponses.length} glyphe={x.mode === "apercu"} />
+        <Titre c={c} x={x} id={idT} />
         <Aide c={c} id={idA} x={x} />
         <div className="champ-rapport__corps">
           {x.mode === "apercu" ? (
@@ -204,7 +321,10 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
                         choix={NIVEAUX_SANTE.map((n) => ({ valeur: n.valeur, libelle: n.libelle, ton: n.valeur === "en_retard" ? ("retard" as const) : undefined }))}
                       />
                     ) : (
-                      <span className={`pastille-sante pastille-sante--${r.valeur || "vide"}`}>{libelleSante(r.valeur) || "Non noté"}</span>
+                      <span className="feu__lu">
+                        <span className={`pastille-sante pastille-sante--${r.valeur || "vide"}`}>{libelleSante(r.valeur) || "Non noté"}</span>
+                        <Tendance x={x} projetId={r.projetId} valeur={r.valeur} />
+                      </span>
                     )}
                   </div>
                   {saisie && r.valeur && r.valeur !== "dans_les_temps" ? (
@@ -230,16 +350,10 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
   if (c.type === "charge") {
     const r = reponses[0];
     const ecart = r?.propose && r.valeur && r.valeur !== r.propose;
-    return (
-      <section className="carte champ-rapport" aria-labelledby={idT}>
-        <Titre c={c} x={x} id={idT} glyphe />
-        <Aide c={c} id={idA} x={x} />
-        <div className="champ-rapport__corps" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {x.mode === "apercu" ? (
-            <p className="apercu">
-              {NIVEAUX_RESSENTI.map((n) => n.libelle).join(", ")}.{c.prerempli ? " Proposé d'après les heures de tâches prévues ; la personne corrige si ce n'est pas son ressenti." : ""}
-            </p>
-          ) : saisie ? (
+    if (saisie) {
+      return (
+        <section className="carte champ-rapport champ-rapport--compact" aria-labelledby={idT}>
+          <TeteCompacte c={c} x={x} id={idT}>
             <ChoixSegmente
               rapportId={x.rapportId}
               champId={c.id}
@@ -248,15 +362,29 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
               valeur={r?.valeur ?? ""}
               choix={NIVEAUX_RESSENTI.map((n) => ({ valeur: n.valeur, libelle: n.libelle, propose: r?.propose === n.valeur }))}
             />
+            {r?.commentaire ? <span className="champ-compact__resume">calculé : {r.commentaire} prévues</span> : null}
+          </TeteCompacte>
+          {ecart ? <p className="note ton-veille" style={{ margin: 0 }}>Votre ressenti diffère du calcul : votre supérieur verra les deux. Une estimation de tâche à revoir ?</p> : null}
+        </section>
+      );
+    }
+    return (
+      <section className="carte champ-rapport" aria-labelledby={idT}>
+        <Titre c={c} x={x} id={idT} />
+        <Aide c={c} id={idA} x={x} />
+        <div className="champ-rapport__corps" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {x.mode === "apercu" ? (
+            <p className="apercu">
+              {NIVEAUX_RESSENTI.map((n) => n.libelle).join(", ")}.{c.prerempli ? " Proposé d'après les heures de tâches prévues ; la personne corrige si ce n'est pas son ressenti." : ""}
+            </p>
           ) : (
             <p style={{ margin: 0, fontSize: 15 }}>{libelleRessenti(r?.valeur) || "Non renseignée"}</p>
           )}
           {x.mode !== "apercu" && r?.commentaire ? (
             <span className="note">
-              Calculé : {r.commentaire} de tâches prévues la semaine prochaine{!saisie && r.propose ? ` (proposé : ${libelleRessenti(r.propose).toLowerCase()})` : ""}.
+              Calculé : {r.commentaire} de tâches prévues la semaine prochaine{r.propose ? ` (proposé : ${libelleRessenti(r.propose).toLowerCase()})` : ""}.
             </span>
           ) : null}
-          {saisie && ecart ? <span className="note ton-veille">Votre ressenti diffère du calcul : votre supérieur verra les deux. Une estimation de tâche à revoir ?</span> : null}
         </div>
       </section>
     );
@@ -266,8 +394,8 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
   if (c.type === "texte" || c.type === "texte_long" || c.type === "nombre" || c.type === "date" || c.type === "choix" || c.type === "echelle") {
     const v = reponses[0]?.valeur ?? "";
     return (
-      <section className="carte champ-rapport" aria-labelledby={idT}>
-        <Titre c={c} x={x} id={idT} glyphe />
+      <section className={`carte champ-rapport${x.mode === "lecture" && c.rubrique === "decision" && v.trim() ? " champ-rapport--attention" : ""}`} aria-labelledby={idT}>
+        <Titre c={c} x={x} id={idT} />
         <Aide c={c} id={idA} x={x} />
         <PropositionsDecision c={c} x={x} />
         <div className="champ-rapport__corps">
@@ -293,7 +421,7 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
               />
             )
           ) : (
-            <p style={{ margin: 0, fontSize: 15, lineHeight: "22px", whiteSpace: "pre-line" }}>{v || <span className="ton-discret">Sans réponse</span>}</p>
+            <p style={{ margin: 0, fontSize: 15, lineHeight: "22px", whiteSpace: "pre-line" }}>{v || <span className="ton-discret">{c.rubrique === "decision" ? "Aucune décision attendue." : "Sans réponse"}</span>}</p>
           )}
         </div>
       </section>
@@ -302,50 +430,58 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
 
   // ---------- Réunions de la semaine ----------
   if (c.type === "reunions") {
-    const r = saisie ? (x.reunions ?? null) : lireReunions(reponses[0]?.valeur);
+    // Le brouillon (et son aperçu) montre la semaine en direct ; un rapport envoyé, la liste figée à l'envoi.
+    const r = x.reunions !== undefined && x.reunions !== null ? x.reunions : saisie ? null : lireReunions(reponses[0]?.valeur);
     const n = r?.reunions.length ?? 0;
+    const liste = n ? (
+      <ul className="liste">
+        {r!.reunions.map((m, i) => (
+          <li key={i} className="rangee" style={{ minHeight: 44, gap: 12 }}>
+            <span className="rangee__meta" style={{ width: 86, flex: "none", fontSize: 12 }}>
+              {jourAbrege(m.jour)}
+              {m.heure ? ` ${m.heure.replace(":", " h ")}` : ""}
+            </span>
+            {m.projet ? <CodeProjet id={x.codesProjets?.get(m.projet)?.id} code={m.projet} titre={x.codesProjets?.get(m.projet)?.titre} visible={voitProjet(x, x.codesProjets?.get(m.projet)?.id)} /> : null}
+            <span className="rangee__texte">
+              <span className="rangee__titre">{m.titre}</span>
+              {m.avec ? <span className="rangee__sous">avec {m.avec} autre{m.avec > 1 ? "s" : ""} personne{m.avec > 1 ? "s" : ""}</span> : null}
+            </span>
+            <span className="rangee__meta">{dureeTexte(m.minutes)}</span>
+          </li>
+        ))}
+      </ul>
+    ) : null;
+    if (saisie) {
+      return (
+        <section className="carte champ-rapport champ-rapport--compact" aria-labelledby={idT}>
+          <TeteCompacte c={c} x={x} id={idT}>
+            <span className="champ-compact__resume">{n ? `${dureeTexte(r!.minutes)} · ${n} réunion${n > 1 ? "s" : ""}, reprises du journal` : "aucune notée cette semaine"}</span>
+            <a className="champ-compact__lien" href={`/reunions${x.semaine ? `?semaine=${x.semaine}` : ""}`}>
+              Noter une réunion
+            </a>
+          </TeteCompacte>
+          {n ? (
+            <details className="champ-compact__detail">
+              <summary>Voir le détail · figé à l&apos;envoi du rapport</summary>
+              {liste}
+            </details>
+          ) : null}
+        </section>
+      );
+    }
     return (
       <section className="carte champ-rapport" aria-labelledby={idT}>
-        <Titre c={c} x={x} id={idT} nombre={x.mode === "apercu" ? null : n} glyphe={x.mode === "apercu"} />
+        <Titre c={c} x={x} id={idT} nombre={x.mode === "lecture" && n ? dureeTexte(r!.minutes) : null} />
         <Aide c={c} id={idA} x={x} />
         <div className="champ-rapport__corps" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {x.mode === "apercu" ? (
             <p className="apercu">Les réunions de la semaine, reprises du journal des réunions, avec leur durée totale. Figées à l&apos;envoi.</p>
+          ) : n ? (
+            liste
           ) : (
-            <>
-              <p style={{ margin: 0, fontSize: 15 }}>
-                {n ? (
-                  <>
-                    <strong style={{ fontWeight: 600 }}>{dureeTexte(r!.minutes)}</strong> en réunion · {n} réunion{n > 1 ? "s" : ""}
-                  </>
-                ) : (
-                  <span className="ton-discret">Aucune réunion notée cette semaine.</span>
-                )}
-              </p>
-              {n ? (
-                <ul className="liste">
-                  {r!.reunions.map((m, i) => (
-                    <li key={i} className="rangee" style={{ minHeight: 44, gap: 12 }}>
-                      <span className="rangee__meta" style={{ width: 64, flex: "none", fontSize: 12 }}>
-                        {jourAbrege(m.jour)}
-                        {m.heure ? ` ${m.heure.replace(":", " h ")}` : ""}
-                      </span>
-                      {m.projet ? <CodeProjet id={x.codesProjets?.get(m.projet)?.id} code={m.projet} titre={x.codesProjets?.get(m.projet)?.titre} visible={voitProjet(x, x.codesProjets?.get(m.projet)?.id)} /> : null}
-                      <span className="rangee__texte">
-                        <span className="rangee__titre">{m.titre}</span>
-                        {m.avec ? <span className="rangee__sous">avec {m.avec} autre{m.avec > 1 ? "s" : ""} personne{m.avec > 1 ? "s" : ""}</span> : null}
-                      </span>
-                      <span className="rangee__meta">{dureeTexte(m.minutes)}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              {saisie ? (
-                <p className="note" style={{ margin: 0 }}>
-                  <a href={`/reunions${x.semaine ? `?semaine=${x.semaine}` : ""}`}>Noter une réunion</a> · la liste est figée à l&apos;envoi du rapport.
-                </p>
-              ) : null}
-            </>
+            <p className="vide" style={{ margin: 0 }}>
+              Aucune réunion notée cette semaine.
+            </p>
           )}
         </div>
       </section>
@@ -355,43 +491,41 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
   // ---------- Pièces jointes ----------
   if (c.type === "piece_jointe") {
     const pieces = (x.pieces ?? []).filter((p) => p.champId === c.id);
-    return (
-      <section className="carte champ-rapport" aria-labelledby={idT}>
-        <Titre c={c} x={x} id={idT} nombre={x.mode === "apercu" ? null : pieces.length} glyphe={x.mode === "apercu"} />
-        <Aide c={c} id={idA} x={x} />
-        <div className="champ-rapport__corps" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {x.mode === "apercu" ? (
-            <p className="apercu">La personne joint des fichiers : PDF, images, Word, Excel, PowerPoint, CSV ou texte ; 10 Mo au plus chacun, dix au plus.</p>
-          ) : pieces.length ? (
-            <ul className="liste">
-              {pieces.map((p) => (
-                <li key={p.id} className="piece">
-                  <Icone nom="trombone" taille={16} />
-                  <a href={`/api/pieces/${p.id}`} className="piece__nom" download>
-                    {p.nom}
-                  </a>
-                  <span className="piece__taille">{tailleLisible(p.taille)}</span>
-                  {saisie ? (
-                    <form action={retirer.bind(null, x.rapportId, p.id)}>
-                      <button type="submit" className="bouton-mini" aria-label={`Retirer ${p.nom}`}>
-                        Retirer
-                      </button>
-                    </form>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="vide" style={{ margin: 0 }}>
-              Aucun fichier.
-            </p>
-          )}
-          {x.erreurPiece?.champId === c.id ? (
+    const erreur = x.erreurPiece?.champId === c.id ? x.erreurPiece.message : null;
+    const liste = pieces.length ? (
+      <ul className="liste">
+        {pieces.map((p) => (
+          <li key={p.id} className="piece">
+            <Icone nom="trombone" taille={16} />
+            <a href={`/api/pieces/${p.id}`} className="piece__nom" download>
+              {p.nom}
+            </a>
+            <span className="piece__taille">{tailleLisible(p.taille)}</span>
+            {saisie ? (
+              <form action={retirer.bind(null, x.rapportId, p.id)}>
+                <button type="submit" className="bouton-mini" aria-label={`Retirer ${p.nom}`}>
+                  Retirer
+                </button>
+              </form>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    ) : null;
+    if (saisie) {
+      return (
+        <section className="carte champ-rapport champ-rapport--compact" aria-labelledby={idT}>
+          <TeteCompacte c={c} x={x} id={idT}>
+            <span className="champ-compact__resume">{pieces.length ? `${pieces.length} fichier${pieces.length > 1 ? "s" : ""}` : "aucune"}</span>
+          </TeteCompacte>
+          {liste}
+          {erreur ? (
             <p className="erreur" role="alert" style={{ margin: 0 }}>
-              {x.erreurPiece.message}
+              {erreur}
             </p>
           ) : null}
-          {saisie ? (
+          <details className="champ-compact__detail" open={!!erreur}>
+            <summary>Joindre un fichier</summary>
             <form action={deposer.bind(null, x.rapportId, c.id)} className="piece__depot">
               <label htmlFor={`fichiers-${c.id}`} className="visuellement-cache">
                 Fichiers à joindre à « {c.libelle} »
@@ -404,7 +538,24 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
                 PDF, images, Word, Excel, PowerPoint, CSV ou texte · 10 Mo au plus par fichier
               </span>
             </form>
-          ) : null}
+          </details>
+        </section>
+      );
+    }
+    return (
+      <section className="carte champ-rapport" aria-labelledby={idT}>
+        <Titre c={c} x={x} id={idT} nombre={x.mode === "apercu" ? null : pieces.length} />
+        <Aide c={c} id={idA} x={x} />
+        <div className="champ-rapport__corps" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {x.mode === "apercu" ? (
+            <p className="apercu">La personne joint des fichiers : PDF, images, Word, Excel, PowerPoint, CSV ou texte ; 10 Mo au plus chacun, dix au plus.</p>
+          ) : (
+            liste ?? (
+              <p className="vide" style={{ margin: 0 }}>
+                Aucun fichier.
+              </p>
+            )
+          )}
         </div>
       </section>
     );
@@ -416,6 +567,23 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
   // ---------- Repris des rapports reçus (rapport de chef) ----------
   if (c.type === "reprise") return <Reprise c={c} x={x} lignes={lignes} reponses={reponses} idT={idT} idA={idA} />;
   return null;
+}
+
+const RANG: Record<string, number> = { dans_les_temps: 0, a_surveiller: 1, en_retard: 2 };
+
+/** Lecture d'un feu : comment il a bougé depuis le rapport précédent. */
+function Tendance({ x, projetId, valeur }: { x: ContexteRapport; projetId: string | null; valeur: string }) {
+  // Sans feux la semaine dernière (ancien modèle), pas de tendance.
+  if (x.mode !== "lecture" || !x.precedent?.sante.size || !projetId || !valeur) return null;
+  const avant = x.precedent.sante.get(projetId);
+  if (!avant) return <span className="tendance">nouveau</span>;
+  if (avant === valeur) return <span className="tendance">= inchangé</span>;
+  const pire = (RANG[valeur] ?? 0) > (RANG[avant] ?? 0);
+  return (
+    <span className={`tendance ${pire ? "tendance--pire" : "tendance--mieux"}`}>
+      {pire ? "↘" : "↗"} était « {libelleSante(avant)} »
+    </span>
+  );
 }
 
 /** « Décision ou aide attendue » : propositions tirées des tâches bloquées et des échéances dépassées. */
@@ -453,7 +621,7 @@ function Synthese({ c, x, reponses, idT, idA }: { c: Champ; x: ContexteRapport; 
   if (x.mode === "apercu") {
     return (
       <section className="carte champ-rapport" aria-labelledby={idT}>
-        <Titre c={c} x={x} id={idT} glyphe />
+        <Titre c={c} x={x} id={idT} />
         <Aide c={c} id={idA} x={x} />
         <p className="champ-rapport__corps apercu">
           Pour chaque projet dont parlent les rapports reçus : quelques phrases préparées à partir de ce que l&apos;équipe a envoyé (ou des synthèses des chefs d&apos;équipe). Le chef les relit, les reformule ou les fait rédiger par l&apos;assistant. Seul ce que les lecteurs de ce champ pouvaient déjà lire y entre.
@@ -539,7 +707,7 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
   if (x.mode === "apercu") {
     return (
       <section className="carte champ-rapport" aria-labelledby={idT}>
-        <Titre c={c} x={x} id={idT} glyphe />
+        <Titre c={c} x={x} id={idT} />
         <Aide c={c} id={idA} x={x} />
         <p className="champ-rapport__corps apercu">
           {c.reprise === "a_decider"
@@ -556,9 +724,14 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
 
   if (c.reprise === "sante") {
     const avis = x.equipe?.sante.get(c.id);
+    // Aperçu d'un brouillon de chef : les feux tels qu'ils seront figés à l'envoi.
+    const lues: { id: string; projetId: string | null; projetCode: string | null; projetTitre: string | null; valeur: string; propose: string | null; commentaire: string | null }[] =
+      !saisie && avis
+        ? avis.filter((p) => p.choisi || p.propose).map((p) => ({ id: p.projetId, projetId: p.projetId, projetCode: p.code, projetTitre: p.titre, valeur: p.choisi || p.propose || "", propose: p.propose, commentaire: p.avis.map((a) => `${a.qui} : ${libelleSante(a.valeur).toLowerCase()}`).join(" · ") }))
+        : reponses;
     return (
       <section className="carte champ-rapport" aria-labelledby={idT}>
-        <Titre c={c} x={x} id={idT} nombre={saisie && avis ? avis.length : reponses.length} />
+        <Titre c={c} x={x} id={idT} nombre={saisie && avis ? avis.length : lues.length} />
         <Aide c={c} id={idA} x={x} />
         <div className="champ-rapport__corps">
           {saisie && avis ? (
@@ -599,12 +772,12 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
                 );
               })
             )
-          ) : reponses.length === 0 ? (
+          ) : lues.length === 0 ? (
             <p className="vide" style={{ margin: 0 }}>
               Aucun feu.
             </p>
           ) : (
-            reponses.map((r) => (
+            lues.map((r) => (
               <div key={r.id} className="feu">
                 <div className="feu__ligne">
                   <span className="feu__nom">
@@ -619,7 +792,10 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
                       {r.propose && r.valeur !== r.propose ? <span className="rangee__sous ton-veille">Changé par le chef : l'équipe disait « {libelleSante(r.propose).toLowerCase()} »</span> : null}
                     </span>
                   </span>
-                  <span className={`pastille-sante pastille-sante--${r.valeur || "vide"}`}>{libelleSante(r.valeur)}</span>
+                  <span className="feu__lu">
+                    <span className={`pastille-sante pastille-sante--${r.valeur || "vide"}`}>{libelleSante(r.valeur)}</span>
+                    <Tendance x={x} projetId={r.projetId} valeur={r.valeur} />
+                  </span>
                 </div>
               </div>
             ))
@@ -631,10 +807,10 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
 
   if (c.reprise === "charge") {
     const ch = saisie ? x.equipe?.charge : null;
-    const fige = lireComptes(reponses[0]?.valeur);
+    const fige = lireComptes(reponses[0]?.valeur) ?? (!saisie && x.equipe ? x.equipe.charge.comptes : null);
     return (
       <section className="carte champ-rapport" aria-labelledby={idT}>
-        <Titre c={c} x={x} id={idT} glyphe />
+        <Titre c={c} x={x} id={idT} />
         <Aide c={c} id={idA} x={x} />
         <div className="champ-rapport__corps">
           {ch ? (
