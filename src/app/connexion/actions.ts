@@ -5,6 +5,7 @@ import { connecterIdentiteVerifiee, verifierIdentifiants } from "@/lib/auth/sess
 import { adActive, verifierAD } from "@/lib/auth/ad";
 import { MESSAGES_AD } from "@/lib/auth/ad-regles";
 import { noter } from "@/lib/journal";
+import { suiteValide } from "@/lib/retour";
 
 /** `courriel` revient avec l'erreur pour ne pas avoir à le retaper (le formulaire se vide après chaque envoi). */
 export type EtatConnexion = { message: string | null; courriel?: string };
@@ -13,7 +14,7 @@ export async function seConnecter(_: EtatConnexion, form: FormData): Promise<Eta
   const courriel = String(form.get("courriel") ?? "").trim().slice(0, 200);
   const r = await verifierIdentifiants(courriel, String(form.get("motDePasse") ?? ""));
   if (!r.ok) return { message: r.message, courriel };
-  redirect("/semaine");
+  redirect(suiteValide(form.get("suite")) ?? "/semaine");
 }
 
 export type EtatConnexionAD = { message: string | null; identifiant?: string };
@@ -29,5 +30,5 @@ export async function seConnecterAD(_: EtatConnexionAD, form: FormData): Promise
   }
   const c = await connecterIdentiteVerifiee(r.courriel, "ad", { identifiant: r.identifiant });
   if (!c.ok) return { message: MESSAGES_AD.sans_acces, identifiant: saisie };
-  redirect("/semaine");
+  redirect(suiteValide(form.get("suite")) ?? "/semaine");
 }

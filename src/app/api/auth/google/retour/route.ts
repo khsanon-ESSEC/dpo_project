@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { COOKIE_GOOGLE, finConnexion, googleActive } from "@/lib/auth/google";
 import { connecterIdentiteVerifiee } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
+import { suiteValide } from "@/lib/retour";
 
 const base = () => process.env.APP_URL || "http://localhost:3000";
 
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
 
   const p = req.nextUrl.searchParams;
   if (p.get("error")) return fin("/connexion?google=annule");
-  let garde: { etat?: string; nonce?: string; verificateur?: string } = {};
+  let garde: { etat?: string; nonce?: string; verificateur?: string; suite?: string } = {};
   try {
     garde = JSON.parse(Buffer.from(req.cookies.get(COOKIE_GOOGLE)?.value ?? "", "base64url").toString("utf8") || "{}");
   } catch {
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
     }
     const c = await connecterIdentiteVerifiee(r.courriel, "google");
     if (!c.ok) return fin("/connexion?google=sans_acces");
-    return fin("/semaine");
+    return fin(suiteValide(garde.suite) ?? "/semaine");
   } catch (e) {
     console.error("connexion Google :", (e as Error).message);
     return fin("/connexion?google=echec");

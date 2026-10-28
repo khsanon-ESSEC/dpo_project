@@ -3,6 +3,9 @@ import { notFound } from "next/navigation";
 import { exigerInterne } from "@/lib/auth/session";
 import { dateCourte } from "@/lib/dates";
 import { suiviPilote } from "@/lib/donnees/pilote";
+import { courrielActif } from "@/lib/courriel";
+import { bilanCourriels } from "@/lib/donnees/courriels";
+import { semaineCourante } from "@/lib/donnees/rapport";
 import { Bandeau } from "@/components/Bandeau";
 import { ONGLETS_ORGANISATION, SousOnglets } from "@/components/SousOnglets";
 
@@ -18,6 +21,7 @@ export default async function PagePilote() {
   const u = await exigerInterne();
   if (!u.administrateur && !u.executif) notFound();
   const s = await suiviPilote();
+  const courriel = courrielActif() ? await bilanCourriels(semaineCourante()) : null;
   const derniere = [...s.semaines].reverse().find((w) => w.attendu);
 
   const Barre = ({ valeur, total, etiquette }: { valeur: number; total: number; etiquette: string }) => {
@@ -97,6 +101,27 @@ export default async function PagePilote() {
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section className="carte" aria-labelledby="p-courriels">
+          <h2 id="p-courriels" className="carte__titre">
+            Rappels par courriel · cette semaine
+          </h2>
+          {courriel ? (
+            <p style={{ margin: "4px 0 0" }}>
+              {courriel.envoyes} courriel{courriel.envoyes > 1 ? "s" : ""} envoyé{courriel.envoyes > 1 ? "s" : ""} (« prêt à relire » et rappels)
+              {courriel.erreurs ? (
+                <span className="ton-retard">
+                  {" "}
+                  · {courriel.erreurs} en erreur, retenté{courriel.erreurs > 1 ? "s" : ""} toutes les vingt minutes : vérifier le serveur de courriel (SMTP_*) et les adresses des personnes.
+                </span>
+              ) : null}
+            </p>
+          ) : (
+            <p className="note" style={{ margin: "4px 0 0" }}>
+              Pas de courriel : le serveur de courriel n&apos;est pas configuré (SMTP_HOTE, SMTP_EXPEDITEUR, APP_URL). Les alertes dans l&apos;application restent.
+            </p>
+          )}
         </section>
 
         <section className="carte carte--liste" aria-labelledby="p-ecrans">

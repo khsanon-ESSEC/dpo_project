@@ -24,7 +24,7 @@ function ChampMotDePasse({ id, libelle, aide }: { id: string; libelle: string; a
  * Connexion : avec le compte Windows de la banque (Active Directory) quand il est activé, sinon par le mot
  * de passe de l'application ; et, si elle est activée, avec le compte Google de la banque.
  */
-export function FormulaireConnexion({ google, ad, erreurGoogle }: { google: boolean; ad: boolean; erreurGoogle: string | null }) {
+export function FormulaireConnexion({ google, ad, erreurGoogle, suite = null }: { google: boolean; ad: boolean; erreurGoogle: string | null; suite?: string | null }) {
   const [etat, action, enCours] = useActionState<EtatConnexion, FormData>(seConnecter, { message: null });
   const [etatAD, actionAD, enCoursAD] = useActionState<EtatConnexionAD, FormData>(seConnecterAD, { message: null });
   const [mode, setMode] = useState<"ad" | "mdp">(ad ? "ad" : "mdp");
@@ -32,6 +32,7 @@ export function FormulaireConnexion({ google, ad, erreurGoogle }: { google: bool
   const message = (windows ? etatAD.message : etat.message) ?? erreurGoogle;
   return (
     <form action={windows ? actionAD : action} className="connexion__formulaire">
+      {suite ? <input type="hidden" name="suite" value={suite} /> : null}
       <h2 className="connexion__soustitre">Connexion</h2>
       {ad ? (
         <div className="connexion__choix" role="group" aria-label="Méthode de connexion">
@@ -79,7 +80,7 @@ export function FormulaireConnexion({ google, ad, erreurGoogle }: { google: bool
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {google ? (
-          <a href="/api/auth/google" className="bouton-contour" style={{ height: 52, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
+          <a href={suite ? `/api/auth/google?suite=${encodeURIComponent(suite)}` : "/api/auth/google"} className="bouton-contour" style={{ height: 52, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
             Continuer avec le compte Google UNIBANK
           </a>
         ) : (

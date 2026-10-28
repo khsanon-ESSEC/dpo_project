@@ -4,6 +4,7 @@ import { utilisateurCourant } from "@/lib/auth/session";
 import { googleActive } from "@/lib/auth/google";
 import { adActive } from "@/lib/auth/ad";
 import { MESSAGES_GOOGLE } from "@/lib/auth/google-regles";
+import { suiteValide } from "@/lib/retour";
 import { FormulaireConnexion } from "./FormulaireConnexion";
 
 export const metadata: Metadata = { title: "Connexion" };
@@ -14,9 +15,11 @@ const BARRES: [number, number, string][] = [
   [16, 44, "#233c7d"], [28, 64, "#284283"], [10, 34, "#1b316a"], [18, 48, "#233c7d"],
 ];
 
-export default async function PageConnexion({ searchParams }: { searchParams: Promise<{ google?: string }> }) {
-  if (await utilisateurCourant()) redirect("/semaine");
-  const { google } = await searchParams;
+export default async function PageConnexion({ searchParams }: { searchParams: Promise<{ google?: string; suite?: string }> }) {
+  const { google, suite: brute } = await searchParams;
+  // « suite » : la page où aller une fois connecté (lien d'un courriel), seulement une page connue de l'application.
+  const suite = suiteValide(brute);
+  if (await utilisateurCourant()) redirect(suite ?? "/semaine");
   // Seulement un message connu : jamais un texte venu de l'adresse de la page.
   const erreurGoogle = google && Object.hasOwn(MESSAGES_GOOGLE, google) ? MESSAGES_GOOGLE[google] : null;
   return (
@@ -42,7 +45,7 @@ export default async function PageConnexion({ searchParams }: { searchParams: Pr
       </section>
       <main className="connexion__panneau">
         <div className="connexion__centre">
-          <FormulaireConnexion google={googleActive()} ad={adActive()} erreurGoogle={erreurGoogle} />
+          <FormulaireConnexion google={googleActive()} ad={adActive()} erreurGoogle={erreurGoogle} suite={suite} />
         </div>
         <p className="note" style={{ textAlign: "center", fontSize: 12 }}>
           Réservé au personnel UNIBANK
