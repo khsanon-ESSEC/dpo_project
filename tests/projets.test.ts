@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { codeSuggere, codeValide, dureeTexte, dureeValide, peutAssigner, peutDecider, peutGererProjet, projetOuvert, projetSupprimable, tacheSupprimable, type Acteur } from "@/lib/projets";
+import { cleNom, codeSuggere, codeValide, dureeTexte, dureeValide, peutAssigner, peutDecider, peutGererProjet, projetOuvert, projetSupprimable, responsableId, separerNom, tacheSupprimable, verifierChefEtReferent, type Acteur } from "@/lib/projets";
 
 const chef: Acteur = { moiId: "chef", suivis: new Set(["chef", "a", "b"]), projetsDiriges: new Set(["P1"]), directeur: false, toutVoir: false };
 const employe: Acteur = { moiId: "e", suivis: new Set(["e"]), projetsDiriges: new Set(), directeur: false, toutVoir: false };
@@ -99,5 +99,36 @@ describe("durées de réunion", () => {
     expect(dureeValide(4)).toBeNull();
     expect(dureeValide(601)).toBeNull();
     expect(dureeValide("abc")).toBeNull();
+  });
+});
+
+describe("personnes hors division et projets d'autres divisions", () => {
+  const directeur: Acteur = { ...employe, moiId: "d", directeur: true };
+  it("une personne hors division reçoit une tâche hors projet, ou sur un projet qu'on dirige ; la direction partout", () => {
+    expect(peutAssigner(employe, "ext", null, true)).toBe(true);
+    expect(peutAssigner(employe, "ext", P2, true)).toBe(false);
+    expect(peutAssigner(chef, "ext", P1, true)).toBe(true);
+    expect(peutAssigner(chef, "ext", P2, true)).toBe(false);
+    expect(peutAssigner(directeur, "ext", P2, true)).toBe(true);
+  });
+  it("le référent DPO a les droits de chef de projet ; c'est lui qui lit les lignes du projet", () => {
+    const projet = { chefProjetId: "externe", referentId: "r", statut: "en_cours" };
+    expect(responsableId(projet)).toBe("r");
+    expect(responsableId({ chefProjetId: "c" })).toBe("c");
+    expect(peutGererProjet({ ...employe, moiId: "r" }, projet)).toBe(true);
+    expect(peutGererProjet(employe, projet)).toBe(false);
+    expect(peutAssigner({ ...employe, moiId: "r", projetsDiriges: new Set(["P3"]) }, "r2", { id: "P3", chefProjetId: "externe", referentId: "r", membres: new Set(["r2"]) })).toBe(true);
+  });
+  it("un chef hors division demande un référent de la DPO", () => {
+    expect(verifierChefEtReferent({ externe: true }, null)).toMatch(/référent/);
+    expect(verifierChefEtReferent({ externe: true }, { externe: false })).toBeNull();
+    expect(verifierChefEtReferent({ externe: false }, null)).toBeNull();
+    expect(verifierChefEtReferent({ externe: false }, { externe: true })).toMatch(/DPO/);
+  });
+  it("un nom saisi d'un bloc se range en prénom et nom, et se compare sans accents ni casse", () => {
+    expect(separerNom("  Mireille   Saint-Fort ")).toEqual({ prenom: "Mireille", nom: "Saint-Fort" });
+    expect(separerNom("Jonas")).toEqual({ prenom: "Jonas", nom: "" });
+    expect(separerNom("   ")).toBeNull();
+    expect(cleNom("Nathalie CÉLESTIN")).toBe(cleNom("nathalie  celestin"));
   });
 });

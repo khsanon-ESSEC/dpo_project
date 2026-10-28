@@ -19,6 +19,7 @@ import {
   supprimerProjet,
 } from "@/lib/donnees/gestion";
 import { peutDecider, peutGererProjet } from "@/lib/projets";
+import { externeDuFormulaire } from "@/lib/donnees/externes";
 
 const UUID = /^[0-9a-f-]{36}$/;
 
@@ -46,8 +47,9 @@ export async function proposer(form: FormData) {
       programme: String(form.get("programme") ?? ""),
       strategique: form.get("strategique") === "on",
       finSouhaitee: String(form.get("finSouhaitee") ?? ""),
-      chefSuggereId: String(form.get("chefSuggereId") ?? ""),
+      chefSuggereId: (await externeDuFormulaire(form, "chef", u.id)) ?? String(form.get("chefSuggereId") ?? ""),
       code: String(form.get("code") ?? ""),
+      division: String(form.get("division") ?? ""),
     },
     u.id,
   );
@@ -69,7 +71,9 @@ export async function decider(projetId: string, form: FormData) {
       accepte,
       motif: String(form.get("motif") ?? ""),
       statut: String(form.get("statut") ?? ""),
-      chefProjetId: String(form.get("chefProjetId") ?? ""),
+      chefProjetId: accepte ? ((await externeDuFormulaire(form, "chef", u.id)) ?? String(form.get("chefProjetId") ?? "")) : "",
+      referentId: String(form.get("referentId") ?? ""),
+      division: form.has("division") ? String(form.get("division") ?? "") : undefined,
       dateEntree: String(form.get("dateEntree") ?? ""),
       dateFinPrevue: String(form.get("dateFinPrevue") ?? ""),
       strategique: form.get("strategique") === "on",
@@ -94,7 +98,9 @@ export async function enregistrerProjet(projetId: string, form: FormData) {
       strategique: form.get("strategique") === "on",
       statut: champ("statut"),
       sante: champ("sante"),
-      chefProjetId: champ("chefProjetId"),
+      chefProjetId: (await externeDuFormulaire(form, "chef", u.id)) ?? champ("chefProjetId"),
+      referentId: champ("referentId"),
+      division: champ("division"),
       dateEntree: champ("dateEntree"),
       dateFinInitiale: champ("dateFinInitiale"),
       dateFinPrevue: champ("dateFinPrevue"),
@@ -152,7 +158,7 @@ export async function deplacerInd(projetId: string, indicateurId: string, sens: 
 
 export async function ajouter(projetId: string, form: FormData) {
   const { u } = await exigerGestion(projetId);
-  const personneId = String(form.get("personneId") ?? "");
+  const personneId = (await externeDuFormulaire(form, "membre", u.id)) ?? String(form.get("personneId") ?? "");
   if (UUID.test(personneId)) await ajouterMembre(projetId, personneId, String(form.get("role") ?? ""), u.id);
   revalider(projetId);
 }

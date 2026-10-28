@@ -40,7 +40,7 @@ describe.skipIf(!URL_TEST)("modèles de rapport et rapport de chef", () => {
     RA = await import("@/lib/donnees/rappels");
     EQ = await import("@/lib/donnees/equipe");
     for (const p of await D.db.select().from(D.schema.personnes)) {
-      gens.set(p.courriel.split("@")[0], { id: p.id, prenom: p.prenom, nom: p.nom, poste: p.poste, directeur: p.directeur, executif: p.executif, administrateur: p.administrateur, theme: p.theme, doitChangerMotDePasse: false });
+      gens.set((p.courriel ?? p.id).split("@")[0], { id: p.id, prenom: p.prenom, nom: p.nom, poste: p.poste, directeur: p.directeur, executif: p.executif, administrateur: p.administrateur, externe: p.externe, theme: p.theme, doitChangerMotDePasse: false });
     }
     for (const p of await D.db.select({ id: D.schema.projets.id, code: D.schema.projets.code }).from(D.schema.projets)) projets.set(p.code, p.id);
   });

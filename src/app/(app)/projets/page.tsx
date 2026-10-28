@@ -131,6 +131,11 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
                   </span>
                   <span style={{ flex: 1, minWidth: 0, fontSize: 16, lineHeight: "22px", fontWeight: 500 }}>{p.titre}</span>
                   {p.strategique ? <span className="etiquette-strategique">Stratégique</span> : null}
+                  {p.division ? (
+                    <span className="etiquette-hors" title={`Projet de la ${p.division}`}>
+                      Autre division
+                    </span>
+                  ) : null}
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
                   <Anneau fait={p.atteints} total={p.totalIndicateurs} taille={84} label={`${p.atteints} indicateurs vérifiables atteints sur ${p.totalIndicateurs}`} />

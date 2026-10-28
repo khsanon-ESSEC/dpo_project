@@ -8,7 +8,7 @@ import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { ONGLETS_ORGANISATION, SousOnglets } from "@/components/SousOnglets";
 import { changerChefEquipe } from "./actions";
-import { FichePersonne, NouvellePersonne } from "./Formulaires";
+import { FicheExterne, FichePersonne, NouvellePersonne } from "./Formulaires";
 
 export const metadata: Metadata = { title: "Organisation" };
 
@@ -22,6 +22,7 @@ export default async function PageOrganisation({ searchParams }: { searchParams:
   if (!admin && !a.toutVoir) notFound();
   const o = await vueOrganisation();
   const sel = o.personnes.find((p) => p.id === selId) ?? null;
+  const selExterne = sel ? null : (o.externes.find((p) => p.id === selId) ?? null);
   const equipesOptions = o.equipes.map((e) => ({ id: e.id, nom: e.nom }));
   const personnesOptions = o.personnes.filter((p) => p.actif).map((p) => ({ id: p.id, nom: p.nomComplet }));
   const rolesDe = (id: string) => o.personnes.find((p) => p.id === id)?.roles ?? [];
@@ -138,6 +139,35 @@ export default async function PageOrganisation({ searchParams }: { searchParams:
                   ) : null}
                 </section>
               ))}
+              {o.externes.length ? (
+                <section className="carte carte--liste" style={{ flex: "1 1 100%", padding: "20px 20px 8px" }} aria-labelledby="eq-hors">
+                  <h2 id="eq-hors" className="carte__titre" style={{ marginBottom: 4 }}>
+                    Hors division · {o.externes.filter((p) => p.actif).length}
+                  </h2>
+                  <p className="note" style={{ margin: "0 0 8px" }}>
+                    Autres départements, consultants : ajoutés au besoin par chacun (réunion, tâche, équipe projet). Corrigez les fiches et fusionnez les doublons ici.
+                  </p>
+                  <ul className="liste" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", columnGap: 24 }}>
+                    {o.externes.map((p) => (
+                      <li key={p.id} style={{ borderTop: 0 }}>
+                        <a href={`/organisation?p=${p.id}`} className="rangee rangee--choix" aria-current={selExterne?.id === p.id ? "true" : undefined} style={{ minHeight: 52, padding: "8px 10px", margin: "0 -10px", opacity: p.actif ? 1 : 0.5 }}>
+                          <span className="mono" aria-hidden="true">
+                            {p.initiales}
+                          </span>
+                          <span className="rangee__texte">
+                            <span className="rangee__titre" style={{ fontSize: 14 }}>
+                              {p.nomComplet}
+                            </span>
+                            <span className="rangee__sous">
+                              {[p.organisation, p.acces ? "accès limité" : null, p.actif ? null : "désactivée"].filter(Boolean).join(" · ") || "Département à préciser"}
+                            </span>
+                          </span>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
               {o.sansEquipe.length ? (
                 <section className="carte carte--liste" style={{ flex: "1 1 280px", padding: "20px 20px 8px" }} aria-labelledby="eq-sans">
                   <h2 id="eq-sans" className="carte__titre">
@@ -155,6 +185,13 @@ export default async function PageOrganisation({ searchParams }: { searchParams:
           <aside className="colonne-etroite carte apparition" style={{ animationDelay: "160ms" }} aria-label="Fiche">
             {nouvelle && admin ? (
               <NouvellePersonne equipes={equipesOptions} personnes={personnesOptions} peutDonnerExecutif={u.executif} />
+            ) : selExterne ? (
+              <FicheExterne
+                key={selExterne.id}
+                personne={selExterne}
+                autres={o.externes.filter((x) => x.id !== selExterne.id).map((x) => ({ id: x.id, nom: `${x.nomComplet}${x.organisation ? ` · ${x.organisation}` : ""}` }))}
+                modifiable={admin}
+              />
             ) : sel ? (
               <FichePersonne
                 key={sel.id}

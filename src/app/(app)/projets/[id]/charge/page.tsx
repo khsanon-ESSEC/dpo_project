@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { responsableId } from "@/lib/projets";
 import { suitPersonne } from "@/lib/acces";
 import { dateCourte } from "@/lib/dates";
 import { heuresTexte, LIBELLE_NIVEAU, nombre } from "@/lib/charge";
@@ -16,7 +17,8 @@ export const metadata: Metadata = { title: "Charge de l'équipe du projet" };
 export default async function PageChargeProjet({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await chargerVueProjet(id);
-  const { semaines, membres } = await chargeDuProjet(id, ctx.projet.chefProjetId);
+  // Le chef d'un projet d'une autre division est hors division : c'est le référent DPO qui figure ici.
+  const { semaines, membres } = await chargeDuProjet(id, responsableId(ctx.projet));
   const voitCharge = ctx.a.toutVoir || ctx.a.directeur || ctx.a.equipeDirecte.length > 0;
   const tri = membres.sort((x, y) => Number(y.chefDeProjet) - Number(x.chefDeProjet) || y.projet.semaines.reduce((s, w) => s + w.heures, 0) - x.projet.semaines.reduce((s, w) => s + w.heures, 0));
   const surchargesCetteSemaine = membres.filter((m) => m.charge.semaines[0].niveau === "surchargee").length;

@@ -5,7 +5,7 @@
 import "server-only";
 import { cache } from "react";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Utilisateur } from "@/lib/auth/session";
 import { chargerOrganisation } from "@/lib/organisation";
@@ -19,7 +19,7 @@ export type Acces = {
   directeur: boolean;
   /** Personnes dont je vois les tâches et les rapports complets (moi compris). */
   suivis: Set<string> | "toutes";
-  /** Projets dont je suis le chef. */
+  /** Projets dont je suis le chef, ou le référent de la DPO. */
   projetsDiriges: Set<string>;
   /** Projets dont je suis membre (équipe projet). */
   projetsMembre: Set<string>;
@@ -28,7 +28,8 @@ export type Acces = {
 
 export const acces = cache(async (moi: Utilisateur): Promise<Acces> => {
   const org = await chargerOrganisation();
-  const diriges = await db.select({ id: schema.projets.id }).from(schema.projets).where(eq(schema.projets.chefProjetId, moi.id));
+  // Projets que je dirige : j'en suis le chef, ou le référent de la DPO (chef hors division).
+  const diriges = await db.select({ id: schema.projets.id }).from(schema.projets).where(or(eq(schema.projets.chefProjetId, moi.id), eq(schema.projets.referentId, moi.id)));
   const membre = await db.select({ id: schema.membresProjet.projetId }).from(schema.membresProjet).where(eq(schema.membresProjet.personneId, moi.id));
   return {
     moi,
@@ -45,9 +46,12 @@ export function suitPersonne(a: Acces, personneId: string): boolean {
   return a.suivis === "toutes" || a.suivis.has(personneId);
 }
 
-/** Lire une tâche : la personne assignée, son supérieur (ou son directeur), le chef du projet, les exécutifs. */
-export function peutVoirTache(a: Acces, t: { assigneId: string; projetId: string | null }): boolean {
-  return suitPersonne(a, t.assigneId) || (t.projetId !== null && a.projetsDiriges.has(t.projetId));
+/**
+ * Lire une tâche : la personne assignée, son supérieur (ou son directeur), le chef du projet, les
+ * exécutifs, et la personne qui l'a confiée (elle suit les tâches confiées hors division).
+ */
+export function peutVoirTache(a: Acces, t: { assigneId: string; projetId: string | null; creeParId?: string | null }): boolean {
+  return suitPersonne(a, t.assigneId) || (t.projetId !== null && a.projetsDiriges.has(t.projetId)) || (!!t.creeParId && t.creeParId === a.moi.id);
 }
 
 /** Modifier une tâche : mêmes personnes. */
@@ -71,7 +75,7 @@ export async function idsProjetsVisibles(a: Acces): Promise<Set<string> | "tous"
   for (const l of lignes) if (l.projetId && suitPersonne(a, l.assigneId)) ids.add(l.projetId);
   const membres = await db.select({ projetId: schema.membresProjet.projetId, personneId: schema.membresProjet.personneId }).from(schema.membresProjet);
   for (const m of membres) if (suitPersonne(a, m.personneId)) ids.add(m.projetId);
-  const projets = await db.select({ id: schema.projets.id, chef: schema.projets.chefProjetId, demandeur: schema.projets.demandeParId }).from(schema.projets);
+  const projets = await db.select({ id: schema.projets.id, chef: sql<string | null>`coalesce(${schema.projets.referentId}, ${schema.projets.chefProjetId})`, demandeur: schema.projets.demandeParId }).from(schema.projets);
   for (const p of projets) {
     if (p.demandeur && (p.demandeur === a.moi.id || suitPersonne(a, p.demandeur))) ids.add(p.id);
     if (a.directeur && p.chef && suitPersonne(a, p.chef)) ids.add(p.id);

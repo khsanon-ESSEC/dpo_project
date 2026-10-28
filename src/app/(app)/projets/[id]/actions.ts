@@ -1,5 +1,6 @@
 "use server";
 
+import { peutGererProjet } from "@/lib/projets";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -13,7 +14,7 @@ async function exigerDroitProjet(projetId: string) {
   const u = await exigerUtilisateur();
   const a = await acces(u);
   const p = await exigerProjetVisible(a, projetId);
-  if (!a.toutVoir && !a.directeur && p.chefProjetId !== u.id) throw new Error("Seuls le chef de projet, son directeur et les exécutifs modifient ce projet.");
+  if (!peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir }, p)) throw new Error("Seuls le chef de projet (ou le référent DPO), sa direction et les exécutifs modifient ce projet.");
   return { u, p };
 }
 

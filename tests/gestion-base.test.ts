@@ -34,7 +34,7 @@ describe.skipIf(!URL_TEST)("gestion des projets et des tâches", () => {
     G = await import("@/lib/donnees/gestion");
     PR = await import("@/lib/donnees/projets");
     for (const p of await D.db.select().from(D.schema.personnes)) {
-      gens.set(p.courriel.split("@")[0], { id: p.id, prenom: p.prenom, nom: p.nom, poste: p.poste, directeur: p.directeur, executif: p.executif, administrateur: p.administrateur, theme: p.theme, doitChangerMotDePasse: false });
+      gens.set((p.courriel ?? p.id).split("@")[0], { id: p.id, prenom: p.prenom, nom: p.nom, poste: p.poste, directeur: p.directeur, executif: p.executif, administrateur: p.administrateur, externe: p.externe, theme: p.theme, doitChangerMotDePasse: false });
     }
     for (const p of await D.db.select({ id: D.schema.projets.id, code: D.schema.projets.code }).from(D.schema.projets)) projets.set(p.code, p.id);
   });
@@ -169,7 +169,7 @@ describe.skipIf(!URL_TEST)("gestion des projets et des tâches", () => {
   it("modifier : code unique, chef obligatoire pour un projet accepté ; indicateurs réordonnés", async () => {
     const ex = qui("frantz.desrosiers").id;
     const p = await projet(projets.get("CR")!);
-    const base = { code: p.code, titre: p.titre, description: p.description, programme: p.programme, strategique: p.strategique, statut: p.statut, sante: p.sante, chefProjetId: p.chefProjetId ?? "", dateEntree: p.dateEntree ?? "", dateFinInitiale: p.dateFinInitiale ?? "", dateFinPrevue: p.dateFinPrevue ?? "", dateLancementPrevue: "" };
+    const base = { code: p.code, titre: p.titre, description: p.description, programme: p.programme, strategique: p.strategique, statut: p.statut, sante: p.sante, chefProjetId: p.chefProjetId ?? "", referentId: p.referentId ?? "", division: p.division, dateEntree: p.dateEntree ?? "", dateFinInitiale: p.dateFinInitiale ?? "", dateFinPrevue: p.dateFinPrevue ?? "", dateLancementPrevue: "" };
     expect(await G.modifierProjet(p.id, { ...base, code: "UN" }, ex)).toEqual({ erreur: "Le code UN est déjà pris." });
     expect(await G.modifierProjet(p.id, { ...base, chefProjetId: "" }, ex)).toHaveProperty("erreur");
     expect(await G.modifierProjet(p.id, { ...base, titre: "Refonte de Credos", statut: "requete" }, ex)).toEqual({ ok: true });

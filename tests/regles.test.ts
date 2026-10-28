@@ -21,7 +21,7 @@ import {
  *      └─ équipe om, poste vacant ── gp (remonte à na)
  */
 function personne(id: string, equipeId: string | null, superieurId: string | null, roles: Partial<PersonneOrg> = {}): PersonneOrg {
-  return { id, prenom: id, nom: id.toUpperCase(), poste: "", courriel: `${id}@x`, equipeId, superieurId, actif: true, directeur: false, executif: false, administrateur: false, ...roles };
+  return { id, prenom: id, nom: id.toUpperCase(), poste: "", courriel: `${id}@x`, equipeId, superieurId, actif: true, directeur: false, executif: false, administrateur: false, externe: false, organisation: "", acces: true, ...roles };
 }
 function equipe(id: string, chefId: string | null, equipeParenteId: string | null): EquipeOrg {
   return { id, nom: id, chefId, equipeParenteId };

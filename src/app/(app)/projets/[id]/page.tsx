@@ -14,6 +14,7 @@ import { Anneau, Bandeau } from "@/components/Bandeau";
 import { CocheSeule } from "@/components/CaseTache";
 import { Icone } from "@/components/Icone";
 import { LienPersonne } from "@/components/Liens";
+import { ChoixPersonne } from "@/components/ChoixPersonne";
 import { changerIndicateur, mettreAJourProjet } from "./actions";
 import { OngletsVues } from "./commun";
 
@@ -43,7 +44,17 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const org = await chargerOrganisation();
   const membres = await membresDuProjet(id);
   const nom = (pid: string | null) => (pid && org.personnes.get(pid) ? nomComplet(org.personnes.get(pid)!) : null);
-  const personnesActives = [...org.personnes.values()].filter((x) => x.actif).sort((x, y) => x.nom.localeCompare(y.nom, "fr"));
+  const personnesActives = [...org.personnes.values()]
+    .filter((x) => x.actif)
+    .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
+    .map((x) => ({ id: x.id, nom: nomComplet(x), externe: x.externe, organisation: x.organisation }));
+  const chefP = p.chefProjetId ? org.personnes.get(p.chefProjetId) : undefined;
+  const referentP = p.referentId ? org.personnes.get(p.referentId) : undefined;
+  /** « hors division · DTI » sous le nom d'une personne hors division. */
+  const hors = (id: string | null | undefined) => {
+    const x = id ? org.personnes.get(id) : undefined;
+    return x?.externe ? `Hors division${x.organisation ? ` · ${x.organisation}` : ""}` : null;
+  };
   const ouvertesParPersonne = new Map(f.equipe.map((m) => [m.id, m.detail]));
   const auteurs = auteursLignesVisibles(a, id);
   const rapports = auteurs ? await lignesDuProjetCetteSemaine(id, auteurs) : null;
@@ -63,7 +74,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   return (
     <>
       <Bandeau
-        surtitre={[demande ? "Demande de projet" : refuse ? "Demande refusée" : p.strategique ? "Stratégique" : "Projet", p.archiveLe ? "Archivé" : null, actif || p.archiveLe ? LIBELLE_STATUT_PROJET[p.statut] : null, p.programme].filter(Boolean).join(" · ")}
+        surtitre={[demande ? "Demande de projet" : refuse ? "Demande refusée" : p.strategique ? "Stratégique" : "Projet", p.division ? p.division : null, p.archiveLe ? "Archivé" : null, actif || p.archiveLe ? LIBELLE_STATUT_PROJET[p.statut] : null, p.programme].filter(Boolean).join(" · ")}
         titre={p.titre}
         retour={
           <a href="/projets" className="retour">
@@ -92,9 +103,17 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
               </dd>
             </div>
             <div className="chiffre">
-              <dt>chef de projet</dt>
+              <dt>chef de projet{hors(p.chefProjetId) ? ` · ${hors(p.chefProjetId)!.toLowerCase()}` : ""}</dt>
               <dd style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 22, lineHeight: "54px", fontWeight: 300 }}>{f.chef ? <LienPersonne id={p.chefProjetId}>{f.chef.nom}</LienPersonne> : "—"}</dd>
             </div>
+            {referentP ? (
+              <div className="chiffre">
+                <dt>référent DPO</dt>
+                <dd style={{ display: "flex", alignItems: "center", gap: 12, fontSize: 22, lineHeight: "54px", fontWeight: 300 }}>
+                  <LienPersonne id={referentP.id}>{nomComplet(referentP)}</LienPersonne>
+                </dd>
+              </div>
+            ) : null}
           </dl>
         </div>
       </Bandeau>
@@ -148,18 +167,25 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 <form action={decider.bind(null, p.id)} style={{ flex: "2 1 320px", display: "flex", flexDirection: "column", gap: 12 }}>
                   <input type="hidden" name="decision" value="accepter" />
                   <h3 style={{ margin: 0, fontSize: 15, fontWeight: 500 }}>Accepter</h3>
-                  <div className="champ">
-                    <label htmlFor="d-chef">Chef de projet</label>
-                    <select id="d-chef" name="chefProjetId" defaultValue={p.chefProjetId ?? ""} required>
-                      <option value="" disabled>
-                        Choisir
-                      </option>
-                      {personnesActives.map((x) => (
-                        <option key={x.id} value={x.id}>
-                          {nomComplet(x)}
-                        </option>
-                      ))}
-                    </select>
+                  <ChoixPersonne id="d-chef" name="chefProjetId" prefixe="chef" libelle="Chef de projet" personnes={personnesActives} defaut={p.chefProjetId} vide="Choisir" />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
+                    <div className="champ" style={{ flex: "1 1 180px" }}>
+                      <label htmlFor="d-division">Division du projet</label>
+                      <input id="d-division" name="division" defaultValue={p.division} maxLength={120} placeholder="Vide : la DPO" />
+                    </div>
+                    <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                      <ChoixPersonne
+                        id="d-referent"
+                        name="referentId"
+                        prefixe="referent"
+                        libelle="Référent DPO"
+                        personnes={personnesActives.filter((x) => !x.externe)}
+                        defaut={p.referentId}
+                        vide="Aucun"
+                        horsDivision={false}
+                        aide="Si le chef de projet est hors division."
+                      />
+                    </div>
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
                     <div className="champ" style={{ flex: "1 1 150px" }}>
@@ -441,7 +467,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
 
             <section className="carte carte--liste" aria-labelledby="p-equipe">
               <h2 id="p-equipe" className="carte__titre">
-                Équipe projet · {membres.length + (p.chefProjetId ? 1 : 0)}
+                Équipe projet · {membres.length + (p.chefProjetId ? 1 : 0) + (referentP ? 1 : 0)}
               </h2>
               <ul className="liste">
                 {p.chefProjetId && nom(p.chefProjetId) ? (
@@ -450,10 +476,23 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                       <span className="rangee__titre">
                         <LienPersonne id={p.chefProjetId}>{nom(p.chefProjetId)}</LienPersonne>
                       </span>
-                      <span className="rangee__sous">Chef de projet</span>
+                      <span className="rangee__sous">Chef de projet{hors(p.chefProjetId) ? ` · ${hors(p.chefProjetId)!.toLowerCase()}` : ""}</span>
                     </span>
                     <span className="rangee__meta" style={{ fontSize: 12 }}>
                       {ouvertesParPersonne.get(p.chefProjetId) === "Chef de projet" ? "" : (ouvertesParPersonne.get(p.chefProjetId) ?? "")}
+                    </span>
+                  </li>
+                ) : null}
+                {referentP ? (
+                  <li className="rangee" style={{ minHeight: 52 }}>
+                    <span className="rangee__texte">
+                      <span className="rangee__titre">
+                        <LienPersonne id={referentP.id}>{nomComplet(referentP)}</LienPersonne>
+                      </span>
+                      <span className="rangee__sous">Référent DPO · gère le projet ici</span>
+                    </span>
+                    <span className="rangee__meta" style={{ fontSize: 12 }}>
+                      {ouvertesParPersonne.get(referentP.id) ?? ""}
                     </span>
                   </li>
                 ) : null}
@@ -463,7 +502,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                       <span className="rangee__titre">
                         <LienPersonne id={m.personneId}>{m.nom}</LienPersonne>
                       </span>
-                      <span className="rangee__sous">{m.role || m.poste}</span>
+                      <span className="rangee__sous">{[m.role || m.poste, m.externe ? `hors division${m.organisation ? ` · ${m.organisation}` : ""}` : null].filter(Boolean).join(" · ")}</span>
                     </span>
                     <span className="rangee__meta" style={{ fontSize: 12 }}>
                       {ouvertesParPersonne.get(m.personneId) ?? "Aucune tâche ouverte"}
@@ -480,33 +519,26 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 {!membres.length && !p.chefProjetId ? <li className="vide">Personne pour l&apos;instant.</li> : null}
               </ul>
               {peutModifier && actif ? (
-                <form action={ajouter.bind(null, p.id)} style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-                  <label className="visuellement-cache" htmlFor="m-personne">
-                    Personne à ajouter à l&apos;équipe
-                  </label>
-                  <select id="m-personne" name="personneId" defaultValue="" required style={{ flex: "1 1 180px", minWidth: 0, maxWidth: "100%", minHeight: 40, border: "1px solid var(--controle)", background: "var(--champ)" }}>
-                    <option value="" disabled>
-                      Ajouter une personne
-                    </option>
-                    {personnesActives
-                      .filter((x) => x.id !== p.chefProjetId && !membres.some((m) => m.personneId === x.id))
-                      .map((x) => (
-                        <option key={x.id} value={x.id}>
-                          {nomComplet(x)}
-                        </option>
-                      ))}
-                  </select>
-                  <label className="visuellement-cache" htmlFor="m-role">
-                    Son rôle dans le projet
-                  </label>
-                  <input id="m-role" name="role" maxLength={80} placeholder="Rôle (facultatif)" style={{ flex: "1 1 120px", minWidth: 0, minHeight: 40, padding: "0 10px", border: "1px solid var(--controle)", background: "var(--champ)" }} />
-                  <button type="submit" className="bouton-contour">
+                <form action={ajouter.bind(null, p.id)} style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+                  <ChoixPersonne
+                    id="m-personne"
+                    name="personneId"
+                    prefixe="membre"
+                    libelle="Ajouter à l'équipe"
+                    personnes={personnesActives.filter((x) => x.id !== p.chefProjetId && x.id !== p.referentId && !membres.some((m) => m.personneId === x.id))}
+                    vide="Choisir une personne"
+                  />
+                  <div className="champ">
+                    <label htmlFor="m-role">Son rôle dans le projet (facultatif)</label>
+                    <input id="m-role" name="role" maxLength={80} placeholder="Ex. : analyste, consultant sécurité" />
+                  </div>
+                  <button type="submit" className="bouton-contour" style={{ alignSelf: "flex-start" }}>
                     <Icone nom="ajouter" taille={16} /> Ajouter
                   </button>
                 </form>
               ) : null}
               <p className="note" style={{ margin: "10px 0 4px" }}>
-                Les membres voient le projet ; le chef de projet peut leur confier des tâches.
+                Les membres voient le projet ; le chef de projet (ou le référent DPO) peut leur confier des tâches, y compris aux personnes hors division.
               </p>
             </section>
           </div>

@@ -135,7 +135,7 @@ export async function mesProjets(personneId: string) {
       .selectDistinct({ id: schema.projets.id })
       .from(schema.projets)
       .leftJoin(schema.taches, and(eq(schema.taches.projetId, schema.projets.id), eq(schema.taches.assigneId, personneId), ne(schema.taches.statut, "faite"), isNull(schema.taches.annuleeLe)))
-      .where(or(eq(schema.projets.chefProjetId, personneId), eq(schema.taches.assigneId, personneId))),
+      .where(or(eq(schema.projets.chefProjetId, personneId), eq(schema.projets.referentId, personneId), eq(schema.taches.assigneId, personneId))),
     db.select({ id: schema.membresProjet.projetId }).from(schema.membresProjet).where(eq(schema.membresProjet.personneId, personneId)),
   ]);
   const ids = [...new Set([...lignes, ...membre].map((l) => l.id))];
@@ -156,7 +156,7 @@ export async function resumesProjets(ids: string[], personneId?: string) {
     ...p,
     atteints: parProjet.get(p.id)?.atteints ?? 0,
     totalIndicateurs: parProjet.get(p.id)?.total ?? 0,
-    role: personneId && p.chefProjetId === personneId ? "Chef de projet" : "Membre",
+    role: personneId && p.chefProjetId === personneId ? "Chef de projet" : personneId && p.referentId === personneId ? "Référent DPO" : "Membre",
   }));
 }
 
@@ -165,4 +165,26 @@ export async function etatMonRapport(personneId: string) {
   const org = await chargerOrganisation();
   const sup = resoudreSuperieur(org, personneId);
   return { rapport: statuts.get(personneId) ?? null, superieur: sup ? nomComplet(sup) : null };
+}
+
+/** Tâches ouvertes que la personne a confiées à quelqu'un hors division : elle les suit pour eux. */
+export async function confieesHorsDivision(personneId: string) {
+  const lignes = await db
+    .select({
+      id: schema.taches.id,
+      titre: schema.taches.titre,
+      statut: schema.taches.statut,
+      echeance: schema.taches.echeance,
+      assigneId: schema.taches.assigneId,
+      prenom: schema.personnes.prenom,
+      nom: schema.personnes.nom,
+      organisation: schema.personnes.organisation,
+      projetCode: schema.projets.code,
+    })
+    .from(schema.taches)
+    .innerJoin(schema.personnes, eq(schema.personnes.id, schema.taches.assigneId))
+    .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
+    .where(and(eq(schema.taches.creeParId, personneId), eq(schema.personnes.externe, true), ne(schema.taches.statut, "faite"), isNull(schema.taches.annuleeLe)))
+    .orderBy(asc(schema.taches.echeance), asc(schema.taches.titre));
+  return lignes;
 }

@@ -6,8 +6,24 @@ import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { lundiDe } from "@/lib/dates";
 import { modifierReunion, noterReunion, quitterReunion, supprimerReunion, type SaisieReunion } from "@/lib/donnees/reunions";
+import { trouverOuCreerExterne } from "@/lib/donnees/externes";
 
 const UUID = /^[0-9a-f-]{36}$/;
+
+/** Les personnes hors division ajoutées dans le formulaire (« externes » : {nom, organisation} en JSON) : leurs fiches. */
+async function avecExternes(form: FormData, d: SaisieReunion, parId: string): Promise<SaisieReunion> {
+  const ids: string[] = [];
+  for (const brut of form.getAll("externes").slice(0, 30)) {
+    try {
+      const e = JSON.parse(String(brut)) as { nom?: string; organisation?: string };
+      const id = await trouverOuCreerExterne(String(e.nom ?? ""), String(e.organisation ?? ""), parId);
+      if (id) ids.push(id);
+    } catch {
+      /* entrée illisible : ignorée */
+    }
+  }
+  return ids.length ? { ...d, participants: [...d.participants, ...ids] } : d;
+}
 
 const saisie = (form: FormData): SaisieReunion => ({
   titre: String(form.get("titre") ?? ""),
@@ -30,7 +46,7 @@ const revalider = () => {
 export async function noter(form: FormData) {
   const u = await exigerUtilisateur();
   const a = await acces(u);
-  const d = saisie(form);
+  const d = await avecExternes(form, saisie(form), u.id);
   const r = await noterReunion(a, d, await idsProjetsVisibles(a));
   revalider();
   const s = semaineDe(d.jour);
@@ -42,7 +58,7 @@ export async function modifier(id: string, form: FormData) {
   if (!UUID.test(id)) return;
   const u = await exigerUtilisateur();
   const a = await acces(u);
-  const d = saisie(form);
+  const d = await avecExternes(form, saisie(form), u.id);
   const r = await modifierReunion(a, id, d, await idsProjetsVisibles(a));
   revalider();
   const s = semaineDe(d.jour);

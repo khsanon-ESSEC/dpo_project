@@ -118,7 +118,7 @@ export async function listeModeles() {
   const brouillons = await db.select({ modeleId: schema.versionsModele.modeleId, numero: schema.versionsModele.numero }).from(schema.versionsModele).where(eq(schema.versionsModele.statut, "brouillon"));
   const utilisateurs = new Map<string, number>();
   for (const p of org.personnes.values()) {
-    if (!p.actif) continue;
+    if (!p.actif || p.externe) continue;
     const r = resoudreModele(p.id, equipesDe(org, p.id), subordonnesDirects(org, p.id).length > 0, refs, affectations);
     if (r.modeleId) utilisateurs.set(r.modeleId, (utilisateurs.get(r.modeleId) ?? 0) + 1);
   }
@@ -186,7 +186,7 @@ export async function modeleDetaille(id: string) {
       .filter((a) => a.personneId)
       .map((a) => ({ affectationId: a.id, id: a.personneId!, nom: qui(a.personneId) ?? "" })),
     personnesOptions: [...org.personnes.values()]
-      .filter((p) => p.actif)
+      .filter((p) => p.actif && !p.externe)
       .sort((a, b) => a.nom.localeCompare(b.nom, "fr"))
       .map((p) => ({ id: p.id, nom: nomComplet(p), ailleurs: (() => {
         const a = toutes.find((x) => x.personneId === p.id);

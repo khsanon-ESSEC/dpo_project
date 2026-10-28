@@ -4,6 +4,7 @@ import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet } from "@/lib/regles";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
+import { ChoixPersonne } from "@/components/ChoixPersonne";
 import { proposer } from "../gestion-actions";
 
 export const metadata: Metadata = { title: "Proposer un projet" };
@@ -13,7 +14,10 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
   const { erreur } = await searchParams;
   const u = await exigerUtilisateur();
   const org = await chargerOrganisation();
-  const personnes = [...org.personnes.values()].filter((p) => p.actif).sort((x, y) => x.nom.localeCompare(y.nom, "fr"));
+  const personnes = [...org.personnes.values()]
+    .filter((p) => p.actif)
+    .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
+    .map((p) => ({ id: p.id, nom: p.id === u.id ? `Moi (${nomComplet(p)})` : nomComplet(p), externe: p.externe, organisation: p.organisation }));
   return (
     <>
       <Bandeau
@@ -61,17 +65,16 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
               <input id="pp-fin" name="finSouhaitee" type="date" />
             </div>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
-            <div className="champ" style={{ flex: "2 1 240px" }}>
-              <label htmlFor="pp-chef">Chef de projet suggéré (facultatif)</label>
-              <select id="pp-chef" name="chefSuggereId" defaultValue="">
-                <option value="">À choisir par la direction</option>
-                {personnes.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.id === u.id ? `Moi (${nomComplet(p)})` : nomComplet(p)}
-                  </option>
-                ))}
-              </select>
+          <div className="champ">
+            <label htmlFor="pp-division">Projet d&apos;une autre division ? (facultatif)</label>
+            <input id="pp-division" name="division" maxLength={120} placeholder="Ex. : Division Réseau et succursales" aria-describedby="pp-division-aide" />
+            <span className="aide" id="pp-division-aide">
+              Laissez vide pour un projet de la DPO. Pour le projet d&apos;une autre division, son chef de projet peut être hors division ; la direction nommera un référent de la DPO.
+            </span>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
+            <div style={{ flex: "2 1 240px", minWidth: 0 }}>
+              <ChoixPersonne id="pp-chef" name="chefSuggereId" prefixe="chef" libelle="Chef de projet suggéré (facultatif)" personnes={personnes} vide="À choisir par la direction" />
             </div>
             <div className="champ" style={{ flex: "1 1 120px" }}>
               <label htmlFor="pp-code">Code (facultatif)</label>

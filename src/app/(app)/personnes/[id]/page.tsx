@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { acces, idsProjetsVisibles, suitPersonne } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
@@ -32,9 +32,9 @@ export default async function PageFichePersonne({ params }: { params: Promise<{ 
   const visibles = await idsProjetsVisibles(a);
   const [diriges, membre] = await Promise.all([
     db
-      .select({ id: schema.projets.id, code: schema.projets.code, titre: schema.projets.titre, statut: schema.projets.statut })
+      .select({ id: schema.projets.id, code: schema.projets.code, titre: schema.projets.titre, statut: schema.projets.statut, referentId: schema.projets.referentId })
       .from(schema.projets)
-      .where(and(eq(schema.projets.chefProjetId, id), isNull(schema.projets.archiveLe), ne(schema.projets.statut, "refuse"))),
+      .where(and(or(eq(schema.projets.chefProjetId, id), eq(schema.projets.referentId, id)), isNull(schema.projets.archiveLe), ne(schema.projets.statut, "refuse"))),
     db
       .select({ id: schema.projets.id, code: schema.projets.code, titre: schema.projets.titre, statut: schema.projets.statut, role: schema.membresProjet.role })
       .from(schema.membresProjet)
@@ -42,7 +42,7 @@ export default async function PageFichePersonne({ params }: { params: Promise<{ 
       .where(and(eq(schema.membresProjet.personneId, id), isNull(schema.projets.archiveLe))),
   ]);
   const vus = <T extends { id: string }>(l: T[]) => l.filter((x) => visibles === "tous" || visibles.has(x.id));
-  const projets = [...vus(diriges).map((x) => ({ ...x, role: x.statut === "requete" ? "Chef de projet suggéré" : "Chef de projet" })), ...vus(membre).filter((x) => !diriges.some((d) => d.id === x.id)).map((x) => ({ ...x, role: x.role || "Membre" }))];
+  const projets = [...vus(diriges).map((x) => ({ ...x, role: x.referentId === id ? "Référent DPO" : x.statut === "requete" ? "Chef de projet suggéré" : "Chef de projet" })), ...vus(membre).filter((x) => !diriges.some((d) => d.id === x.id)).map((x) => ({ ...x, role: x.role || "Membre" }))];
   const suivi = id === u.id || suitPersonne(a, id);
   const roles = [p.executif ? "Exécutif" : null, p.directeur ? "Directeur" : null, subordonnes.length ? "Chef d'équipe" : null, diriges.some((d) => d.statut !== "requete") ? "Chef de projet" : null, p.administrateur ? "Administrateur" : null].filter(Boolean);
   // Retour : la page d'où l'on vient, si elle est de l'application.
@@ -58,7 +58,7 @@ export default async function PageFichePersonne({ params }: { params: Promise<{ 
   return (
     <>
       <Bandeau
-        surtitre={[p.poste, p.actif ? null : "Inactif"].filter(Boolean).join(" · ")}
+        surtitre={[p.externe ? `Hors division${p.organisation ? ` · ${p.organisation}` : ""}` : null, p.poste, p.actif ? null : "Inactif"].filter(Boolean).join(" · ")}
         titre={nomComplet(p)}
         retour={
           <a href={retour} className="retour">
@@ -80,24 +80,42 @@ export default async function PageFichePersonne({ params }: { params: Promise<{ 
                 Identité
               </h2>
               <dl className="fiche">
-                <div>
-                  <dt>Équipe</dt>
-                  <dd>{equipe?.nom ?? "Sans équipe"}</dd>
-                </div>
-                <div>
-                  <dt>Supérieur</dt>
-                  <dd>{sup ? <LienPersonne id={sup.id}>{nomComplet(sup)}</LienPersonne> : "—"}</dd>
-                </div>
+                {p.externe ? (
+                  <div>
+                    <dt>Département ou société</dt>
+                    <dd>{p.organisation || "Non précisé"}</dd>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <dt>Équipe</dt>
+                      <dd>{equipe?.nom ?? "Sans équipe"}</dd>
+                    </div>
+                    <div>
+                      <dt>Supérieur</dt>
+                      <dd>{sup ? <LienPersonne id={sup.id}>{nomComplet(sup)}</LienPersonne> : "—"}</dd>
+                    </div>
+                  </>
+                )}
                 <div>
                   <dt>Courriel</dt>
                   <dd>
-                    <a href={`mailto:${p.courriel}`} className="lien-nom">
-                      {p.courriel}
-                    </a>
+                    {p.courriel ? (
+                      <a href={`mailto:${p.courriel}`} className="lien-nom">
+                        {p.courriel}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
                   </dd>
                 </div>
               </dl>
-              {suivi ? (
+              {p.externe ? (
+                <p className="note" style={{ margin: "16px 0 0" }}>
+                  Personne hors division : ses tâches sont suivies par celles et ceux qui les lui ont confiées, et par les chefs de ses projets.
+                </p>
+              ) : null}
+              {suivi && !p.externe ? (
                 <p style={{ margin: "16px 0 0" }}>
                   <a href={`/equipe/${id}`} className="bouton-contour">
                     <Icone nom="jauge" taille={16} /> {id === u.id ? "Mes tâches et ma charge" : "Ses tâches, sa charge et ses rapports"}

@@ -3389,7 +3389,7 @@ a.puce:hover {
   padding: 8px 12px;
   cursor: pointer;
 }
-.participants__case + .participants__case {
+.participants__liste > div + div > .participants__case {
   border-top: 1px solid var(--filet);
 }
 .participants__case:hover {
@@ -3609,4 +3609,67 @@ a.puce:hover {
   font-size: 13px;
   line-height: 19px;
   color: var(--discret);
+}
+
+/* Saisie d'une personne qui n'est pas dans la liste (hors division) */
+.hors-liste summary {
+  width: fit-content;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: var(--discret);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--filet-fort);
+  text-underline-offset: 3px;
+}
+.hors-liste[open] summary {
+  color: var(--encre);
+}
+.hors-liste__champs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 12px;
+  border-left: 2px solid var(--arc-2);
+  background: var(--surface);
+}
+.hors-liste__champs .champ {
+  flex: 1 1 180px;
+}
+.etiquette-hors {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border: 1px solid var(--filet-fort);
+  border-radius: 9999px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--discret);
+  white-space: nowrap;
+}
+.participants__groupe {
+  margin: 0;
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  line-height: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--discret);
+  border-top: 1px solid var(--filet);
+}
+.pastille-personne--nouvelle {
+  border-style: dashed;
+}
+.participants__autre {
+  align-self: flex-start;
+  min-height: 32px;
+  padding: 0;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
 }

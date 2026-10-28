@@ -22,6 +22,8 @@ export type Utilisateur = {
   directeur: boolean;
   executif: boolean;
   administrateur: boolean;
+  /** Hors division, avec un accès limité à ses tâches et à ses projets. */
+  externe?: boolean;
   theme: string;
   doitChangerMotDePasse: boolean;
 };
@@ -77,6 +79,7 @@ export const utilisateurCourant = cache(async (): Promise<Utilisateur | null> =>
       directeur: schema.personnes.directeur,
       executif: schema.personnes.executif,
       administrateur: schema.personnes.administrateur,
+      externe: schema.personnes.externe,
       theme: schema.personnes.theme,
       doitChangerMotDePasse: schema.personnes.doitChangerMotDePasse,
     })

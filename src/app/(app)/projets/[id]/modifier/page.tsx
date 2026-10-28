@@ -10,6 +10,7 @@ import { nomComplet } from "@/lib/regles";
 import { LIBELLE_STATUT_PROJET, peutGererProjet, projetSupprimable, STATUTS_ACCEPTES } from "@/lib/projets";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
+import { ChoixPersonne } from "@/components/ChoixPersonne";
 import { archiver, deplacerInd, enregistrerProjet, nouvelIndicateur, renommer, retirerInd, supprimer } from "../../gestion-actions";
 
 export const metadata: Metadata = { title: "Modifier le projet" };
@@ -29,7 +30,10 @@ export default async function PageModifierProjet({ params, searchParams }: { par
     activiteDuProjet(id),
     chargerOrganisation(),
   ]);
-  const personnes = [...org.personnes.values()].filter((x) => x.actif || x.id === p.chefProjetId).sort((x, y) => x.nom.localeCompare(y.nom, "fr"));
+  const personnes = [...org.personnes.values()]
+    .filter((x) => x.actif || x.id === p.chefProjetId || x.id === p.referentId)
+    .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
+    .map((x) => ({ id: x.id, nom: nomComplet(x), externe: x.externe, organisation: x.organisation }));
   const supprimable = projetSupprimable(activite);
   const demande = p.statut === "requete" || p.statut === "refuse";
 
@@ -77,16 +81,30 @@ export default async function PageModifierProjet({ params, searchParams }: { par
               <label htmlFor="mp-programme">Programme</label>
               <input id="mp-programme" name="programme" defaultValue={p.programme} maxLength={160} />
             </div>
-            <div className="champ" style={{ flex: "1 1 200px" }}>
-              <label htmlFor="mp-chef">Chef de projet</label>
-              <select id="mp-chef" name="chefProjetId" defaultValue={p.chefProjetId ?? ""}>
-                <option value="">{demande ? "À nommer" : "Choisir"}</option>
-                {personnes.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {nomComplet(x)}
-                  </option>
-                ))}
-              </select>
+            <div className="champ" style={{ flex: "1 1 220px" }}>
+              <label htmlFor="mp-division">Division du projet</label>
+              <input id="mp-division" name="division" defaultValue={p.division} maxLength={120} placeholder="Vide : la DPO" aria-describedby="mp-division-aide" />
+              <span className="aide" id="mp-division-aide">
+                Pour un projet d&apos;une autre division. Il n&apos;entre pas dans le rapport mensuel au conseil.
+              </span>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
+            <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+              <ChoixPersonne id="mp-chef" name="chefProjetId" prefixe="chef" libelle="Chef de projet" personnes={personnes} defaut={p.chefProjetId} vide={demande ? "À nommer" : "Choisir"} />
+            </div>
+            <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+              <ChoixPersonne
+                id="mp-referent"
+                name="referentId"
+                prefixe="referent"
+                libelle="Référent DPO"
+                personnes={personnes.filter((x) => !x.externe)}
+                defaut={p.referentId}
+                vide="Aucun"
+                horsDivision={false}
+                aide="Obligatoire quand le chef de projet est hors division : il a ici les droits de chef de projet."
+              />
             </div>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>

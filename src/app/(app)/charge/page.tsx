@@ -24,7 +24,7 @@ export default async function PageCharge({ searchParams }: { searchParams: Promi
   const a = await acces(u);
   if (!a.toutVoir && !a.directeur && a.equipeDirecte.length === 0) notFound();
   const org = await chargerOrganisation();
-  const ids = a.suivis === "toutes" ? [...org.personnes.values()].filter((p) => p.actif).map((p) => p.id) : [...a.suivis];
+  const ids = a.suivis === "toutes" ? [...org.personnes.values()].filter((p) => p.actif && !p.externe).map((p) => p.id) : [...a.suivis];
   const { semaines, lignes: toutes } = await chargeDesPersonnes(ids);
 
   const equipes = [...new Map(toutes.map((l) => [l.equipeId ?? "aucune", l.equipe])).entries()].sort((x, y) => (x[0] === "aucune" ? 1 : y[0] === "aucune" ? -1 : x[1].localeCompare(y[1], "fr")));

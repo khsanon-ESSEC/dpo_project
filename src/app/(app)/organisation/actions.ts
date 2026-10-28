@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { creerPersonne, definirChefEquipe, modifierPersonne, reinitialiserMotDePasse } from "@/lib/donnees/organisation";
+import { fermerAccesExterne, fusionnerExternes, modifierExterne, ouvrirAccesExterne } from "@/lib/donnees/externes";
 import { peutAdministrer } from "@/lib/regles";
 
 async function exigerAdministrateur() {
@@ -80,4 +81,55 @@ export async function changerChefEquipe(equipeId: string, form: FormData) {
   await definirChefEquipe(u.id, equipeId, ou(form.get("chefId")));
   revalidatePath("/organisation");
   redirect("/organisation");
+}
+
+// ---------- Personnes hors division ----------
+
+export async function enregistrerExterne(_: EtatFiche, form: FormData): Promise<EtatFiche> {
+  const u = await exigerAdministrateur();
+  try {
+    await modifierExterne(u.id, String(form.get("personneId") ?? ""), {
+      prenom: String(form.get("prenom") ?? ""),
+      nom: String(form.get("nom") ?? ""),
+      organisation: String(form.get("organisation") ?? ""),
+      poste: String(form.get("poste") ?? ""),
+      courriel: String(form.get("courriel") ?? ""),
+      actif: form.get("actif") === "on",
+    });
+  } catch (e) {
+    return { message: (e as Error).message };
+  }
+  revalidatePath("/organisation");
+  return { message: "Enregistré.", ok: true };
+}
+
+export async function changerAccesExterne(_: EtatFiche, form: FormData): Promise<EtatFiche> {
+  const u = await exigerAdministrateur();
+  const id = String(form.get("personneId") ?? "");
+  try {
+    if (form.get("ouvrir") === "1") {
+      const provisoire = await ouvrirAccesExterne(u.id, id);
+      revalidatePath("/organisation");
+      return { message: "Accès ouvert : transmettez-lui son adresse et ce mot de passe provisoire.", ok: true, provisoire };
+    }
+    await fermerAccesExterne(u.id, id);
+  } catch (e) {
+    return { message: (e as Error).message };
+  }
+  revalidatePath("/organisation");
+  return { message: "Accès fermé.", ok: true };
+}
+
+export async function fusionnerExterne(_: EtatFiche, form: FormData): Promise<EtatFiche> {
+  const u = await exigerAdministrateur();
+  const cible = String(form.get("cibleId") ?? "");
+  if (!cible) return { message: "Choisissez la fiche à garder." };
+  if (form.get("confirme") !== "on") return { message: "Cochez « Oui, fusionner » pour confirmer." };
+  try {
+    await fusionnerExternes(u.id, String(form.get("personneId") ?? ""), cible);
+  } catch (e) {
+    return { message: (e as Error).message };
+  }
+  revalidatePath("/organisation");
+  redirect(`/organisation?p=${cible}`);
 }

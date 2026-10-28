@@ -110,7 +110,7 @@ async function projetsANoter(auteurId: string, semaine: string) {
     .from(schema.taches)
     .innerJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
     .where(and(eq(schema.taches.assigneId, auteurId), or(ne(schema.taches.statut, "faite"), sql`${schema.taches.termineeLe} >= ${debut}`), isNull(schema.taches.annuleeLe)));
-  const diriges = await db.select({ id: schema.projets.id }).from(schema.projets).where(eq(schema.projets.chefProjetId, auteurId));
+  const diriges = await db.select({ id: schema.projets.id }).from(schema.projets).where(or(eq(schema.projets.chefProjetId, auteurId), eq(schema.projets.referentId, auteurId)));
   const ids = [...new Set([...viaTaches, ...diriges].map((x) => x.id))];
   if (!ids.length) return [];
   return db
@@ -208,7 +208,8 @@ export async function lignesDuRapport(rapportId: string) {
       retiree: schema.lignesRapport.retiree,
       projetCode: schema.projets.code,
       projetTitre: schema.projets.titre,
-      projetChefId: schema.projets.chefProjetId,
+      // Le chef de projet qui lit ses lignes : le référent DPO quand le chef est hors division.
+      projetChefId: sql<string | null>`coalesce(${schema.projets.referentId}, ${schema.projets.chefProjetId})`,
     })
     .from(schema.lignesRapport)
     .leftJoin(schema.projets, eq(schema.projets.id, schema.lignesRapport.projetId))
@@ -229,7 +230,8 @@ export async function reponsesDuRapport(rapportId: string) {
       proposeParIa: schema.reponsesRapport.proposeParIa,
       projetCode: schema.projets.code,
       projetTitre: schema.projets.titre,
-      projetChefId: schema.projets.chefProjetId,
+      // Le chef de projet qui lit ses lignes : le référent DPO quand le chef est hors division.
+      projetChefId: sql<string | null>`coalesce(${schema.projets.referentId}, ${schema.projets.chefProjetId})`,
     })
     .from(schema.reponsesRapport)
     .leftJoin(schema.projets, eq(schema.projets.id, schema.reponsesRapport.projetId))

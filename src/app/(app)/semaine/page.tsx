@@ -3,13 +3,12 @@ import { exigerUtilisateur } from "@/lib/auth/session";
 import { redigeUnRapport } from "@/lib/regles";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { ajouterJours, aujourdhui, dateCourte, echeanceRelative, heure, jourComplet, lettreJour, lundiDe } from "@/lib/dates";
-import { activiteDeLaSemaine, compter, etatMonRapport, journeeDe, mesProjets, tachesDe, trier } from "@/lib/donnees/semaine";
+import { ajouterJours, aujourdhui, dateCourte, heure, jourComplet, lettreJour, lundiDe } from "@/lib/dates";
+import { activiteDeLaSemaine, compter, etatMonRapport, journeeDe, mesProjets, tachesDe } from "@/lib/donnees/semaine";
 import { semaineCourante } from "@/lib/donnees/rapport";
 import { chargeDesPersonnes } from "@/lib/donnees/charge";
 import { Jauge } from "@/components/Charge";
 import { Anneau, Bandeau } from "@/components/Bandeau";
-import { CaseTache } from "@/components/CaseTache";
 import { Icone } from "@/components/Icone";
 import { ONGLETS_SEMAINE, SousOnglets } from "@/components/SousOnglets";
 import { reunionsDe } from "@/lib/donnees/reunions";
@@ -31,13 +30,15 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
   // Un jour choisi dans la frise (passé ou non) : sa semaine s'affiche, et ce qui s'y est passé.
   const choisi = jourDemande && /^\d{4}-\d{2}-\d{2}$/.test(jourDemande) && !Number.isNaN(Date.parse(jourDemande)) ? jourDemande : null;
   const semaineVue = lundiDe(choisi ?? jour);
+  // Le jour montré : celui choisi dans la frise, sinon aujourd'hui. La liste des tâches est dans « À faire ».
+  const jourVu = choisi ?? jour;
   const [taches, jours, projets, rapport, maCharge, journee, rapportVu, reunions] = await Promise.all([
     tachesDe([u.id]),
     activiteDeLaSemaine(u.id, semaineVue),
     mesProjets(u.id),
     etatMonRapport(u.id),
     chargeDesPersonnes([u.id], 2),
-    choisi ? journeeDe(u.id, choisi) : null,
+    journeeDe(u.id, jourVu),
     semaineVue !== semaine
       ? db
           .select({ id: schema.rapportsHebdo.id, statut: schema.rapportsHebdo.statut })
@@ -48,10 +49,9 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
     reunionsDe(u.id, semaineVue, ajouterJours(semaineVue, 6)),
   ]);
   const minutesReunion = reunions.reduce((t, r) => t + r.dureeMinutes, 0);
-  const reunionsDuJour = choisi ? reunions.filter((r) => r.jour === choisi) : [];
+  const reunionsDuJour = reunions.filter((r) => r.jour === jourVu);
   const charge = maCharge.lignes[0]?.charge;
   const c = compter(taches, jour);
-  const liste = trier(taches, jour);
   const envoye = rapport.rapport?.statut === "envoye";
 
   return (
@@ -83,8 +83,8 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
           </a>
           <ol className="frise" aria-label={`Semaine du ${dateCourte(semaineVue)} : choisissez un jour pour voir ce qui s'y est passé`}>
             {jours.map((j) => (
-              <li key={j.jour} aria-current={j.jour === jour ? "date" : undefined} data-choisi={j.jour === choisi ? "1" : undefined}>
-                <a href={j.jour === choisi ? "/semaine" : `/semaine?jour=${j.jour}`} aria-label={`${jourComplet(j.jour)} : ${j.total} mise${j.total > 1 ? "s" : ""} à jour`} aria-pressed={j.jour === choisi}>
+              <li key={j.jour} aria-current={j.jour === jour ? "date" : undefined} data-choisi={j.jour === jourVu ? "1" : undefined}>
+                <a href={j.jour === jour ? "/semaine" : `/semaine?jour=${j.jour}`} aria-label={`${jourComplet(j.jour)} : ${j.total} mise${j.total > 1 ? "s" : ""} à jour`} aria-pressed={j.jour === jourVu}>
                   <span className="frise__lettre" aria-hidden="true">
                     {lettreJour(j.jour)}
                   </span>
@@ -121,16 +121,22 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
             </a>
           </p>
         ) : null}
-        {choisi && journee ? (
-          <section className="carte carte--liste" aria-labelledby="t-journee">
+        <div className="colonnes">
+          <section className="carte carte--liste colonne-large" aria-labelledby="t-journee">
             <div className="carte__entete">
               <h2 id="t-journee" className="carte__titre">
-                {jourComplet(choisi)}
-                {choisi === jour ? " · aujourd'hui" : ""}
+                {jourVu === jour ? "Aujourd'hui · " : ""}
+                {jourComplet(jourVu)}
               </h2>
-              <a href="/semaine" className="lien-discret">
-                Fermer
-              </a>
+              {jourVu !== jour ? (
+                <a href="/semaine" className="lien-discret">
+                  Revenir à aujourd&apos;hui
+                </a>
+              ) : (
+                <a href="/a-faire" className="lien-discret">
+                  Mes tâches →
+                </a>
+              )}
             </div>
             {journee.faits.length === 0 && journee.echeances.length === 0 && reunionsDuJour.length === 0 ? <p className="vide">Aucune mise à jour de tâche ce jour-là, aucune échéance, aucune réunion.</p> : null}
             {journee.faits.length ? (
@@ -184,53 +190,13 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
                         <span className="rangee__texte">
                           <span className="rangee__titre">{t.titre}</span>
                         </span>
-                        <span className={`rangee__meta ${t.statut === "faite" ? "ton-ok" : t.statut === "bloquee" ? "ton-veille" : choisi < jour ? "ton-retard" : ""}`}>{t.libelle}</span>
+                        <span className={`rangee__meta ${t.statut === "faite" ? "ton-ok" : t.statut === "bloquee" ? "ton-veille" : jourVu < jour ? "ton-retard" : ""}`}>{t.libelle}</span>
                       </a>
                     </li>
                   ))}
                 </ul>
               </>
             ) : null}
-          </section>
-        ) : null}
-        <div className="colonnes">
-          <section className="carte carte--liste colonne-large" aria-labelledby="t-afaire" style={{ gap: 0 }}>
-            <div className="carte__entete">
-              <h2 id="t-afaire" className="carte__titre">
-                À faire · {c.total - c.faites}
-              </h2>
-              <a href="/taches/nouvelle" className="lien-discret" style={{ display: "inline-flex", alignItems: "center", gap: 6, minHeight: 36 }}>
-                <Icone nom="ajouter" taille={16} /> Nouvelle tâche
-              </a>
-            </div>
-            {liste.length === 0 ? (
-              <p className="vide">Aucune tâche pour le moment.</p>
-            ) : (
-              <ul className="liste">
-                {liste.map((t) => {
-                  const e = echeanceRelative(t.echeance, jour);
-                  const meta =
-                    t.statut === "faite" ? { texte: "Faite", classe: "ton-discret" } : t.statut === "bloquee" ? { texte: "Bloquée", classe: "ton-veille" } : { texte: e.texte, classe: e.retard ? "ton-retard" : "ton-discret" };
-                  return (
-                    <CaseTache key={t.id} id={t.id} titre={t.titre} faite={t.statut === "faite"}>
-                      <a href={`/taches/${t.id}`} className="rangee" style={{ flex: 1, minWidth: 0 }}>
-                        {t.projetCode ? (
-                          <span className="mono" aria-hidden="true">
-                            {t.projetCode}
-                          </span>
-                        ) : null}
-                        <span className="rangee__texte">
-                          <span className="rangee__titre">{t.titre}</span>
-                          <span className="rangee__sous">
-                            {t.projetTitre ?? "Hors projet"} · <span className={meta.classe}>{meta.texte}</span>
-                          </span>
-                        </span>
-                      </a>
-                    </CaseTache>
-                  );
-                })}
-              </ul>
-            )}
           </section>
           <div className="colonne-etroite">
 {redigeUnRapport(u) ? (

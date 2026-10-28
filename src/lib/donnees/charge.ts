@@ -57,7 +57,8 @@ export async function chargeDesPersonnes(ids: string[], nbSemaines = NB_SEMAINES
   const jour = aujourdhui();
   const semaines = semainesAVenir(jour, nbSemaines);
   const org = await chargerOrganisation();
-  const actifs = ids.filter((id) => org.personnes.get(id)?.actif);
+  // La charge n'est mesurée que pour la division : les personnes hors division n'y figurent pas.
+  const actifs = ids.filter((id) => org.personnes.get(id)?.actif && !org.personnes.get(id)?.externe);
   const [taches, caps, reunions] = await Promise.all([tachesOuvertesDe(actifs), capacites(actifs), reunionsParJour(actifs, jour, ajouterJours(semaines.at(-1)!, 6))]);
   const lignes: LigneCharge[] = actifs.map((id) => {
     const p = org.personnes.get(id)!;

@@ -30,7 +30,7 @@ export default async function LayoutApplication({ children }: { children: React.
   const PROJETS: ElementNav = { href: "/projets", libelle: "Projets", icone: "tableau-de-bord" };
   // Les exécutifs ne rédigent pas de rapport : ils lisent ceux de tout le monde (Équipe → Rapports).
   const redige = redigeUnRapport(u);
-  const SEMAINE: ElementNav = { href: "/semaine", libelle: "Semaine", icone: "calendrier", actifs: ["/reunions", "/bilan"] };
+  const SEMAINE: ElementNav = { href: "/semaine", libelle: "Semaine", icone: "calendrier", actifs: ["/reunions", "/bilan", "/a-faire"] };
   const elements: ElementNav[] = [
     SEMAINE,
     ...(redige ? [RAPPORT] : []),

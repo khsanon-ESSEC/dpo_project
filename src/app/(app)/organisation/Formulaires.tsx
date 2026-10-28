@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { ajouterPersonne, enregistrerPersonne, nouveauMotDePasse, type EtatFiche } from "./actions";
+import { ajouterPersonne, changerAccesExterne, enregistrerExterne, enregistrerPersonne, fusionnerExterne, nouveauMotDePasse, type EtatFiche } from "./actions";
 
 type Option = { id: string; nom: string };
 
@@ -75,7 +75,7 @@ export function FichePersonne({
     nom: string;
     initiales: string;
     poste: string;
-    courriel: string;
+    courriel: string | null;
     equipeId: string | null;
     superieurId: string | null;
     superieurEffectif: string | null;
@@ -203,6 +203,119 @@ export function NouvellePersonne({ equipes, personnes, peutDonnerExecutif }: { e
           {enCours ? "Création…" : "Créer"}
         </button>
       </form>
+    </div>
+  );
+}
+
+/**
+ * Fiche d'une personne hors division (autre département, consultant) : nom, département ou société,
+ * courriel ; accès limité à ouvrir ou à fermer ; fusion avec une autre fiche (doublon).
+ */
+export function FicheExterne({
+  personne: p,
+  autres,
+  modifiable,
+}: {
+  personne: { id: string; prenom: string; nom: string; nomComplet: string; initiales: string; organisation: string; poste: string; courriel: string | null; actif: boolean; acces: boolean; nbTaches: number; projets: string[] };
+  autres: Option[];
+  modifiable: boolean;
+}) {
+  const [etat, action, enCours] = useActionState<EtatFiche, FormData>(enregistrerExterne, { message: null });
+  const [etatAcces, actionAcces, enCoursAcces] = useActionState<EtatFiche, FormData>(changerAccesExterne, { message: null });
+  const [etatFusion, actionFusion, enCoursFusion] = useActionState<EtatFiche, FormData>(fusionnerExterne, { message: null });
+  return (
+    <div className="glisse" style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <span className="mono mono--grand" aria-hidden="true">
+          {p.initiales}
+        </span>
+        <div className="rangee__texte">
+          <h2 style={{ margin: 0, fontSize: 26, lineHeight: "32px", fontWeight: 200 }}>{p.nomComplet}</h2>
+          <span className="rangee__sous" style={{ fontSize: 13 }}>
+            Hors division{p.organisation ? ` · ${p.organisation}` : ""} · {p.acces ? "accès limité ouvert" : "sans accès"}
+          </span>
+        </div>
+      </div>
+      <p className="note" style={{ margin: 0 }}>
+        {p.nbTaches ? `${p.nbTaches} tâche${p.nbTaches > 1 ? "s" : ""} ouverte${p.nbTaches > 1 ? "s" : ""}` : "Aucune tâche ouverte"}
+        {p.projets.length ? ` · équipe de ${p.projets.join(", ")}` : ""}. Sans équipe ni supérieur ici : ni rapport du vendredi, ni charge, ni bilan.
+      </p>
+      <form action={action} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <input type="hidden" name="personneId" value={p.id} />
+        {etat.message ? (
+          <p className={etat.ok ? "succes" : "erreur"} role={etat.ok ? "status" : "alert"}>
+            {etat.message}
+          </p>
+        ) : null}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+          <div className="champ" style={{ flex: "1 1 140px" }}>
+            <label htmlFor="ex-prenom">Prénom</label>
+            <input id="ex-prenom" name="prenom" defaultValue={p.prenom} required maxLength={80} disabled={!modifiable} />
+          </div>
+          <div className="champ" style={{ flex: "1 1 160px" }}>
+            <label htmlFor="ex-nom">Nom</label>
+            <input id="ex-nom" name="nom" defaultValue={p.nom} maxLength={120} disabled={!modifiable} />
+          </div>
+        </div>
+        <div className="champ">
+          <label htmlFor="ex-organisation">Département ou société</label>
+          <input id="ex-organisation" name="organisation" defaultValue={p.organisation} maxLength={120} disabled={!modifiable} placeholder="Ex. : DTI, Cabinet Atlas" />
+        </div>
+        <div className="champ">
+          <label htmlFor="ex-poste">Fonction (facultatif)</label>
+          <input id="ex-poste" name="poste" defaultValue={p.poste} maxLength={120} disabled={!modifiable} placeholder="Ex. : consultante sécurité" />
+        </div>
+        <div className="champ">
+          <label htmlFor="ex-courriel">Adresse courriel (facultatif, nécessaire pour un accès)</label>
+          <input id="ex-courriel" name="courriel" type="email" defaultValue={p.courriel ?? ""} maxLength={200} disabled={!modifiable} />
+        </div>
+        <Interrupteur nom="actif" libelle="Active" detail="Désactivée, elle ne se choisit plus ; ce qu'elle a fait reste" coche={p.actif} desactive={!modifiable} />
+        {modifiable ? (
+          <button type="submit" className="bouton-ambre" disabled={enCours} style={{ alignSelf: "flex-start" }}>
+            Enregistrer
+          </button>
+        ) : null}
+      </form>
+      {modifiable ? (
+        <form action={actionAcces} style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 20, borderTop: "1px solid var(--filet)" }}>
+          <input type="hidden" name="personneId" value={p.id} />
+          <input type="hidden" name="ouvrir" value={p.acces ? "" : "1"} />
+          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>Accès à l&apos;application</h3>
+          <p className="note" style={{ margin: 0 }}>
+            {p.acces
+              ? "Elle se connecte et voit seulement ses tâches et les projets dont elle fait partie."
+              : "Sans accès, la personne qui lui confie une tâche la met à jour pour elle. Un accès limité lui montre seulement ses tâches et ses projets."}
+          </p>
+          {etatAcces.message ? (
+            <p className={etatAcces.ok ? "succes" : "erreur"} role={etatAcces.ok ? "status" : "alert"}>
+              {etatAcces.message}
+            </p>
+          ) : null}
+          {etatAcces.provisoire ? <MotDePasseProvisoire valeur={etatAcces.provisoire} /> : null}
+          <button type="submit" className="bouton-contour" disabled={enCoursAcces} style={{ alignSelf: "flex-start" }}>
+            {p.acces ? "Fermer l'accès" : "Ouvrir un accès limité"}
+          </button>
+        </form>
+      ) : null}
+      {modifiable && autres.length ? (
+        <form action={actionFusion} style={{ display: "flex", flexDirection: "column", gap: 10, paddingTop: 20, borderTop: "1px solid var(--filet)" }}>
+          <input type="hidden" name="personneId" value={p.id} />
+          <h3 style={{ margin: 0, fontSize: 14, fontWeight: 500 }}>Doublon</h3>
+          {etatFusion.message ? (
+            <p className={etatFusion.ok ? "succes" : "erreur"} role={etatFusion.ok ? "status" : "alert"}>
+              {etatFusion.message}
+            </p>
+          ) : null}
+          <ChoixListe id="ex-cible" nom="cibleId" libelle="C'est la même personne que" options={autres} valeur={null} vide="Choisir la fiche à garder" />
+          <span className="aide">Ses tâches, ses équipes projet et ses réunions passent sur la fiche gardée ; celle-ci disparaît.</span>
+          <label className="confirmer">
+            <input type="checkbox" name="confirme" required /> Oui, fusionner
+          </label>
+          <button type="submit" className="bouton-contour" disabled={enCoursFusion} style={{ alignSelf: "flex-start" }}>
+            Fusionner les deux fiches
+          </button>
+        </form>
+      ) : null}
     </div>
   );
 }

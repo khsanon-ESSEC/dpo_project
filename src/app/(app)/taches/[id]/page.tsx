@@ -37,8 +37,9 @@ export default async function PageTache({ params, searchParams }: { params: Prom
   const visibles = await idsProjetsVisibles(a);
   const projets = (await tousLesProjetsActifs()).filter((x) => visibles === "tous" || visibles.has(x.id) || x.id === t.projetId);
   if (projet && !projets.some((x) => x.id === projet.id)) projets.unshift({ id: projet.id, code: projet.code, titre: projet.titre });
-  const { personnes, base, parProjet } = await assignables(a);
-  if (!personnes.some((x) => x.id === t.assigneId)) personnes.push({ id: t.assigneId, nom: nomComplet(org.personnes.get(t.assigneId)!) });
+  const { personnes, base, parProjet, externesPartout } = await assignables(a);
+  const actuel = org.personnes.get(t.assigneId)!;
+  if (!personnes.some((x) => x.id === t.assigneId)) personnes.push({ id: t.assigneId, nom: nomComplet(actuel), externe: actuel.externe, organisation: actuel.organisation });
   const supprimable = tacheSupprimable({ statut: t.statut, ...(await histoireDeTache(t.id)) });
   const chef = projet?.chefProjetId ? org.personnes.get(projet.chefProjetId) : null;
   const assigne = org.personnes.get(t.assigneId)!;
@@ -65,7 +66,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
           retour ? (
             <a href={retour} className="retour">
               <Icone nom="chevron-gauche" taille={18} />{" "}
-              {retour.startsWith("/projets/") && projet ? projet.titre : retour === "/charge" ? "Charge de travail" : retour.startsWith("/equipe") ? "Équipe" : "Ma semaine"}
+              {retour.startsWith("/projets/") && projet ? projet.titre : retour === "/charge" ? "Charge de travail" : retour === "/a-faire" ? "À faire" : retour.startsWith("/equipe") ? "Équipe" : "Ma semaine"}
             </a>
           ) : (
             <a href="/semaine" className="retour">
@@ -151,6 +152,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
             personnes={personnes}
             base={base}
             parProjet={parProjet}
+            externesPartout={externesPartout}
           />
         )}
         {t.annuleeLe ? null : (

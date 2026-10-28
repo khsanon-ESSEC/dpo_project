@@ -37,7 +37,13 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
   const personnes = [...org.personnes.values()]
     .filter((p) => p.actif && p.id !== u.id)
     .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
-    .map((p) => ({ id: p.id, nom: nomComplet(p), detail: [p.poste, p.equipeId ? org.equipes.get(p.equipeId)?.nom : null].filter(Boolean).join(" · ") }));
+    .sort((x, y) => Number(x.externe) - Number(y.externe))
+    .map((p) => ({
+      id: p.id,
+      nom: nomComplet(p),
+      externe: p.externe,
+      detail: p.externe ? ["Hors division", p.organisation].filter(Boolean).join(" · ") : [p.poste, p.equipeId ? org.equipes.get(p.equipeId)?.nom : null].filter(Boolean).join(" · "),
+    }));
   const parJour = new Map<string, typeof liste>();
   for (const r of liste) parJour.set(r.jour, [...(parJour.get(r.jour) ?? []), r]);
   const visible = (id: string | null) => !!id && (visibles === "tous" || visibles.has(id));

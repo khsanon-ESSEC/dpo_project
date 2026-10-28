@@ -24,10 +24,16 @@ export type PersonneOrg = Roles & {
   prenom: string;
   nom: string;
   poste: string;
-  courriel: string;
+  courriel: string | null;
   equipeId: string | null;
   superieurId: string | null;
   actif: boolean;
+  /** Hors division (autre département, consultant) : ni équipe, ni supérieur, ni rapport. */
+  externe: boolean;
+  /** Département ou société d'une personne hors division. */
+  organisation: string;
+  /** Peut se connecter (un mot de passe existe). */
+  acces: boolean;
 };
 
 export type EquipeOrg = {
@@ -53,8 +59,9 @@ export function voitTout(p: Pick<Roles, "executif">): boolean {
  * Les exécutifs ne rédigent pas de rapport de la semaine : ils n'ont personne à qui l'envoyer.
  * Ils lisent ceux de tout le monde (décision du 27 octobre 2026).
  */
-export function redigeUnRapport(p: Pick<Roles, "executif">): boolean {
-  return !p.executif;
+export function redigeUnRapport(p: Pick<Roles, "executif"> & { externe?: boolean }): boolean {
+  // Une personne hors division n'a pas de supérieur ici : elle n'envoie pas de rapport non plus.
+  return !p.executif && !p.externe;
 }
 
 export function peutAdministrer(p: Pick<Roles, "administrateur">): boolean {
@@ -157,7 +164,7 @@ export function libellesRoles(p: Roles & { nbRapports: number; nbProjetsDiriges:
 }
 
 export function nomComplet(p: { prenom: string; nom: string }): string {
-  return `${p.prenom} ${p.nom}`;
+  return `${p.prenom} ${p.nom}`.trim();
 }
 
 export function initiales(p: { prenom: string; nom: string }): string {

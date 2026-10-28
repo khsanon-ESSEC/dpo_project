@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { creerTache, type EtatNouvelleTache } from "../actions";
 import { dateCourte, lundiDe } from "@/lib/dates";
+import { ChoixPour, externesPermisPour, NOUVELLE_PERSONNE, type PersonneChoix } from "@/components/ChoixPour";
 
 type Indication = { capacite: number; semaines: { semaine: string; heures: number | null; capacite: number; niveau: string }[] };
 
@@ -18,6 +19,7 @@ export function FormulaireNouvelleTache({
   personnes,
   base,
   parProjet,
+  externesPartout,
   indications,
   projetParDefaut,
   pourParDefaut,
@@ -25,11 +27,13 @@ export function FormulaireNouvelleTache({
   aujourdhui,
 }: {
   projets: { id: string; code: string; titre: string }[];
-  personnes: { id: string; nom: string }[];
+  personnes: PersonneChoix[];
   /** Personnes qu'on peut choisir pour une tâche hors projet (soi, les personnes suivies). */
   base: string[];
   /** Pour chaque projet qu'on dirige : son équipe, à qui on peut aussi confier ses tâches. */
   parProjet: Record<string, string[]>;
+  /** Direction et exécutifs : personnes hors division sur tous les projets. */
+  externesPartout: boolean;
   indications: Record<string, Indication>;
   projetParDefaut: string;
   pourParDefaut: string;
@@ -41,8 +45,9 @@ export function FormulaireNouvelleTache({
   const [echeance, setEcheance] = useState("");
   const [projet, setProjet] = useState(projetParDefaut);
   const permis = new Set([...base, ...(parProjet[projet] ?? [])]);
-  const choix = personnes.filter((p) => permis.has(p.id));
-  const pourValide = permis.has(pour) ? pour : (choix[0]?.id ?? "");
+  const externesPermis = externesPermisPour(projet, parProjet, externesPartout);
+  const choix = personnes.filter((p) => permis.has(p.id) || (p.externe && externesPermis));
+  const pourValide = pour === NOUVELLE_PERSONNE && externesPermis ? pour : choix.some((p) => p.id === pour) ? pour : (choix[0]?.id ?? "");
 
   // Charge de la personne choisie, la semaine de l'échéance (ou cette semaine).
   const semaine = lundiDe(echeance || aujourdhui);
@@ -78,16 +83,7 @@ export function FormulaireNouvelleTache({
         </select>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div className="champ">
-          <label htmlFor="assigneId">Pour</label>
-          <select id="assigneId" name="assigneId" value={pourValide} onChange={(e) => setPour(e.target.value)}>
-            {choix.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nom}
-              </option>
-            ))}
-          </select>
-        </div>
+        <ChoixPour id="assigneId" personnes={personnes} permis={permis} externesPermis={externesPermis} valeur={pourValide} onChange={setPour} />
         {ind && n ? (
           <p className="note" aria-live="polite" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span aria-hidden="true" className={`point-niveau point-niveau--${ind.niveau}`} />

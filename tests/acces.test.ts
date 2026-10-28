@@ -38,7 +38,7 @@ describe.skipIf(!URL_TEST)("accès, sur les données d'exemple", () => {
     R = await import("@/lib/donnees/rapport");
     O = await import("@/lib/donnees/organisation");
     for (const p of await D.db.select().from(D.schema.personnes)) {
-      gens.set(p.courriel.split("@")[0], {
+      gens.set((p.courriel ?? p.id).split("@")[0], {
         id: p.id,
         prenom: p.prenom,
         nom: p.nom,

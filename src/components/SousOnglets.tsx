@@ -24,11 +24,12 @@ export const ONGLETS_EQUIPE: SousOnglet[] = [
   { href: "/equipe/bilan", libelle: "Bilan", icone: "bilan" },
 ];
 
-/** Section Semaine : ma semaine, mes réunions, mon bilan. */
+/** Section Semaine : ma semaine (jour par jour), mes réunions, mon bilan, mes tâches à faire. */
 export const ONGLETS_SEMAINE: SousOnglet[] = [
   { href: "/semaine", libelle: "Ma semaine", icone: "calendrier" },
   { href: "/reunions", libelle: "Réunions", icone: "reunion" },
   { href: "/bilan", libelle: "Mon bilan", icone: "bilan" },
+  { href: "/a-faire", libelle: "À faire", icone: "liste" },
 ];
 
 /** Section Rapport : le rapport de la semaine et ceux déjà envoyés. */

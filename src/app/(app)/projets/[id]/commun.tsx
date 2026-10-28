@@ -51,8 +51,9 @@ export async function chargerVueProjet(id: string): Promise<ContexteVue> {
   const projet = await exigerProjetVisible(a, id);
   const org = await chargerOrganisation();
   const chef = projet.chefProjetId ? org.personnes.get(projet.chefProjetId) : null;
+  const referent = projet.referentId ? org.personnes.get(projet.referentId) : null;
   const taches = (await tachesDuProjet(id)).map((t) => ({ ...t, ouvrable: peutVoirTache(a, t) }));
-  return { u, a, projet, chefNom: chef ? nomComplet(chef) : null, taches };
+  return { u, a, projet, chefNom: chef ? `${nomComplet(chef)}${referent ? ` · référent DPO : ${nomComplet(referent)}` : ""}` : null, taches };
 }
 
 /** En-tête des vues autres que la vue d'ensemble. */

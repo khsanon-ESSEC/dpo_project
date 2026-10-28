@@ -263,6 +263,7 @@ ${DATE_DEMO ? `  Date figée au ${DATE_DEMO} (démonstration). Pour la vraie dat
     nadege.augustin@demo.dpo.local      directrice de la division, administratrice
     frantz.desrosiers@demo.dpo.local    exécutif et administrateur
     jean-robert.noel@demo.dpo.local     analyste et administrateur
+    nathalie.celestin@demo.dpo.local    consultante hors division (accès limité)
 
   Pour arrêter : Ctrl+C dans cette fenêtre (ou fermez-la).
   Pour repartir de zéro : supprimez le dossier .local/postgres, puis relancez.

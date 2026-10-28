@@ -58,8 +58,13 @@ export const personnes = pgTable(
     id: uuid().primaryKey().defaultRandom(),
     prenom: text().notNull(),
     nom: text().notNull(),
-    courriel: text().notNull().unique(),
+    /** Facultatif pour une personne hors division sans accès. */
+    courriel: text().unique(),
     poste: text().notNull().default(""),
+    /** Hors division : autre département de la banque, ou consultant. Sans équipe ni supérieur ici, sans rapport. */
+    externe: boolean().notNull().default(false),
+    /** Pour une personne hors division : son département ou sa société. */
+    organisation: text().notNull().default(""),
     equipeId: uuid("equipe_id").references((): AnyPgColumn => equipes.id, { onDelete: "set null" }),
     /** Un seul supérieur. Vide = rattaché au responsable de l'équipe, ou à la direction. */
     superieurId: uuid("superieur_id").references((): AnyPgColumn => personnes.id, { onDelete: "set null" }),
@@ -94,6 +99,10 @@ export const projets = pgTable("projets", {
   statut: statutProjet().notNull().default("en_cours"),
   sante: santeProjet().notNull().default("dans_les_temps"),
   chefProjetId: uuid("chef_projet_id").references(() => personnes.id, { onDelete: "set null" }),
+  /** Projet d'une autre division : son nom (vide = la DPO). */
+  division: text().notNull().default(""),
+  /** Projet dont le chef est hors division : la personne de la DPO qui a ici les droits de chef de projet. */
+  referentId: uuid("referent_id").references((): AnyPgColumn => personnes.id, { onDelete: "set null" }),
   dateEntree: date("date_entree"),
   dateFinInitiale: date("date_fin_initiale"),
   dateFinPrevue: date("date_fin_prevue"),

@@ -85,6 +85,16 @@ export async function reunionsParJour(personneIds: string[], depuis: string, jus
   return m;
 }
 
+/** Parmi ces personnes, celles qui peuvent lire une alerte : la division, et les personnes hors division qui ont un accès. */
+async function prevenables(ids: string[]) {
+  if (!ids.length) return [];
+  const lignes = await db
+    .select({ id: schema.personnes.id, externe: schema.personnes.externe, hash: schema.personnes.motDePasseHash })
+    .from(schema.personnes)
+    .where(inArray(schema.personnes.id, ids));
+  return lignes.filter((p) => !p.externe || p.hash).map((p) => p.id);
+}
+
 /** Contrôle d'une saisie : renvoie les valeurs propres ou un message. */
 async function verifier(d: SaisieReunion, moiId: string) {
   const titre = String(d.titre ?? "").trim().slice(0, 160);
@@ -93,8 +103,12 @@ async function verifier(d: SaisieReunion, moiId: string) {
   const duree = dureeValide(d.dureeMinutes);
   if (!duree) return { erreur: "Une réunion dure de 5 minutes à 10 heures." } as const;
   const heure = HEURE.test(d.heure) ? d.heure : null;
-  const org = await chargerOrganisation();
-  const participants = [...new Set([moiId, ...d.participants.filter((id) => org.personnes.get(id)?.actif)])];
+  // Lu en base : des personnes hors division peuvent avoir été ajoutées dans cette même requête.
+  const demandes = [...new Set(d.participants.filter((id) => /^[0-9a-f-]{36}$/.test(id)))];
+  const actifs = demandes.length
+    ? (await db.select({ id: schema.personnes.id }).from(schema.personnes).where(and(inArray(schema.personnes.id, demandes), eq(schema.personnes.actif, true)))).map((p) => p.id)
+    : [];
+  const participants = [...new Set([moiId, ...actifs])];
   const projetId = /^[0-9a-f-]{36}$/.test(d.projetId) ? d.projetId : null;
   return { titre, jour: d.jour, heure, dureeMinutes: duree, projetId, notes: String(d.notes ?? "").trim().slice(0, 2000), participants } as const;
 }
@@ -109,7 +123,7 @@ export async function noterReunion(a: Acces, d: SaisieReunion, projetsPermis: Se
     .values({ titre: v.titre, jour: v.jour, heure: v.heure, dureeMinutes: v.dureeMinutes, projetId: v.projetId, notes: v.notes, noteeParId: a.moi.id })
     .returning({ id: schema.reunions.id });
   await db.insert(schema.participantsReunion).values(v.participants.map((personneId) => ({ reunionId: r.id, personneId })));
-  const autres = v.participants.filter((id) => id !== a.moi.id);
+  const autres = await prevenables(v.participants.filter((id) => id !== a.moi.id));
   if (autres.length)
     await db.insert(schema.notifications).values(
       autres.map((personneId) => ({
@@ -138,7 +152,7 @@ export async function modifierReunion(a: Acces, id: string, d: SaisieReunion, pr
   const avant = new Set((await db.select().from(schema.participantsReunion).where(eq(schema.participantsReunion.reunionId, id))).map((p) => p.personneId));
   await db.delete(schema.participantsReunion).where(eq(schema.participantsReunion.reunionId, id));
   await db.insert(schema.participantsReunion).values(v.participants.map((personneId) => ({ reunionId: id, personneId })));
-  const nouveaux = v.participants.filter((p) => !avant.has(p) && p !== a.moi.id);
+  const nouveaux = await prevenables(v.participants.filter((p) => !avant.has(p) && p !== a.moi.id));
   if (nouveaux.length)
     await db.insert(schema.notifications).values(
       nouveaux.map((personneId) => ({ personneId, type: "reunion", texte: `${a.moi.prenom} ${a.moi.nom} a noté « ${v.titre} » (${dateCourte(v.jour)}, ${dureeTexte(v.dureeMinutes)}) avec vous`, lien: `/reunions?semaine=${v.jour}` })),

@@ -4,6 +4,7 @@
  */
 import "server-only";
 import { cache } from "react";
+import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { resoudreSuperieur, type OrgDonnees } from "./regles";
 
@@ -22,6 +23,9 @@ export const chargerOrganisation = cache(async (): Promise<OrgDonnees> => {
         executif: schema.personnes.executif,
         administrateur: schema.personnes.administrateur,
         actif: schema.personnes.actif,
+        externe: schema.personnes.externe,
+        organisation: schema.personnes.organisation,
+        acces: sql<boolean>`${schema.personnes.motDePasseHash} is not null`,
       })
       .from(schema.personnes),
     db.select().from(schema.equipes),
@@ -38,3 +42,17 @@ export async function superieurDe(personneId: string) {
 }
 
 export { initiales, nomComplet } from "./regles";
+
+/**
+ * Une personne lue en base, hors du cache de la requête : pour une fiche hors division qui vient
+ * d'être créée dans la même requête (réunion, tâche, équipe projet).
+ */
+export async function personneActuelle(id: string | null | undefined) {
+  if (!id || !/^[0-9a-f-]{36}$/.test(id)) return null;
+  const [p] = await db
+    .select({ id: schema.personnes.id, actif: schema.personnes.actif, externe: schema.personnes.externe, acces: sql<boolean>`${schema.personnes.motDePasseHash} is not null` })
+    .from(schema.personnes)
+    .where(eq(schema.personnes.id, id))
+    .limit(1);
+  return p ?? null;
+}

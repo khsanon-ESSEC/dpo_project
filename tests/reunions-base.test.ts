@@ -38,7 +38,7 @@ describe.skipIf(!URL_TEST)("journal des réunions et bilan", () => {
     B = await import("@/lib/donnees/bilan");
     CH = await import("@/lib/donnees/charge");
     for (const p of await D.db.select().from(D.schema.personnes)) {
-      gens.set(p.courriel.split("@")[0], { id: p.id, prenom: p.prenom, nom: p.nom, poste: p.poste, directeur: p.directeur, executif: p.executif, administrateur: p.administrateur, theme: p.theme, doitChangerMotDePasse: false });
+      gens.set((p.courriel ?? p.id).split("@")[0], { id: p.id, prenom: p.prenom, nom: p.nom, poste: p.poste, directeur: p.directeur, executif: p.executif, administrateur: p.administrateur, externe: p.externe, theme: p.theme, doitChangerMotDePasse: false });
     }
   });
 

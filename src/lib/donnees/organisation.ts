@@ -1,6 +1,6 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { hacherMotDePasse } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
@@ -9,10 +9,26 @@ import { initiales, libellesRoles, nomComplet, resoudreSuperieur, subordonnesDir
 
 export async function vueOrganisation() {
   const org = await chargerOrganisation();
-  const projets = await db.select({ code: schema.projets.code, titre: schema.projets.titre, chefId: schema.projets.chefProjetId }).from(schema.projets).orderBy(asc(schema.projets.titre));
+  const projets = await db.select({ code: schema.projets.code, titre: schema.projets.titre, chefId: schema.projets.chefProjetId, referentId: schema.projets.referentId }).from(schema.projets).orderBy(asc(schema.projets.titre));
   const caps = new Map((await db.select({ id: schema.personnes.id, c: schema.personnes.capaciteHeures }).from(schema.personnes)).map((x) => [x.id, x.c]));
   const equipes = [...org.equipes.values()].sort((a, b) => (a.equipeParenteId ? 1 : 0) - (b.equipeParenteId ? 1 : 0) || a.nom.localeCompare(b.nom, "fr"));
-  const personnes = [...org.personnes.values()].sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  const toutes = [...org.personnes.values()].sort((a, b) => a.nom.localeCompare(b.nom, "fr"));
+  // La division d'un côté ; les personnes hors division (autres départements, consultants) de l'autre.
+  const personnes = toutes.filter((p) => !p.externe);
+  const externes = toutes.filter((p) => p.externe);
+  const ouvertes = externes.length
+    ? await db
+        .select({ id: schema.taches.assigneId })
+        .from(schema.taches)
+        .where(and(inArray(schema.taches.assigneId, externes.map((p) => p.id)), ne(schema.taches.statut, "faite"), isNull(schema.taches.annuleeLe)))
+    : [];
+  const equipesProjet = externes.length
+    ? await db
+        .select({ personneId: schema.membresProjet.personneId, code: schema.projets.code })
+        .from(schema.membresProjet)
+        .innerJoin(schema.projets, eq(schema.projets.id, schema.membresProjet.projetId))
+        .where(inArray(schema.membresProjet.personneId, externes.map((p) => p.id)))
+    : [];
   const fiche = (id: string) => {
     const p = org.personnes.get(id)!;
     const sup = resoudreSuperieur(org, id);
@@ -26,7 +42,7 @@ export async function vueOrganisation() {
       equipeNom: p.equipeId ? org.equipes.get(p.equipeId)?.nom ?? "" : "",
       nbRapports: subordonnesDirects(org, id).length,
       capaciteHeures: caps.get(id) ?? 40,
-      projetsDiriges: projets.filter((pr) => pr.chefId === id).map((pr) => pr.titre),
+      projetsDiriges: projets.filter((pr) => pr.chefId === id || pr.referentId === id).map((pr) => pr.titre),
     };
   };
   const roles = (f: ReturnType<typeof fiche>) => libellesRoles({ ...f, nbProjetsDiriges: f.projetsDiriges.length });
@@ -39,6 +55,13 @@ export async function vueOrganisation() {
     })),
     sansEquipe: personnes.filter((p) => !p.equipeId).map((p) => fiche(p.id)),
     personnes: personnes.map((p) => ({ ...fiche(p.id), roles: roles(fiche(p.id)) })),
+    externes: externes.map((p) => ({
+      ...p,
+      nomComplet: nomComplet(p),
+      initiales: initiales(p),
+      nbTaches: ouvertes.filter((t) => t.id === p.id).length,
+      projets: [...new Set(equipesProjet.filter((m) => m.personneId === p.id).map((m) => m.code))],
+    })),
     total: personnes.filter((p) => p.actif).length,
     vacants: equipes.filter((e) => !e.chefId).length,
     administrateurs: personnes.filter((p) => p.actif && p.administrateur).length,

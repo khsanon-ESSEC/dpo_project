@@ -2,13 +2,19 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { acces, exigerTacheVisible } from "@/lib/acces";
 import { annulerTache, creerTacheGeree, modifierDefinitionTache, retablirTache, supprimerTache } from "@/lib/donnees/gestion";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
 import { retourValide } from "@/lib/retour";
+// Constante prise dans un module partagé : un module « use client » ne s'importe pas dans une action serveur.
+import { NOUVELLE_PERSONNE } from "@/lib/projets";
+
+/** « Quelqu'un d'autre, hors division » choisi dans « Pour » : son nom et son département. */
+const nouvelExterne = (form: FormData) =>
+  String(form.get("assigneId") ?? "") === NOUVELLE_PERSONNE ? { nom: String(form.get("pourNomExterne") ?? ""), organisation: String(form.get("pourOrgExterne") ?? "") } : null;
 
 type Statut = "a_faire" | "en_cours" | "bloquee" | "faite";
 const STATUTS: Statut[] = ["a_faire", "en_cours", "bloquee", "faite"];
@@ -90,7 +96,7 @@ export async function enregistrerTache(_: EtatTache, form: FormData): Promise<Et
   if (note) await db.insert(schema.evenementsTache).values({ tacheId, auteurId: u.id, type: "note", note });
 
   if (statut === "bloquee" && form.get("prevenir") === "on" && t.projetId) {
-    const [p] = await db.select({ chef: schema.projets.chefProjetId, titre: schema.projets.titre }).from(schema.projets).where(eq(schema.projets.id, t.projetId));
+    const [p] = await db.select({ chef: sql<string | null>`coalesce(${schema.projets.referentId}, ${schema.projets.chefProjetId})`, titre: schema.projets.titre }).from(schema.projets).where(eq(schema.projets.id, t.projetId));
     if (p?.chef && p.chef !== u.id) {
       await db.insert(schema.notifications).values({ personneId: p.chef, type: "blocage", texte: `${u.prenom} ${u.nom} est bloqué(e) sur « ${t.titre} » (${p.titre})`, lien: `/taches/${t.id}` });
     }
@@ -111,6 +117,7 @@ export async function creerTache(_: EtatNouvelleTache, form: FormData): Promise<
     description: String(form.get("description") ?? ""),
     projetId: String(form.get("projetId") ?? "") || null,
     assigneId: String(form.get("assigneId") ?? "") || u.id,
+    nouvelExterne: nouvelExterne(form),
     echeance: lireDate(form.get("echeance")),
     debut: lireDate(form.get("debut")),
     estimationHeures: lireHeures(form.get("estimationHeures")),
@@ -131,6 +138,7 @@ export async function definirTache(_: EtatTache, form: FormData): Promise<EtatTa
     description: String(form.get("description") ?? ""),
     projetId: String(form.get("projetId") ?? "") || null,
     assigneId: String(form.get("assigneId") ?? "") || t.assigneId,
+    nouvelExterne: nouvelExterne(form),
   });
   if ("erreur" in r) return { message: r.erreur };
   revalidatePath("/", "layout");

@@ -62,7 +62,7 @@ export default async function PageNouveauPonctuel({ searchParams }: { searchPara
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 8 }}>
               {projets.map((p) => (
                 <label key={p.id} className="choix-radio">
-                  <input type="checkbox" name="projets" value={p.id} defaultChecked={p.strategique && p.statut !== "finalise"} />
+                  <input type="checkbox" name="projets" value={p.id} defaultChecked={p.strategique && p.statut !== "finalise" && !p.division} />
                   <span className="rangee__texte">
                     <span>
                       <span className="etiquette-projet" style={{ marginRight: 6 }}>
@@ -72,6 +72,7 @@ export default async function PageNouveauPonctuel({ searchParams }: { searchPara
                     </span>
                     <span className="rangee__sous">
                       {p.strategique ? "Stratégique · " : ""}
+                      {p.division ? `${p.division} · ` : ""}
                       {STATUTS[p.statut] ?? p.statut}
                     </span>
                   </span>

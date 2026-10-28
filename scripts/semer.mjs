@@ -104,6 +104,18 @@ await sql.begin(async (tx) => {
     await tx`update equipes set chef_id = ${P[chef]} where id = ${E[eq]}`;
   }
 
+  // ---------- Personnes hors division (autres départements, consultants ; noms fictifs) ----------
+  // Sans équipe ni supérieur ici. Nathalie Célestin a un accès limité (ses tâches, ses projets).
+  for (const [k, prenom, nom, organisation, poste, courriel] of [
+    ["pd", "Patrick", "Dorsainvil", "DTI", "Ingénieur réseau", null],
+    ["nc", "Nathalie", "Célestin", "Cabinet Atlas Conseil", "Consultante sécurité", "nathalie.celestin@demo.dpo.local"],
+    ["ms", "Mireille", "Saint-Fort", "Division Réseau et succursales", "Directrice des opérations du Réseau", null],
+  ]) {
+    P[k] = randomUUID();
+    await tx`insert into personnes (id, prenom, nom, courriel, poste, externe, organisation, capacite_heures, mot_de_passe_hash, doit_changer_mot_de_passe)
+      values (${P[k]}, ${prenom}, ${nom}, ${courriel}, ${poste}, true, ${organisation}, 0, ${courriel ? empreinte : null}, false)`;
+  }
+
   // ---------- Projets (titres et indicateurs : documents de la DPO ; dates d'octobre : exemple) ----------
   const projets = [
     {
@@ -148,11 +160,17 @@ await sql.begin(async (tx) => {
       ind: [["Existant analysé", "atteint"], ["Solution adaptée retenue", "atteint"], ["Rapport d'évaluation des solutions présenté", "atteint"], ["Archives physiques transférées", "en_cours"]],
     },
   ];
+  // Un projet d'une autre division : la cheffe de projet est au Réseau ; Wesner Bazile en est le référent à la DPO.
+  projets.push({
+    k: "OC", titre: "Ouverture de compte en ligne", strat: true, pm: "ms", referent: "wb", division: "Division Réseau et succursales", sante: "a_surveiller",
+    description: "Permettre aux nouveaux clients d'ouvrir un compte depuis le site, avec une vérification d'identité à distance.", entree: "2026-09-01", initiale: "2027-03-31", fin: "2027-03-31", lancement: null,
+    ind: [["Parcours client validé", "en_cours"], ["Pièces justificatives définies par type de client", "a_venir"], ["Pilote dans trois succursales", "a_venir"]],
+  });
   const PJ = {};
   for (const p of projets) {
     PJ[p.k] = randomUUID();
-    await tx`insert into projets (id, code, titre, description, programme, strategique, statut, sante, chef_projet_id, date_entree, date_fin_initiale, date_fin_prevue, date_lancement_prevue)
-      values (${PJ[p.k]}, ${p.k}, ${p.titre}, ${p.description}, ${p.strat ? "Amélioration de l'expérience client" : ""}, ${p.strat}, ${p.statut ?? "en_cours"}, ${p.sante}, ${P[p.pm]}, ${p.entree}, ${p.initiale}, ${p.fin}, ${p.lancement})`;
+    await tx`insert into projets (id, code, titre, description, programme, strategique, statut, sante, chef_projet_id, referent_id, division, date_entree, date_fin_initiale, date_fin_prevue, date_lancement_prevue)
+      values (${PJ[p.k]}, ${p.k}, ${p.titre}, ${p.description}, ${p.strat ? "Amélioration de l'expérience client" : ""}, ${p.strat}, ${p.statut ?? "en_cours"}, ${p.sante}, ${P[p.pm]}, ${p.referent ? P[p.referent] : null}, ${p.division ?? ""}, ${p.entree}, ${p.initiale}, ${p.fin}, ${p.lancement})`;
     let i = 0;
     for (const [libelle, etat] of p.ind) {
       i += 1;
@@ -244,6 +262,21 @@ await sql.begin(async (tx) => {
   // Marc-Antoine Louis (chef du projet UC).
   await tache("ml", "UC", "Revue d'architecture avec le prestataire", "a_faire", jour(8), [], null, { h: 4 });
 
+  // ---------- Tâches confiées hors division (suivies par la personne qui les a confiées) ----------
+  const tacheConfiee = async (par, qui, pj, titre, statut, echeance, h) => {
+    const id = randomUUID();
+    await tx`insert into taches (id, projet_id, titre, assigne_id, statut, echeance, estimation_heures, cree_par_id, cree_le)
+      values (${id}, ${pj ? PJ[pj] : null}, ${titre}, ${P[qui]}, ${statut}, ${jour(echeance)}, ${h}, ${P[par]}, ${moment(-6, 10)})`;
+    await tx`insert into evenements_tache (tache_id, auteur_id, type, cree_le) values (${id}, ${P[par]}, 'creation', ${moment(-6, 10)})`;
+  };
+  await tacheConfiee("mv", "pd", "UR", "Ouvrir les flux du pare-feu pour la recette", "a_faire", 6, 4);
+  await tacheConfiee("mv", "nc", "UR", "Contre-audit de sécurité (points 4 à 6)", "en_cours", 12, 24);
+  await tacheConfiee("dj", "pd", null, "Accès VPN pour le prestataire de la plateforme", "a_faire", 3, 2);
+  // Projet OC (Réseau) : des membres de la DPO y travaillent.
+  await tache("sc", "OC", "Parcours d'ouverture de compte : maquettes", "en_cours", jour(8), [[2, "statut", "a_faire", "en_cours"]], null, { debut: jour(2), h: 12 });
+  await tache("jd", "OC", "Pièces justificatives par type de client", "a_faire", jour(11), [], null, { debut: jour(8), h: 6 });
+  await tache("wb", "OC", "Compte rendu du comité de suivi", "faite", jour(2), [[2, "statut", "a_faire", "faite"]], null, { h: 1 });
+
   // ---------- Tâches terminées des semaines passées (pour le bilan semaine sur semaine) ----------
   // Tirage déterministe : mêmes données à chaque semis.
   let graine = 7;
@@ -286,7 +319,8 @@ await sql.begin(async (tx) => {
   ];
   const ponctuelles = [
     ["Démonstration d'UNIBANKOnline au Réseau", "mv", ["mv", "dj", "re", "na", "ex"], -2, 4, "11:00", 60, "UR", "Retours positifs ; demande d'un guide pour les clients."],
-    ["Atelier sécurité avec la DTI", "dj", ["dj", "re", "ml"], 0, 1, "09:30", 120, "UR", "Points 1 à 3 de l'audit revus ; le point 3 reste ouvert."],
+    ["Atelier sécurité avec la DTI", "dj", ["dj", "re", "ml", "pd", "nc"], 0, 1, "09:30", 120, "UR", "Points 1 à 3 de l'audit revus ; le point 3 reste ouvert."],
+    ["Comité de suivi : ouverture de compte en ligne", "wb", ["wb", "sc", "jd", "ms"], 0, 2, "10:00", 60, "OC", "Maquettes du parcours présentées au Réseau ; liste des pièces à finaliser."],
     ["Entretien avec le prestataire du Corporate", "ml", ["ml", "jn"], -1, 2, "16:00", 60, "UC", ""],
     ["Comité de direction", "ex", ["ex", "na"], 0, 0, "15:00", 120, null, ""],
     ["Préparation du lancement pilote", "wb", ["wb", "sc", "mv"], 0, 3, "11:00", 45, "CE", ""],
@@ -302,11 +336,13 @@ await sql.begin(async (tx) => {
 
   // ---------- Équipes projet (établies par chaque chef de projet) ----------
   // Les personnes qui ont des tâches sur le projet, avec un rôle pour quelques-unes ; Joël rejoint UR sans tâche encore.
-  const roles = { "UR:re": "Développeur", "UR:dj": "Audit de sécurité", "CE:sc": "Formation du Réseau", "UC:jn": "Analyste fonctionnel", "PR:re": "Développeur", "CR:jn": "Recette" };
-  const membres = await tx`select distinct t.projet_id, t.assigne_id from taches t join projets p on p.id = t.projet_id where p.chef_projet_id is distinct from t.assigne_id`;
+  const roles = { "UR:re": "Développeur", "UR:dj": "Audit de sécurité", "CE:sc": "Formation du Réseau", "UC:jn": "Analyste fonctionnel", "PR:re": "Développeur", "CR:jn": "Recette", "UR:pd": "Réseau (DTI)", "UR:nc": "Contre-audit de sécurité", "OC:sc": "Parcours client", "OC:jd": "Pièces justificatives" };
+  const membres = await tx`select distinct t.projet_id, t.assigne_id from taches t join projets p on p.id = t.projet_id
+    where p.chef_projet_id is distinct from t.assigne_id and p.referent_id is distinct from t.assigne_id`;
   const cleDe = Object.fromEntries([...Object.entries(PJ).map(([k, v]) => [v, k]), ...Object.entries(P).map(([k, v]) => [v, k])]);
   for (const m of membres) {
-    const chef = projets.find((x) => PJ[x.k] === m.projet_id)?.pm;
+    const pr = projets.find((x) => PJ[x.k] === m.projet_id);
+    const chef = pr?.referent ?? pr?.pm;
     await tx`insert into membres_projet (projet_id, personne_id, role, ajoute_par_id, ajoute_le)
       values (${m.projet_id}, ${m.assigne_id}, ${roles[`${cleDe[m.projet_id]}:${cleDe[m.assigne_id]}`] ?? ""}, ${chef ? P[chef] : null}, ${moment(-30, 9)})`;
   }
@@ -669,5 +705,6 @@ console.log(`  marc-antoine.louis@demo.dpo.local   directeur (sa direction : Sol
 console.log(`  nadege.augustin@demo.dpo.local      directrice et administratrice (toute la division)`);
 console.log(`  frantz.desrosiers@demo.dpo.local    exécutif et administrateur (voit tout, approuve le rapport au conseil)`);
 console.log(`  jean-robert.noel@demo.dpo.local     analyste et administrateur`);
+console.log(`  nathalie.celestin@demo.dpo.local    consultante hors division (accès limité : ses tâches, ses projets)`);
 console.log(`Mot de passe commun de démonstration : ${motDePasse}`);
 await sql.end();

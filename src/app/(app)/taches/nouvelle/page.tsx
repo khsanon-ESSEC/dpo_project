@@ -21,10 +21,11 @@ export default async function PageNouvelleTache({ searchParams }: { searchParams
   const projets = (await tousLesProjetsActifs()).filter((p) => visibles === "tous" || visibles.has(p.id));
 
   // À qui confier : soi, les personnes qu'on suit ; sur un projet qu'on dirige, les membres de son équipe.
-  const { personnes, base, parProjet } = await assignables(a);
+  const { personnes, base, parProjet, externesPartout } = await assignables(a);
 
   // Indication de charge : heures pour les personnes qu'on suit, seulement le niveau pour les autres.
-  const indications = await indicationsDeCharge(personnes.map((p) => p.id));
+  // Pas de charge mesurée pour les personnes hors division.
+  const indications = await indicationsDeCharge(personnes.filter((p) => !p.externe).map((p) => p.id));
   for (const [id, ind] of Object.entries(indications)) {
     if (!suitPersonne(a, id)) indications[id] = { ...ind, semaines: ind.semaines.map((s) => ({ ...s, heures: null })) };
   }
@@ -46,6 +47,7 @@ export default async function PageNouvelleTache({ searchParams }: { searchParams
           personnes={personnes}
           base={base}
           parProjet={parProjet}
+          externesPartout={externesPartout}
           indications={indications}
           projetParDefaut={projet && projets.some((p) => p.id === projet) ? projet : ""}
           pourParDefaut={pour && personnes.some((p) => p.id === pour) ? pour : u.id}

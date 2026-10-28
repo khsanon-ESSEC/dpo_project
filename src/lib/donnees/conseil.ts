@@ -49,7 +49,8 @@ export async function obtenirOuCreerRapportConseil(mois = moisCourant()) {
     const projets = await db
       .select()
       .from(schema.projets)
-      .where(and(eq(schema.projets.strategique, true), ne(schema.projets.statut, "finalise"), ne(schema.projets.statut, "requete"), ne(schema.projets.statut, "refuse"), isNull(schema.projets.archiveLe)))
+      // Les projets d'autres divisions n'entrent pas dans le rapport mensuel de la DPO (on peut les choisir dans un rapport ponctuel).
+      .where(and(eq(schema.projets.strategique, true), eq(schema.projets.division, ""), ne(schema.projets.statut, "finalise"), ne(schema.projets.statut, "requete"), ne(schema.projets.statut, "refuse"), isNull(schema.projets.archiveLe)))
       .orderBy(asc(schema.projets.creeLe));
     let ordre = 0;
     for (const p of projets) {
@@ -265,7 +266,7 @@ export async function modifierObjet(rapportId: string, d: { titre: string; objet
 /** Projets qu'on peut mettre dans un rapport ponctuel : ceux que la personne voit, en cours ou non, stratégiques d'abord. */
 export async function projetsPourRapport(visibles: Set<string> | "tous") {
   const projets = await db
-    .select({ id: schema.projets.id, code: schema.projets.code, titre: schema.projets.titre, strategique: schema.projets.strategique, statut: schema.projets.statut })
+    .select({ id: schema.projets.id, code: schema.projets.code, titre: schema.projets.titre, strategique: schema.projets.strategique, statut: schema.projets.statut, division: schema.projets.division })
     .from(schema.projets)
     .orderBy(asc(schema.projets.code));
   return projets

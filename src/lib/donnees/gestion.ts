@@ -8,9 +8,10 @@ import { and, asc, count, eq, isNull, max, ne } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Acces } from "@/lib/acces";
 import { noter } from "@/lib/journal";
-import { chargerOrganisation } from "@/lib/organisation";
-import { codeSuggere, codeValide, peutAssigner, projetOuvert, projetSupprimable, STATUTS_ACCEPTES, tacheSupprimable, type StatutProjet } from "@/lib/projets";
+import { chargerOrganisation, personneActuelle } from "@/lib/organisation";
+import { codeSuggere, codeValide, peutAssigner, projetOuvert, projetSupprimable, STATUTS_ACCEPTES, tacheSupprimable, verifierChefEtReferent, type StatutProjet } from "@/lib/projets";
 import { membresDeLaDirection, nomComplet, resoudreSuperieur } from "@/lib/regles";
+import { trouverOuCreerExterne } from "./externes";
 
 const date = (v: unknown) => {
   const s = String(v ?? "").trim();
@@ -33,7 +34,7 @@ export async function suggestionDeCode(titre: string) {
 // Demandes de projet
 // ---------------------------------------------------------------------------
 
-export type DemandeProjet = { titre: string; description: string; justification: string; programme: string; strategique: boolean; finSouhaitee: string; chefSuggereId: string; code: string };
+export type DemandeProjet = { titre: string; description: string; justification: string; programme: string; strategique: boolean; finSouhaitee: string; chefSuggereId: string; code: string; division?: string };
 
 /**
  * Proposer un projet : il naît en « Requête ». Les directeurs au-dessus de la personne (et les
@@ -65,6 +66,7 @@ export async function proposerProjet(d: DemandeProjet, parId: string): Promise<{
       demandeParId: parId,
       demandeLe: new Date(),
       justification,
+      division: texte(d.division, 120),
     })
     .returning({ id: schema.projets.id });
   // Les directeurs au-dessus du demandeur, et les exécutifs.
@@ -81,7 +83,7 @@ export async function proposerProjet(d: DemandeProjet, parId: string): Promise<{
 /** Accepter une demande : statut de départ, chef de projet, dates. Refuser : un motif. Le demandeur est prévenu. */
 export async function deciderDemande(
   projetId: string,
-  d: { accepte: boolean; motif: string; statut?: string; chefProjetId?: string; dateEntree?: string; dateFinPrevue?: string; strategique?: boolean },
+  d: { accepte: boolean; motif: string; statut?: string; chefProjetId?: string; referentId?: string; division?: string; dateEntree?: string; dateFinPrevue?: string; strategique?: boolean },
   parId: string,
 ): Promise<{ ok: true } | { erreur: string }> {
   const [p] = await db.select().from(schema.projets).where(eq(schema.projets.id, projetId));
@@ -92,8 +94,13 @@ export async function deciderDemande(
     await db.update(schema.projets).set({ statut: "refuse", decisionParId: parId, decisionLe: new Date(), motifDecision: motif, majLe: new Date() }).where(eq(schema.projets.id, projetId));
   } else {
     const org = await chargerOrganisation();
-    const chef = d.chefProjetId && org.personnes.get(d.chefProjetId)?.actif ? d.chefProjetId : null;
+    const chefP = await personneActuelle(d.chefProjetId);
+    const chef = chefP?.actif ? chefP.id : null;
     if (!chef) return { erreur: "Nommez le chef de projet." };
+    const referentP = d.referentId && d.referentId !== chef ? await personneActuelle(d.referentId) : null;
+    const referent = referentP?.actif ? referentP.id : null;
+    const incoherence = verifierChefEtReferent(chefP, referent ? referentP : null);
+    if (incoherence) return { erreur: incoherence };
     const statut = (STATUTS_ACCEPTES as string[]).includes(d.statut ?? "") ? (d.statut as StatutProjet) : "en_attente";
     const fin = date(d.dateFinPrevue) ?? p.dateFinPrevue;
     await db
@@ -101,6 +108,8 @@ export async function deciderDemande(
       .set({
         statut: statut as typeof p.statut,
         chefProjetId: chef,
+        referentId: referent,
+        division: d.division !== undefined ? texte(d.division, 120) : p.division,
         dateEntree: date(d.dateEntree) ?? p.dateEntree,
         dateFinPrevue: fin,
         dateFinInitiale: p.dateFinInitiale ?? fin,
@@ -111,7 +120,8 @@ export async function deciderDemande(
         majLe: new Date(),
       })
       .where(eq(schema.projets.id, projetId));
-    if (chef !== parId) await db.insert(schema.notifications).values({ personneId: chef, type: "projet", texte: `Vous êtes chef du projet « ${p.titre} »`, lien: `/projets/${projetId}` });
+    if (chef !== parId && !chefP!.externe) await db.insert(schema.notifications).values({ personneId: chef, type: "projet", texte: `Vous êtes chef du projet « ${p.titre} »`, lien: `/projets/${projetId}` });
+    if (referent && referent !== parId) await db.insert(schema.notifications).values({ personneId: referent, type: "projet", texte: `Vous êtes le référent DPO du projet « ${p.titre} »`, lien: `/projets/${projetId}` });
   }
   if (p.demandeParId && p.demandeParId !== parId)
     await db.insert(schema.notifications).values({
@@ -137,6 +147,8 @@ export type ModifProjet = {
   statut: string;
   sante: string;
   chefProjetId: string;
+  referentId: string;
+  division: string;
   dateEntree: string;
   dateFinInitiale: string;
   dateFinPrevue: string;
@@ -152,8 +164,13 @@ export async function modifierProjet(projetId: string, d: ModifProjet, parId: st
   if (!code) return { erreur: "Le code a 2 à 4 lettres ou chiffres." };
   if ((await codesPris(projetId)).includes(code)) return { erreur: `Le code ${code} est déjà pris.` };
   const org = await chargerOrganisation();
-  const chef = d.chefProjetId ? (org.personnes.get(d.chefProjetId)?.actif ? d.chefProjetId : null) : null;
+  const chefP = await personneActuelle(d.chefProjetId);
+  const chef = chefP && (chefP.actif || chefP.id === p.chefProjetId) ? chefP.id : null;
   if (p.statut !== "requete" && p.statut !== "refuse" && !chef) return { erreur: "Un projet accepté a un chef de projet." };
+  const referentP = d.referentId && d.referentId !== chef ? await personneActuelle(d.referentId) : null;
+  const referent = referentP?.actif ? referentP.id : null;
+  const incoherence = verifierChefEtReferent(chefP, referent ? referentP : null);
+  if (incoherence && p.statut !== "requete" && p.statut !== "refuse") return { erreur: incoherence };
   // La demande et le refus se changent par la décision, pas par ce formulaire.
   const statut = p.statut === "requete" || p.statut === "refuse" ? p.statut : (STATUTS_ACCEPTES as string[]).includes(d.statut) ? (d.statut as StatutProjet) : p.statut;
   const sante = ["dans_les_temps", "a_surveiller", "en_retard"].includes(d.sante) ? (d.sante as typeof p.sante) : p.sante;
@@ -166,6 +183,8 @@ export async function modifierProjet(projetId: string, d: ModifProjet, parId: st
     statut: statut as typeof p.statut,
     sante,
     chefProjetId: chef,
+    referentId: referent,
+    division: texte(d.division, 120),
     dateEntree: date(d.dateEntree),
     dateFinInitiale: date(d.dateFinInitiale),
     dateFinPrevue: date(d.dateFinPrevue),
@@ -173,8 +192,10 @@ export async function modifierProjet(projetId: string, d: ModifProjet, parId: st
     majLe: new Date(),
   };
   await db.update(schema.projets).set(valeurs).where(eq(schema.projets.id, projetId));
-  if (chef && chef !== p.chefProjetId && chef !== parId)
+  if (chef && chef !== p.chefProjetId && chef !== parId && !chefP?.externe)
     await db.insert(schema.notifications).values({ personneId: chef, type: "projet", texte: `Vous êtes chef du projet « ${titre} »`, lien: `/projets/${projetId}` });
+  if (referent && referent !== p.referentId && referent !== parId)
+    await db.insert(schema.notifications).values({ personneId: referent, type: "projet", texte: `Vous êtes le référent DPO du projet « ${titre} »`, lien: `/projets/${projetId}` });
   await noter(parId, "projet_modifie", projetId, { ...valeurs, majLe: undefined });
   return { ok: true };
 }
@@ -253,16 +274,16 @@ export async function membresDuProjet(projetId: string) {
   return lignes
     .map((m) => ({ ...m, personne: org.personnes.get(m.personneId) }))
     .filter((m) => m.personne)
-    .map((m) => ({ id: m.id, personneId: m.personneId, role: m.role, nom: nomComplet(m.personne!), poste: m.personne!.poste, actif: m.personne!.actif }));
+    .map((m) => ({ id: m.id, personneId: m.personneId, role: m.role, nom: nomComplet(m.personne!), poste: m.personne!.poste, actif: m.personne!.actif, externe: m.personne!.externe, organisation: m.personne!.organisation }));
 }
 
 export async function ajouterMembre(projetId: string, personneId: string, role: string, parId: string) {
-  const org = await chargerOrganisation();
-  if (!org.personnes.get(personneId)?.actif) return;
+  const personne = await personneActuelle(personneId);
+  if (!personne?.actif) return;
   const [p] = await db.select({ titre: schema.projets.titre, chef: schema.projets.chefProjetId }).from(schema.projets).where(eq(schema.projets.id, projetId));
   if (!p || p.chef === personneId) return;
   const [n] = await db.insert(schema.membresProjet).values({ projetId, personneId, role: texte(role, 80), ajouteParId: parId }).onConflictDoNothing().returning({ id: schema.membresProjet.id });
-  if (n && personneId !== parId) await db.insert(schema.notifications).values({ personneId, type: "projet", texte: `Vous faites partie de l'équipe du projet « ${p.titre} »`, lien: `/projets/${projetId}` });
+  if (n && personneId !== parId && !personne.externe) await db.insert(schema.notifications).values({ personneId, type: "projet", texte: `Vous faites partie de l'équipe du projet « ${p.titre} »`, lien: `/projets/${projetId}` });
   if (n) await noter(parId, "membre_ajoute", projetId, { personne: personneId });
 }
 
@@ -279,28 +300,36 @@ export async function retirerMembre(projetId: string, membreId: string, parId: s
 /** Le projet, son chef et les membres de son équipe (pour la règle d'assignation). */
 export async function projetPourAssignation(projetId: string | null) {
   if (!projetId) return null;
-  const [p] = await db.select({ id: schema.projets.id, chefProjetId: schema.projets.chefProjetId, statut: schema.projets.statut, archiveLe: schema.projets.archiveLe }).from(schema.projets).where(eq(schema.projets.id, projetId));
+  const [p] = await db
+    .select({ id: schema.projets.id, chefProjetId: schema.projets.chefProjetId, referentId: schema.projets.referentId, statut: schema.projets.statut, archiveLe: schema.projets.archiveLe })
+    .from(schema.projets)
+    .where(eq(schema.projets.id, projetId));
   if (!p) return null;
   const membres = await db.select({ id: schema.membresProjet.personneId }).from(schema.membresProjet).where(eq(schema.membresProjet.projetId, projetId));
   return { ...p, membres: new Set(membres.map((m) => m.id)) };
 }
 
-/** Qui l'on peut choisir dans « Pour » : soi, les personnes suivies, et, par projet dirigé, son équipe. */
+/**
+ * Qui l'on peut choisir dans « Pour » : soi, les personnes suivies, et, par projet dirigé, son équipe.
+ * Les personnes hors division : hors projet et sur un projet qu'on dirige (partout pour la direction).
+ */
 export async function assignables(a: Acces) {
   const org = await chargerOrganisation();
   const actives = [...org.personnes.values()].filter((p) => p.actif);
-  const base = actives.filter((p) => p.id === a.moi.id || a.suivis === "toutes" || a.suivis.has(p.id)).map((p) => p.id);
+  const base = actives.filter((p) => !p.externe && (p.id === a.moi.id || a.suivis === "toutes" || a.suivis.has(p.id))).map((p) => p.id);
+  const externes = actives.filter((p) => p.externe).map((p) => p.id);
+  const externesPartout = a.directeur || a.toutVoir;
   const parProjet: Record<string, string[]> = {};
   for (const projetId of a.projetsDiriges) {
     const membres = await db.select({ id: schema.membresProjet.personneId }).from(schema.membresProjet).where(eq(schema.membresProjet.projetId, projetId));
     parProjet[projetId] = [a.moi.id, ...membres.map((m) => m.id).filter((id) => org.personnes.get(id)?.actif)];
   }
-  const ids = new Set([...base, ...Object.values(parProjet).flat()]);
+  const ids = new Set([...base, ...Object.values(parProjet).flat(), ...externes]);
   const personnes = [...ids]
     .map((id) => org.personnes.get(id)!)
-    .sort((x, y) => Number(y.id === a.moi.id) - Number(x.id === a.moi.id) || x.nom.localeCompare(y.nom, "fr"))
-    .map((p) => ({ id: p.id, nom: p.id === a.moi.id ? "Moi" : nomComplet(p) }));
-  return { personnes, base, parProjet };
+    .sort((x, y) => Number(y.id === a.moi.id) - Number(x.id === a.moi.id) || Number(x.externe) - Number(y.externe) || x.nom.localeCompare(y.nom, "fr"))
+    .map((p) => ({ id: p.id, nom: p.id === a.moi.id ? "Moi" : nomComplet(p), externe: p.externe, organisation: p.organisation }));
+  return { personnes, base, parProjet, externes, externesPartout };
 }
 
 /** Assigner sur un projet fait entrer la personne dans l'équipe du projet (si elle n'y est pas). */
@@ -315,9 +344,21 @@ async function entrerDansLEquipe(projetId: string | null, personneId: string, pa
 // Tâches
 // ---------------------------------------------------------------------------
 
+/** Nouvelle personne hors division saisie avec la tâche (« Quelqu'un d'autre ») : son nom et son département. */
+export type NouvelExterne = { nom: string; organisation: string };
+
+/** Crée la fiche hors division demandée, une fois la règle d'assignation vérifiée pour une personne hors division. */
+async function assigneEffectif(a: Acces, d: { assigneId: string; nouvelExterne?: NouvelExterne | null }, projet: Awaited<ReturnType<typeof projetPourAssignation>>) {
+  if (!d.nouvelExterne) return { id: d.assigneId };
+  if (!peutAssigner(acteur(a), "", projet, true)) return { erreur: "Sur ce projet, seuls son chef (ou son référent) et la direction confient une tâche à une personne hors division." };
+  if (!d.nouvelExterne.nom.trim()) return { erreur: "Donnez le nom de la personne hors division." };
+  const id = await trouverOuCreerExterne(d.nouvelExterne.nom, d.nouvelExterne.organisation, a.moi.id);
+  return id ? { id } : { erreur: "Donnez le nom de la personne hors division." };
+}
+
 export async function creerTacheGeree(
   a: Acces,
-  d: { titre: string; description: string; projetId: string | null; assigneId: string; echeance: string | null; debut: string | null; estimationHeures: number | null },
+  d: { titre: string; description: string; projetId: string | null; assigneId: string; nouvelExterne?: NouvelExterne | null; echeance: string | null; debut: string | null; estimationHeures: number | null },
 ): Promise<{ id: string } | { erreur: string }> {
   const titre = texte(d.titre, 200);
   if (!titre) return { erreur: "Donnez un titre à la tâche." };
@@ -325,14 +366,19 @@ export async function creerTacheGeree(
   const projet = await projetPourAssignation(d.projetId);
   if (d.projetId && !projet) return { erreur: "Projet introuvable." };
   if (projet && !projetOuvert(projet)) return { erreur: "Ce projet ne reçoit pas de tâches (demande, refusé, finalisé ou archivé)." };
-  if (!peutAssigner(acteur(a), d.assigneId, projet)) return { erreur: "Vous ne pouvez pas confier une tâche à cette personne." };
+  const eff = await assigneEffectif(a, d, projet);
+  if ("erreur" in eff) return { erreur: eff.erreur! };
+  d = { ...d, assigneId: eff.id };
+  const assigne = await personneActuelle(d.assigneId);
+  if (!assigne?.actif) return { erreur: "Cette personne n'est plus active." };
+  if (!peutAssigner(acteur(a), d.assigneId, projet, assigne.externe)) return { erreur: "Vous ne pouvez pas confier une tâche à cette personne." };
   const [t] = await db
     .insert(schema.taches)
     .values({ titre, description: texte(d.description, 4000), projetId: d.projetId, assigneId: d.assigneId, echeance: d.echeance, debut: d.debut, estimationHeures: d.estimationHeures, creeParId: a.moi.id })
     .returning({ id: schema.taches.id });
   await db.insert(schema.evenementsTache).values({ tacheId: t.id, auteurId: a.moi.id, type: "creation" });
   await entrerDansLEquipe(d.projetId, d.assigneId, a.moi.id);
-  if (d.assigneId !== a.moi.id) await db.insert(schema.notifications).values({ personneId: d.assigneId, type: "tache", texte: `${a.moi.prenom} ${a.moi.nom} vous a confié « ${titre} »`, lien: `/taches/${t.id}` });
+  if (d.assigneId !== a.moi.id && (!assigne.externe || assigne.acces)) await db.insert(schema.notifications).values({ personneId: d.assigneId, type: "tache", texte: `${a.moi.prenom} ${a.moi.nom} vous a confié « ${titre} »`, lien: `/taches/${t.id}` });
   await noter(a.moi.id, "tache_creee", t.id, { assigne: d.assigneId, projet: d.projetId });
   return { id: t.id };
 }
@@ -341,21 +387,26 @@ export async function creerTacheGeree(
 export async function modifierDefinitionTache(
   a: Acces,
   tache: typeof schema.taches.$inferSelect,
-  d: { titre: string; description: string; projetId: string | null; assigneId: string },
+  d: { titre: string; description: string; projetId: string | null; assigneId: string; nouvelExterne?: NouvelExterne | null },
 ): Promise<{ ok: true } | { erreur: string }> {
   const titre = texte(d.titre, 200);
   if (!titre) return { erreur: "Donnez un titre à la tâche." };
   const projet = await projetPourAssignation(d.projetId);
   if (d.projetId && !projet) return { erreur: "Projet introuvable." };
+  const eff = await assigneEffectif(a, d, projet);
+  if ("erreur" in eff) return { erreur: eff.erreur! };
+  d = { ...d, assigneId: eff.id };
   const change = { titre: titre !== tache.titre, projet: d.projetId !== tache.projetId, assigne: d.assigneId !== tache.assigneId };
   if (change.projet && projet && !projetOuvert(projet)) return { erreur: "Ce projet ne reçoit pas de tâches (demande, refusé, finalisé ou archivé)." };
-  if ((change.assigne || change.projet) && !peutAssigner(acteur(a), d.assigneId, projet)) return { erreur: "Vous ne pouvez pas confier cette tâche à cette personne." };
+  const assigne = await personneActuelle(d.assigneId);
+  if (change.assigne && !assigne?.actif) return { erreur: "Cette personne n'est plus active." };
+  if ((change.assigne || change.projet) && !peutAssigner(acteur(a), d.assigneId, projet, !!assigne?.externe)) return { erreur: "Vous ne pouvez pas confier cette tâche à cette personne." };
   await db.update(schema.taches).set({ titre, description: texte(d.description, 4000), projetId: d.projetId, assigneId: d.assigneId, majLe: new Date() }).where(eq(schema.taches.id, tache.id));
   if (change.titre) await db.insert(schema.evenementsTache).values({ tacheId: tache.id, auteurId: a.moi.id, type: "titre", avant: tache.titre, apres: titre });
   if (change.projet) await db.insert(schema.evenementsTache).values({ tacheId: tache.id, auteurId: a.moi.id, type: "projet", avant: tache.projetId, apres: d.projetId });
   if (change.assigne) {
-    const org = await chargerOrganisation();
-    const nouveau = org.personnes.get(d.assigneId);
+    // Lu en base : la personne peut avoir été ajoutée (hors division) dans cette même requête.
+    const [nouveau] = await db.select({ prenom: schema.personnes.prenom, nom: schema.personnes.nom }).from(schema.personnes).where(eq(schema.personnes.id, d.assigneId));
     await db.insert(schema.evenementsTache).values({ tacheId: tache.id, auteurId: a.moi.id, type: "assignation", avant: tache.assigneId, apres: d.assigneId, note: nouveau ? nomComplet(nouveau) : null });
     const notifs = [];
     if (d.assigneId !== a.moi.id) notifs.push({ personneId: d.assigneId, type: "tache", texte: `${a.moi.prenom} ${a.moi.nom} vous a confié « ${titre} »`, lien: `/taches/${tache.id}` });

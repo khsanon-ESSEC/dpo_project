@@ -2,7 +2,8 @@
 
 Application web de suivi des projets de la DPO (UNIBANK) :
 
-- **Ma semaine** : les tâches de chacun, cochées au fil de la semaine. Un clic sur un jour de la frise montre ce qui s'est passé ce jour-là (tâches, échéances, réunions) ; les flèches remontent aux semaines précédentes.
+- **Ma semaine** : la journée d'aujourd'hui (tâches faites, échéances, réunions) et la frise de la semaine ; un clic sur un jour montre ce qui s'est passé ce jour-là ; les flèches remontent aux semaines précédentes.
+- **À faire** (onglet à côté de « Mon bilan ») : la liste des tâches ouvertes de chacun, cochées au fil de la semaine, et les tâches qu'on a confiées à des personnes hors division, pour les suivre.
 - **Réunions** : chacun note les réunions auxquelles il a participé (sujet, jour, heure, durée, projet, participants, notes). Une seule personne la note : elle compte pour chaque participant, qui est prévenu et peut s'en retirer. Le temps en réunion apparaît dans sa semaine, dans son rapport du vendredi (pour son supérieur direct), dans la charge (il réduit le temps disponible) et dans le bilan.
 - **Mon bilan** : la semaine comparée à la précédente, et les huit dernières semaines (tâches terminées, heures livrées, terminées à temps, temps en réunion, rapport envoyé).
 - **Rapport de la semaine** : un formulaire configuré par les administrateurs (modèles de rapport), préparé à partir des tâches, relu et envoyé au supérieur. Chaque chef de projet reçoit les lignes et les feux de son projet. Ce qui était prévu la semaine précédente se reprend en un clic (fait, en cours, reporté).
@@ -13,12 +14,14 @@ Application web de suivi des projets de la DPO (UNIBANK) :
 - **Mes rapports** : tous les rapports déjà envoyés, semaine par semaine, avec passage d'une semaine à l'autre.
 - **Mon équipe** : qui a envoyé son rapport, les blocages, les retards, le temps en réunion de la semaine, avec relance ; un directeur ou un exécutif y voit toute la structure sous lui, regroupée par équipe ; l'historique des rapports de l'équipe (par semaine ou par personne) ; la charge de travail ; le **bilan de l'équipe**, mois contre mois, personne par personne (les exécutifs le voient pour toute la banque).
 - **Projets** : portefeuille, fiches projet, indicateurs vérifiables, glissement des dates. Chacun peut **proposer un projet** ; un directeur ou un exécutif l'accepte (en nommant le chef de projet) ou la refuse avec un motif. Le chef de projet établit l'**équipe du projet** et modifie la fiche (titre, code, dates, statut, indicateurs). Un projet qui a une histoire s'**archive** ; seul un projet vide (une erreur) se supprime.
-- **Tâches** : créer, renommer, préciser, changer de projet, **confier** à quelqu'un (à soi-même, aux personnes qu'on suit, et, sur un projet qu'on dirige, aux membres de son équipe projet) ; les deux personnes sont prévenues. Une tâche commencée s'**annule** avec un motif (et se rétablit) ; seule une tâche sans histoire se supprime.
+- **Tâches** : créer, renommer, préciser, changer de projet, **confier** à quelqu'un (à soi-même, aux personnes qu'on suit, et, sur un projet qu'on dirige, aux membres de son équipe projet ; à une personne hors division, voir plus bas) ; les deux personnes sont prévenues. Une tâche commencée s'**annule** avec un motif (et se rétablit) ; seule une tâche sans histoire se supprime.
 - **Noms cliquables** : partout, le nom d'une personne ouvre sa fiche (poste, équipe, supérieur, projets), le nom d'un projet ouvre le projet, quand on a le droit de le voir.
 - **Rapports au conseil** : le rapport mensuel des projets stratégiques, au format du tableau Word de la banque (avec le logo) ; et des **rapports ponctuels**, faits à tout moment pour une demande ou un événement imprévu : un titre, la demande, les projets choisis, la période couverte. Un exécutif les approuve ; ils ne changent pas les dates du rapport mensuel.
 - **Vues d'un projet** : vue d'ensemble, liste, tableau (colonnes par état, avec glisser-déposer), Gantt (jours, semaines ou mois), calendrier des échéances, charge de l'équipe du projet. Le portefeuille a aussi une chronologie de tous les projets.
 - **Charge de travail** : les heures de tâches prévues pour chaque personne, semaine par semaine, comparées à ses heures disponibles ; repère qui est chargé ou surchargé, et l'indique au moment de confier une tâche.
-- **Organisation** : personnes, équipes, supérieurs, rôles et heures disponibles par semaine.
+- **Personnes hors division** : collègues d'autres départements, consultants, prestataires. Ils peuvent participer à une réunion, recevoir une tâche, entrer dans l'équipe d'un projet ou diriger un projet d'une autre division. Chacun peut en ajouter un au moment où il en a besoin (nom et département ou société) ; aucune adresse n'est demandée.
+- **Projets d'autres divisions** : un projet porté par une autre division, sur lequel la DPO travaille, garde son chef de projet (hors division) et reçoit un **référent DPO**, qui le gère dans l'application.
+- **Organisation** : personnes, équipes, supérieurs, rôles et heures disponibles par semaine ; les personnes hors division (fiche, accès limité, fusion des doublons).
 - **Assistant** (facultatif) : un bouton flottant sur chaque écran, branché sur le fournisseur d'IA choisi par la banque.
 
 Application multipage (chaque écran est une page rendue par le serveur), en français, avec thème clair et sombre. Elle fonctionne sur ordinateur et sur téléphone. Sur téléphone, la barre du bas a quatre entrées (Semaine, Rapport, Équipe ou Projets, Plus) ; « Plus » mène à tout le reste.
@@ -35,6 +38,9 @@ Application multipage (chaque écran est une page rendue par le serveur), en fra
 | Directeur | Interrupteur dans *Organisation* | Les projets, tâches et rapports des membres de **sa direction** (toutes les personnes placées sous lui, à tous les niveaux) ; décide des demandes de projet qu'il voit ; les projets stratégiques de sa direction dans le rapport au conseil |
 | Exécutif | Interrupteur dans *Organisation* (seul un exécutif peut le donner) | **Tout** ; approuve les rapports au conseil. Ne rédige pas de rapport de la semaine |
 | Administrateur | Interrupteur dans *Organisation* | Gère les personnes, les équipes, les supérieurs, les accès et les **modèles de rapport**. Ne donne **aucun** accès supplémentaire aux rapports ni aux tâches |
+
+| Référent DPO | Désigné sur la fiche d'un projet d'une autre division | Les droits du chef de projet sur ce projet ; reçoit les lignes et les feux du projet dans les rapports de la semaine |
+| Personne hors division | Ajoutée par n'importe qui, au besoin | Par défaut, **aucun accès** : une simple fiche. Un administrateur peut lui ouvrir un **accès limité** (adresse et mot de passe provisoire) : ses tâches, ses réunions, les projets où elle intervient ; ni rapport, ni équipe, ni charge |
 
 Les rôles se cumulent. Chaque personne a **un seul** supérieur. Si le poste de responsable d'une équipe est vacant, les rapports remontent au niveau suivant. Un brouillon de rapport n'est visible que par son auteur. Il reste toujours au moins un administrateur.
 
@@ -81,6 +87,16 @@ Ces règles sont écrites dans `src/lib/charge.ts` et vérifiées par les tests.
 - L'employé compare **semaine contre semaine** (*Semaine → Mon bilan*) ; le chef d'équipe, le directeur et l'exécutif comparent leur équipe **mois contre mois** (*Équipe → Bilan*), et ouvrent le détail par semaine de chaque personne.
 
 Ces chiffres décrivent ce qui est enregistré dans l'application ; ils ne mesurent ni la qualité du travail ni ce qui n'est pas noté. L'écran le rappelle. Règles : `src/lib/bilan.ts`, testées.
+
+## Personnes hors division et projets d'autres divisions
+
+- **Ajouter quelqu'un** : dans « Avec qui » d'une réunion (« + Quelqu'un d'autre, hors division »), dans « Pour » d'une tâche (« Quelqu'un d'autre, hors division… »), dans l'équipe d'un projet ou comme chef de projet. On donne son nom et son département ou sa société. Une fiche déjà connue (même nom, même organisation, sans tenir compte des accents ni des majuscules) est reprise plutôt que recréée.
+- **Confier une tâche** à une personne hors division : hors projet, tout le monde peut ; sur un projet, seulement son chef de projet (ou son référent DPO), un directeur ou un exécutif. Celui qui confie la tâche la voit et la suit dans *Semaine → À faire*, « Confiées hors division ».
+- **Ce qu'elles ne font pas** : pas de supérieur ni d'équipe, pas de rapport du vendredi ; elles n'entrent ni dans la charge, ni dans le bilan, ni dans *Mon équipe*. Sans accès, elles ne reçoivent pas d'alerte.
+- **Organisation → Hors division** : liste avec le nombre de tâches et les projets de chacun ; modifier la fiche, ouvrir ou fermer un accès limité (administrateurs), **fusionner** deux fiches de la même personne (les tâches, réunions et projets passent sur celle qu'on garde).
+- **Projet d'une autre division** : la fiche porte le nom de la division et son chef de projet. Un chef de projet hors division demande un **référent DPO** ; c'est lui qui gère le projet et lit les lignes du projet dans les rapports. Un tel projet n'entre pas dans le rapport mensuel au conseil ; on peut le choisir pour un rapport ponctuel.
+
+Règles : `src/lib/projets.ts` (qui confie quoi à qui), `src/lib/donnees/externes.ts` ; tests `tests/projets.test.ts` et `tests/externes-base.test.ts`.
 
 ## Installation (service informatique)
 
@@ -221,6 +237,8 @@ Personnes fictives (mot de passe commun `Demo-DPO-2026`) :
 | `nadege.augustin@demo.dpo.local` | Directrice de la division et administratrice |
 | `frantz.desrosiers@demo.dpo.local` | Exécutif et administrateur |
 | `jean-robert.noel@demo.dpo.local` | Analyste et administrateur (modèles de rapport) |
+| `wesner.bazile@demo.dpo.local` | Référent DPO du projet « Ouverture de compte en ligne » (Division Réseau et succursales) |
+| `nathalie.celestin@demo.dpo.local` | Consultante hors division (Cabinet Atlas Conseil), avec un accès limité |
 
 ---
 

@@ -9,6 +9,14 @@
  *   sa direction ; exécutif : tout le monde), et, sur un projet qu'on dirige, aux membres de son équipe ;
  * - une tâche ou un projet sans activité se supprime vraiment ; sinon on annule la tâche ou on archive le
  *   projet, qui restent lisibles.
+ *
+ * Personnes hors division et projets d'autres divisions (décision du 27 octobre 2026) :
+ * - une personne hors division (autre département, consultant) a une fiche, sans accès par défaut ;
+ *   tout le monde peut l'ajouter au besoin (réunion, tâche, équipe projet) ;
+ * - on lui confie une tâche hors projet, ou sur un projet qu'on dirige ; la direction et les exécutifs
+ *   partout ; la personne qui lui a confié la tâche la suit et la met à jour ;
+ * - un projet d'une autre division a un chef de projet hors division ; un référent de la DPO y a les
+ *   droits de chef de projet ; il n'entre pas dans le rapport mensuel au conseil.
  */
 
 export const STATUTS_PROJET = ["requete", "en_attente", "en_cours", "continu", "finalise", "refuse"] as const;
@@ -64,10 +72,17 @@ export type Acteur = {
 
 const suit = (a: Acteur, id: string) => a.suivis === "toutes" || a.suivis.has(id);
 
+/** Qui a les droits de chef de projet dans l'application : le référent de la DPO s'il y en a un, sinon le chef. */
+export function responsableId(p: { chefProjetId: string | null; referentId?: string | null }): string | null {
+  return p.referentId ?? p.chefProjetId;
+}
+
 /** Peut-on confier une tâche (de ce projet, ou hors projet) à cette personne ? */
-export function peutAssigner(a: Acteur, assigneId: string, projet: { id: string; chefProjetId: string | null; membres: Set<string> } | null): boolean {
+export function peutAssigner(a: Acteur, assigneId: string, projet: { id: string; chefProjetId: string | null; referentId?: string | null; membres: Set<string> } | null, externe = false): boolean {
   if (assigneId === a.moiId || suit(a, assigneId)) return true;
-  if (projet && a.projetsDiriges.has(projet.id)) return assigneId === projet.chefProjetId || projet.membres.has(assigneId);
+  // Hors division : hors projet, sur un projet qu'on dirige ; la direction et les exécutifs partout.
+  if (externe) return !projet || a.projetsDiriges.has(projet.id) || a.directeur || a.toutVoir;
+  if (projet && a.projetsDiriges.has(projet.id)) return assigneId === projet.chefProjetId || assigneId === projet.referentId || projet.membres.has(assigneId);
   return false;
 }
 
@@ -75,10 +90,40 @@ export function peutAssigner(a: Acteur, assigneId: string, projet: { id: string;
  * Modifier un projet, gérer son équipe, l'archiver : son chef, la direction qui le voit, les exécutifs.
  * Une demande (ou un refus) n'a pas encore de chef : son auteur la corrige, la direction décide.
  */
-export function peutGererProjet(a: Pick<Acteur, "moiId" | "directeur" | "toutVoir">, projet: { chefProjetId: string | null; statut?: string; demandeParId?: string | null }): boolean {
+export function peutGererProjet(a: Pick<Acteur, "moiId" | "directeur" | "toutVoir">, projet: { chefProjetId: string | null; referentId?: string | null; statut?: string; demandeParId?: string | null }): boolean {
   if (a.toutVoir || a.directeur) return true;
   if (projet.statut === "requete" || projet.statut === "refuse") return projet.demandeParId === a.moiId;
-  return projet.chefProjetId === a.moiId;
+  return projet.chefProjetId === a.moiId || projet.referentId === a.moiId;
+}
+
+/**
+ * Chef et référent d'un projet : un chef hors division demande un référent de la DPO, et le référent
+ * est toujours de la DPO. Renvoie un message, ou null si c'est cohérent.
+ */
+export function verifierChefEtReferent(chef: { externe: boolean } | null, referent: { externe: boolean } | null): string | null {
+  if (referent?.externe) return "Le référent est une personne de la DPO.";
+  if (chef?.externe && !referent) return "Le chef de projet est hors division : nommez un référent de la DPO, qui gérera le projet ici.";
+  return null;
+}
+
+/** Valeur de « Pour » qui demande une nouvelle personne hors division (son nom est saisi à côté). */
+export const NOUVELLE_PERSONNE = "__externe";
+
+/** « Prénom Nom » saisi d'un bloc → prénom (premier mot) et nom (le reste). */
+export function separerNom(saisie: string): { prenom: string; nom: string } | null {
+  const mots = saisie.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  if (!mots.length) return null;
+  return { prenom: mots[0].slice(0, 80), nom: mots.slice(1).join(" ").slice(0, 120) };
+}
+
+/** Clé de comparaison d'un nom (sans accents ni casse) : sert à éviter les doublons. */
+export function cleNom(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 /** Projet qui reçoit des tâches : accepté, pas finalisé, pas archivé. */
