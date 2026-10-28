@@ -121,6 +121,18 @@ Construits après la revue, avec les mêmes règles. Vérifiés par lecture du c
 - **Suivi du pilote** : administrateurs et exécutifs ; les écrans ouverts sont notés par jour, écran et personne, sans durée ni contenu, et ne s'affichent qu'en nombres. **[déduction]** La table `consultations` reste une donnée personnelle : à mentionner dans l'information aux employés et à purger après le pilote si la banque le demande.
 - **[à vérifier]** avec le relais de courriel et l'annuaire réels de la banque.
 
+### Relecture indépendante (28 octobre 2026) et corrections
+
+Une seconde relecture du code, faite sans voir ce travail, n'a trouvé aucun point grave. Points faibles corrigés **[vérifié par tests]** :
+
+- **Import** : la ligne appliquée est celle que le plan a validée, jamais retrouvée par son numéro (des numéros en double, envoyés à la main par un administrateur, auraient pu appliquer une ligne écartée : personne hors division, supérieur hors division, boucle). Numéros en double renumérotés.
+- **Annuaire sans groupe** : une unité d'organisation strictement sous la base est exigée (on n'importe jamais tout l'annuaire de la banque).
+- **Personne hors division** : elle ne suit qu'elle-même, quels que soient ses rôles (filet de sécurité) ; elle ne voit plus une tâche qu'elle avait créée une fois confiée à quelqu'un d'autre ; la recherche ne compare plus le nom d'équipe de ses contacts (on ne le devinerait pas).
+- **Mot de passe provisoire** : désormais exigé partout (pages, actions, routes d'API), pas seulement dans la mise en page : tant qu'il n'est pas changé, seule la page de changement répond.
+- **Suivi du pilote** : seuls les écrans connus sont notés (rien d'inventé ne s'affiche).
+- **Barre** : une tâche changée de projet et bloquée dans la même saisie prévient le chef du nouveau projet.
+- **[déduction] Reste** : la recherche relit les tâches à chaque frappe (avec un délai de 200 ms) ; acceptable à l'échelle de la division, à surveiller si l'application s'étend.
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.

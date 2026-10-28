@@ -192,8 +192,9 @@ export async function mettreAJourTacheRapide(etat: EtatSaisieRapide, form: FormD
   if (r.heures && r.heures !== t.estimationHeures) await db.update(schema.taches).set({ estimationHeures: r.heures, majLe: new Date() }).where(eq(schema.taches.id, t.id));
   if (r.note) await db.insert(schema.evenementsTache).values({ tacheId: t.id, auteurId: u.id, type: "note", note: r.note });
   // Bloquée : le chef du projet est prévenu (comme la case cochée par défaut sur la fiche).
-  if (r.statut === "bloquee" && t.statut !== "bloquee" && t.projetId) {
-    const [p] = await db.select({ chef: sql<string | null>`coalesce(${schema.projets.referentId}, ${schema.projets.chefProjetId})` }).from(schema.projets).where(eq(schema.projets.id, t.projetId));
+  if (r.statut === "bloquee" && t.statut !== "bloquee" && projetId) {
+    // Le chef du projet où se trouve la tâche maintenant (elle a pu changer de projet dans la même saisie).
+    const [p] = await db.select({ chef: sql<string | null>`coalesce(${schema.projets.referentId}, ${schema.projets.chefProjetId})` }).from(schema.projets).where(eq(schema.projets.id, projetId));
     if (p?.chef && p.chef !== u.id) await db.insert(schema.notifications).values({ personneId: p.chef, type: "blocage", texte: `${u.prenom} ${u.nom} est bloqué(e) sur « ${t.titre} »`, lien: `/taches/${t.id}` });
   }
   await noter(u.id, "tache_modifiee", t.id, { statut: r.statut ?? t.statut, barre: true });

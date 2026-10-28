@@ -26,7 +26,7 @@ export type Changement = { champ: "prénom" | "nom" | "poste" | "équipe" | "sup
 
 export type Plan = {
   creer: LigneImport[];
-  modifier: { ligne: number; id: string; courriel: string; nom: string; changements: Changement[] }[];
+  modifier: { ligne: number; id: string; courriel: string; nom: string; changements: Changement[]; donnees: LigneImport }[];
   inchanges: number;
   equipesNouvelles: string[];
   erreurs: { ligne: number; message: string }[];
@@ -84,6 +84,8 @@ const COURRIEL = /^[a-z0-9._%+'-]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/;
 const LONGUEURS = { prenom: 100, nom: 100, poste: 150, equipe: 100 } as const;
 
 export function planifierImport(lignes: LigneImport[], existant: Existant, o: { laisserDeCote?: boolean } = {}): Plan {
+  // Un numéro de ligne par ligne : sinon, renumérotées (les erreurs et les écarts se repèrent par numéro).
+  if (new Set(lignes.map((l) => l.ligne)).size !== lignes.length) lignes = lignes.map((l, i) => ({ ...l, ligne: i + 1 }));
   if (!o.laisserDeCote) return planStrict(lignes, existant);
   // Retirer les lignes en erreur, puis recommencer : un compte écarté peut en entraîner un autre (son supérieur).
   const ignores: Plan["ignores"] = [];
@@ -200,7 +202,7 @@ function planStrict(lignes: LigneImport[], existant: Existant): Plan {
     if (l.equipe && cleNom(l.equipe) !== cleNom(equipeActuelle)) changements.push({ champ: "équipe", avant: equipeActuelle, apres: equipeDe.get(cleNom(l.equipe))?.nom ?? l.equipe });
     const supActuel = p.superieurId ? (parId.get(p.superieurId)?.courriel?.toLowerCase() ?? "") : "";
     if (l.superieur && l.superieur !== supActuel) changements.push({ champ: "supérieur", avant: supActuel, apres: l.superieur });
-    if (changements.length) modifier.push({ ligne: l.ligne, id: p.id, courriel: l.courriel, nom: `${p.prenom} ${p.nom}`, changements });
+    if (changements.length) modifier.push({ ligne: l.ligne, id: p.id, courriel: l.courriel, nom: `${p.prenom} ${p.nom}`, changements, donnees: l });
     else inchanges += 1;
   }
   const dansFichier = new Set(lignes.map((l) => l.courriel));

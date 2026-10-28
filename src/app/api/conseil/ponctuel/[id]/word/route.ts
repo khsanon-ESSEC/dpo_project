@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
-import { utilisateurCourant } from "@/lib/auth/session";
+import { utilisateurActif } from "@/lib/auth/session";
 import { dateLongue } from "@/lib/dates";
 import { lignesConseil, rapportConseil } from "@/lib/donnees/conseil";
 import { rapportConseilWord } from "@/lib/conseil-word";
@@ -8,7 +8,7 @@ import { noter } from "@/lib/journal";
 
 /** Fichier Word d'un rapport ponctuel : mêmes colonnes que le rapport mensuel, avec son titre et son objet. */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const u = await utilisateurCourant();
+  const u = await utilisateurActif();
   if (!u) return NextResponse.redirect(new URL("/connexion", process.env.APP_URL || "http://localhost:3000"));
   const a = await acces(u);
   if (!a.toutVoir && !a.directeur) return new NextResponse("Accès refusé", { status: 403 });

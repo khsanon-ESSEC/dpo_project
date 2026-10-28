@@ -22,9 +22,8 @@ function instantLocal(d: Date): string {
   return `${p.year}-${p.month}-${p.day} ${String(Number(p.hour) * 60 + Number(p.minute)).padStart(4, "0")}`;
 }
 
-/** Nom lisible d'un écran noté dans les consultations. */
-export function libelleEcran(e: string): string {
-  const L: Record<string, string> = {
+/** Écrans connus du suivi du pilote, avec leur nom lisible. */
+const L: Record<string, string> = {
     "/semaine": "Ma semaine",
     "/a-faire": "À faire",
     "/reunions": "Réunions",
@@ -59,7 +58,10 @@ export function libelleEcran(e: string): string {
     "/pilote": "Suivi du pilote",
     "/plus": "Plus (téléphone)",
     "/profil": "Profil",
-  };
+};
+
+/** Nom lisible d'un écran noté dans les consultations. */
+export function libelleEcran(e: string): string {
   return L[e] ?? e;
 }
 
@@ -122,7 +124,8 @@ export async function suiviPilote(semaines = 6) {
 /** Écran noté : le chemin sans paramètres, les identifiants remplacés par [id]. */
 export function ecranDe(chemin: string): string | null {
   const c = String(chemin ?? "").split(/[?#]/)[0].replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "/[id]").replace(/\/$/, "");
-  return /^\/[a-z0-9\-/[\]]{1,80}$/.test(c) && !c.startsWith("/api") ? c : null;
+  // Seulement les écrans connus : rien d'inventé ne s'affiche dans le suivi du pilote.
+  return Object.hasOwn(L, c) ? c : null;
 }
 
 export async function noterConsultation(personneId: string, chemin: string) {

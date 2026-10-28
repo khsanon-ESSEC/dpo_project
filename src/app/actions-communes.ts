@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { fermerSession, utilisateurCourant } from "@/lib/auth/session";
+import { fermerSession, utilisateurActif, utilisateurCourant } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
 import { noterConsultation } from "@/lib/donnees/pilote";
 
@@ -24,7 +24,7 @@ export async function seDeconnecter() {
 
 /** Suivi du pilote : l'écran ouvert est noté (une fois par jour et par personne), sans rien d'autre. */
 export async function consultation(chemin: string) {
-  const u = await utilisateurCourant();
+  const u = await utilisateurActif();
   if (!u || typeof chemin !== "string") return;
   await noterConsultation(u.id, chemin).catch(() => {});
 }

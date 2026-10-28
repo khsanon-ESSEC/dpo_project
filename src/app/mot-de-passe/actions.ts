@@ -10,7 +10,7 @@ import { noter } from "@/lib/journal";
 export type EtatMotDePasse = { message: string | null };
 
 export async function changerMotDePasse(_: EtatMotDePasse, form: FormData): Promise<EtatMotDePasse> {
-  const u = await exigerUtilisateur();
+  const u = await exigerUtilisateur({ provisoireAccepte: true });
   const actuel = String(form.get("actuel") ?? "");
   const nouveau = String(form.get("nouveau") ?? "");
   const confirmation = String(form.get("confirmation") ?? "");

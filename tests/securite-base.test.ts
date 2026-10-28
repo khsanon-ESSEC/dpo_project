@@ -114,4 +114,22 @@ describe.skipIf(!URL_TEST)("revue de sécurité : contrôles d'accès", () => {
     const [apres] = await D.db.select().from(D.schema.personnes).where(eq(D.schema.personnes.id, dj.id));
     expect(apres.superieurId).toBe(dj.superieurId);
   });
+
+  it("revue du 28 octobre : une personne hors division ne suit qu'elle-même et ne voit pas une tâche qu'elle a confiée puis qui a changé de mains", async () => {
+    const nc = await acces("nathalie.celestin");
+    expect(nc.suivis).toEqual(new Set([nc.moi.id]));
+    const autre = { assigneId: qui("fabienne.michel").id, projetId: null, creeParId: nc.moi.id };
+    expect(A.peutVoirTache(nc, autre)).toBe(false);
+    // Une personne de la division, elle, suit ce qu'elle a confié.
+    const dj = await acces("daphnee.joseph");
+    expect(A.peutVoirTache(dj, { ...autre, creeParId: dj.moi.id })).toBe(true);
+  });
+
+  it("revue du 28 octobre : seuls les écrans connus sont notés dans le suivi du pilote", async () => {
+    const P = await import("@/lib/donnees/pilote");
+    expect(P.ecranDe("/projets/0b5e9a3c-1d2e-4f5a-8b9c-0d1e2f3a4b5c/gantt?x=1")).toBe("/projets/[id]/gantt");
+    expect(P.ecranDe("/a-faire")).toBe("/a-faire");
+    expect(P.ecranDe("/n-importe-quoi")).toBeNull();
+    expect(P.ecranDe("/api/recherche")).toBeNull();
+  });
 });

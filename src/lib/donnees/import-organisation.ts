@@ -74,9 +74,9 @@ export async function appliquerImport(parId: string, lignes: LigneImport[], sour
         .returning({ id: schema.personnes.id });
       ids.set(l.courriel, p.id);
     }
-    const parLigne = new Map(lignes.map((l) => [l.ligne, l]));
     for (const m of plan.modifier) {
-      const l = parLigne.get(m.ligne)!;
+      // La ligne validée par le plan elle-même (jamais retrouvée par son numéro, qui vient de la page).
+      const l = m.donnees;
       const champs: Partial<typeof schema.personnes.$inferInsert> = { majLe: new Date() };
       for (const c of m.changements) {
         if (c.champ === "prénom") champs.prenom = l.prenom;
@@ -87,7 +87,7 @@ export async function appliquerImport(parId: string, lignes: LigneImport[], sour
       await tx.update(schema.personnes).set(champs).where(eq(schema.personnes.id, m.id));
     }
     // Supérieurs en dernier : une nouvelle personne peut être le supérieur d'une autre.
-    const avecSuperieur = [...plan.creer, ...plan.modifier.filter((m) => m.changements.some((c) => c.champ === "supérieur")).map((m) => parLigne.get(m.ligne)!)].filter((l) => l.superieur);
+    const avecSuperieur = [...plan.creer, ...plan.modifier.filter((m) => m.changements.some((c) => c.champ === "supérieur")).map((m) => m.donnees)].filter((l) => l.superieur);
     for (const l of avecSuperieur) {
       await tx.update(schema.personnes).set({ superieurId: ids.get(l.superieur)! }).where(eq(schema.personnes.id, ids.get(l.courriel)!));
     }

@@ -133,7 +133,8 @@ export async function lireAnnuaire(
   const groupe = process.env.AD_GROUPE?.trim() || null;
   const ou = (o.ou ?? "").trim();
   if (ou && !dnDans(ou, base)) return { ok: false, refus: "perimetre" };
-  if (!groupe && !ou) return { ok: false, refus: "perimetre" };
+  // Sans groupe de l'application : une unité d'organisation sous la base, jamais tout l'annuaire de la banque.
+  if (!groupe && (!ou || dnDans(base, ou))) return { ok: false, refus: "perimetre" };
   const identifiant = normaliserIdentifiant(saisie, domaine);
   if (!identifiant) return { ok: false, refus: "identifiant" };
   if (!motDePasseADAcceptable(motDePasse)) return { ok: false, refus: "identifiants" };

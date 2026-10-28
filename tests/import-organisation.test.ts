@@ -72,7 +72,7 @@ describe("ce que l'import changerait", () => {
     );
     expect(p.erreurs).toEqual([]);
     expect(p.creer.map((l) => l.courriel)).toEqual(["nouveau@x.ht"]);
-    expect(p.modifier).toEqual([{ ligne: 3, id: "p-fm", courriel: "fm@x.ht", nom: "Fabienne Michel", changements: [{ champ: "poste", avant: "Analyste", apres: "Analyste senior" }] }]);
+    expect(p.modifier.map(({ donnees, ...m }) => ({ ...m, poste: donnees.poste }))).toEqual([{ ligne: 3, id: "p-fm", courriel: "fm@x.ht", nom: "Fabienne Michel", changements: [{ champ: "poste", avant: "Analyste", apres: "Analyste senior" }], poste: "Analyste senior" }]);
     expect(p.inchanges).toBe(1);
     expect(p.equipesNouvelles).toEqual(["Nouvelle équipe"]);
     expect(p.absents).toBe(1); // Nadège : rien ne change pour elle
@@ -206,5 +206,14 @@ describe.skipIf(!URL_TEST)("appliquer un import (base de démonstration)", () =>
     const r = await I.appliquerImport(adminId, [L(2, "essai.import3@demo.dpo.local", { prenom: "Trois", nom: "Essai" }), L(3, "pas-une-adresse")], "fichier");
     expect(r.ok).toBe(false);
     expect(await personne("essai.import3@demo.dpo.local")).toBeUndefined();
+  });
+});
+
+describe("revue : la ligne appliquée est celle que le plan a validée", () => {
+  it("chaque mise à jour porte sa propre ligne (jamais retrouvée par son numéro)", () => {
+    const p = planifierImport([L(2, "fm@x.ht", { poste: "Senior" }), L(2, "nc@x.ht", { poste: "Consultante", superieur: "fm@x.ht" })], EXISTANT, { laisserDeCote: true });
+    expect(p.modifier).toHaveLength(1);
+    expect(p.modifier[0].donnees).toMatchObject({ courriel: "fm@x.ht", poste: "Senior" });
+    expect(p.ignores.map((i) => i.courriel)).toEqual(["nc@x.ht"]);
   });
 });

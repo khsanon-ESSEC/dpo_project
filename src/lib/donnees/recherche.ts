@@ -38,7 +38,8 @@ export async function rechercher(u: Utilisateur, saisie: string) {
       .filter((p) => p.actif && (!contacts || contacts.has(p.id)))
       .map((p) => {
         const texte = nomComplet(p);
-        const r = rang(`${texte} ${p.prenom} ${p.poste} ${p.externe ? p.organisation : org.equipes.get(p.equipeId ?? "")?.nom ?? ""}`, mots);
+        // Hors division (accès limité) : l'équipe n'est ni affichée ni cherchée (on ne la devinerait pas).
+        const r = rang(`${texte} ${p.prenom} ${p.poste} ${p.externe ? p.organisation : contacts ? "" : (org.equipes.get(p.equipeId ?? "")?.nom ?? "")}`, mots);
         const nom = rang(texte, mots);
         return { id: p.id, texte, sous: p.externe ? ["Hors division", p.organisation].filter(Boolean).join(" · ") : [p.poste, contacts ? null : org.equipes.get(p.equipeId ?? "")?.nom].filter(Boolean).join(" · "), r: nom ?? (r === null ? null : r + 1) };
       })

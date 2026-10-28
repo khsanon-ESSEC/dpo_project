@@ -77,8 +77,11 @@ function lignesRecues(brut: unknown): LigneImport[] | null {
   }
   if (!Array.isArray(v) || v.length === 0 || v.length > 2000) return null;
   const t = (x: unknown, n: number) => String(x ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+  // Numéros de ligne : ceux du fichier s'ils sont tous distincts (pour les messages), sinon renumérotés.
+  const numeros = v.map((l: Record<string, unknown>) => (Number.isInteger(l?.ligne) && Number(l.ligne) > 0 ? Number(l.ligne) : null));
+  const fiables = numeros.every((n) => n !== null) && new Set(numeros).size === numeros.length;
   return v.map((l: Record<string, unknown>, i) => ({
-    ligne: Number.isInteger(l?.ligne) ? Number(l.ligne) : i + 2,
+    ligne: fiables ? numeros[i]! : i + 2,
     prenom: t(l?.prenom, 101),
     nom: t(l?.nom, 101),
     courriel: t(l?.courriel, 201).toLowerCase(),

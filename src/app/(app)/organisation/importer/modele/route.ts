@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { utilisateurCourant } from "@/lib/auth/session";
+import { utilisateurActif } from "@/lib/auth/session";
 import { tableauOrganisation } from "@/lib/donnees/import-organisation";
 import { ENTETES } from "@/lib/import-organisation";
 import { peutAdministrer } from "@/lib/regles";
@@ -18,7 +18,7 @@ function classeur(lignes: string[][], nom: string) {
 }
 
 async function administrateur() {
-  const u = await utilisateurCourant();
+  const u = await utilisateurActif();
   return u && !u.externe && peutAdministrer(u) ? u : null;
 }
 

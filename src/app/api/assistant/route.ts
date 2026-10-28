@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { utilisateurCourant } from "@/lib/auth/session";
+import { utilisateurActif } from "@/lib/auth/session";
 import { contexteAssistant } from "@/lib/contexte-assistant";
 import { CONSIGNES_ASSISTANT, demanderIA, iaDisponible, IaIndisponible } from "@/lib/ia";
 import { noter } from "@/lib/journal";
@@ -16,7 +16,7 @@ function tropDeQuestions(id: string) {
 }
 
 export async function POST(req: Request) {
-  const u = await utilisateurCourant();
+  const u = await utilisateurActif();
   if (!u) return NextResponse.json({ erreur: "Session expirée. Reconnectez-vous." }, { status: 401 });
   if (!iaDisponible()) {
     return NextResponse.json({ erreur: "L'assistant n'est pas encore branché. Un administrateur doit choisir un fournisseur d'IA (IA_FOURNISSEUR)." }, { status: 503 });

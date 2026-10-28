@@ -42,7 +42,8 @@ export const acces = cache(async (moi: Utilisateur): Promise<Acces> => {
     moi,
     toutVoir: !moi.externe && voitTout(moi),
     directeur: !moi.externe && moi.directeur,
-    suivis: personnesSuivies(org, moi),
+    // Hors division : elle ne suit qu'elle-même, quoi que disent ses rôles ou la hiérarchie (filet de sécurité).
+    suivis: moi.externe ? new Set([moi.id]) : personnesSuivies(org, moi),
     projetsDiriges: new Set(diriges.map((d) => d.id)),
     projetsMembre: new Set(membre.map((d) => d.id)),
     equipeDirecte: subordonnesDirects(org, moi.id).map((p) => p.id),
@@ -58,7 +59,8 @@ export function suitPersonne(a: Acces, personneId: string): boolean {
  * exécutifs, et la personne qui l'a confiée (elle suit les tâches confiées hors division).
  */
 export function peutVoirTache(a: Acces, t: { assigneId: string; projetId: string | null; creeParId?: string | null }): boolean {
-  return suitPersonne(a, t.assigneId) || (t.projetId !== null && a.projetsDiriges.has(t.projetId)) || (!!t.creeParId && t.creeParId === a.moi.id);
+  // La personne qui a confié la tâche la suit ; pas une personne hors division (elle ne voit que ses tâches).
+  return suitPersonne(a, t.assigneId) || (t.projetId !== null && a.projetsDiriges.has(t.projetId)) || (!a.moi.externe && !!t.creeParId && t.creeParId === a.moi.id);
 }
 
 /** Modifier une tâche : mêmes personnes. */

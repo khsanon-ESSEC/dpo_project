@@ -5,7 +5,7 @@ import { FormulaireMotDePasse } from "./FormulaireMotDePasse";
 export const metadata: Metadata = { title: "Choisir un mot de passe" };
 
 export default async function PageMotDePasse() {
-  const u = await exigerUtilisateur();
+  const u = await exigerUtilisateur({ provisoireAccepte: true });
   return (
     <main style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ width: "100%", maxWidth: 400, display: "flex", flexDirection: "column", gap: 24 }}>

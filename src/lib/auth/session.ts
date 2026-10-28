@@ -103,11 +103,24 @@ export const utilisateurCourant = cache(async (): Promise<Utilisateur | null> =>
   return ligne ?? null;
 });
 
-/** À appeler en tête de chaque page et de chaque action protégée. */
-export async function exigerUtilisateur(): Promise<Utilisateur> {
+/** Mot de passe provisoire à changer : seulement pour une session ouverte par mot de passe (pas Google ni Windows). */
+export const doitChangerProvisoire = (u: Utilisateur) => u.doitChangerMotDePasse && (u.connexion ?? "mot_de_passe") === "mot_de_passe";
+
+/**
+ * À appeler en tête de chaque page et de chaque action protégée. Avec un mot de passe provisoire, rien d'autre
+ * que la page de changement de mot de passe (`provisoireAccepte`) ne répond tant qu'il n'est pas changé.
+ */
+export async function exigerUtilisateur(o: { provisoireAccepte?: boolean } = {}): Promise<Utilisateur> {
   const u = await utilisateurCourant();
   if (!u) redirect("/connexion");
+  if (!o.provisoireAccepte && doitChangerProvisoire(u)) redirect("/mot-de-passe");
   return u;
+}
+
+/** Pour les routes d'API : l'utilisateur, ou null (non connecté, ou mot de passe provisoire pas encore changé). */
+export async function utilisateurActif(): Promise<Utilisateur | null> {
+  const u = await utilisateurCourant();
+  return u && !doitChangerProvisoire(u) ? u : null;
 }
 
 /**

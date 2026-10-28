@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { acces } from "@/lib/acces";
-import { utilisateurCourant } from "@/lib/auth/session";
+import { utilisateurActif } from "@/lib/auth/session";
 import { lirePiece } from "@/lib/donnees/pieces";
 import { noter } from "@/lib/journal";
 import { dispositionTelechargement } from "@/lib/pieces";
@@ -10,7 +10,7 @@ import { dispositionTelechargement } from "@/lib/pieces";
  * la direction si le champ ne lui est pas réservé). Toujours en téléchargement, jamais affichée.
  */
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const u = await utilisateurCourant();
+  const u = await utilisateurActif();
   if (!u) return NextResponse.redirect(new URL("/connexion", process.env.APP_URL || "http://localhost:3000"));
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/.test(id)) return new NextResponse("Introuvable", { status: 404 });
