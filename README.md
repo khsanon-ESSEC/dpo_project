@@ -2,13 +2,18 @@
 
 Application web de suivi des projets de la DPO (UNIBANK) :
 
+- **La barre** (en haut d'*À faire*, de *Ma semaine*, de *Rechercher* et du menu *Plus*) : on écrit, l'application comprend.
+  - Ajouter une tâche en une ligne : « Relire maquettes /unib @fab vendredi 2h » (`/` un projet, `@` une personne, une date, des heures).
+  - Mettre une tâche à jour : `#` choisit une tâche (les siennes, celles de son équipe, celles qu'on a confiées, celles de ses projets), puis « faite », « en cours », « bloquée attente de la DTI », une date, une durée, une note, ou `@` pour la confier à quelqu'un d'autre. Sans rien écrire, Entrée l'ouvre.
+  - Noter une réunion : « Réunion comité de pilotage /unib @fab @daph jeudi 10h 1h30 ».
+  - Chercher : projets, tâches et personnes, seulement parmi ce que chacun voit déjà (touche `/` n'importe où pour y aller).
 - **Ma semaine** : la journée d'aujourd'hui (tâches faites, échéances, réunions) et la frise de la semaine ; un clic sur un jour montre ce qui s'est passé ce jour-là ; les flèches remontent aux semaines précédentes.
 - **À faire** (onglet à côté de « Mon bilan ») : la liste des tâches ouvertes de chacun, cochées au fil de la semaine, et les tâches qu'on a confiées à des personnes hors division, pour les suivre.
-- **Réunions** : chacun note les réunions auxquelles il a participé (sujet, jour, heure, durée, projet, participants, notes). Une seule personne la note : elle compte pour chaque participant, qui est prévenu et peut s'en retirer. Le temps en réunion apparaît dans sa semaine, dans son rapport du vendredi (pour son supérieur direct), dans la charge (il réduit le temps disponible) et dans le bilan.
+- **Réunions** : chacun note les réunions auxquelles il a participé (sujet, jour, heure, durée, projet, participants, notes). Une seule personne la note : elle compte pour chaque participant, qui est prévenu et peut s'en retirer. Le temps en réunion apparaît dans sa semaine, dans son rapport du vendredi (pour son supérieur direct), dans la charge (il réduit le temps disponible) et dans le bilan. Les **actions décidées** en réunion deviennent des tâches (pour qui, pour quand), rattachées à la réunion.
 - **Mon bilan** : la semaine comparée à la précédente, et les huit dernières semaines (tâches terminées, heures livrées, terminées à temps, temps en réunion, rapport envoyé).
 - **Rapport de la semaine** : un formulaire configuré par les administrateurs (modèles de rapport), préparé à partir des tâches, relu et envoyé au supérieur. Chaque chef de projet reçoit les lignes et les feux de son projet. Ce qui était prévu la semaine précédente se reprend en un clic (fait, en cours, reporté).
 - **Rapport de chef** : le chef d'équipe et le directeur gardent leur propre rapport (« Mon travail »), suivi d'une partie préremplie à partir des rapports qu'ils reçoivent (« Mon équipe », « Ma division ») : à décider, synthèse par projet, santé des projets, charge, fait, la semaine prochaine. Un seul envoi. Les exécutifs ne rédigent pas de rapport : ils lisent ceux de tout le monde.
-- **Heures du rapport** : chaque modèle fixe quand le rapport est prêt à relire (le brouillon est alors complété avec les tâches de la semaine), quand un rappel part, et l'heure limite ; le chef apprend ensuite quels rapports manquent.
+- **Heures du rapport** : chaque modèle fixe quand le rapport est prêt à relire (le brouillon est alors complété avec les tâches de la semaine), quand un rappel part, et l'heure limite ; le chef apprend ensuite quels rapports manquent. Si le courriel est configuré, « prêt à relire » et le rappel arrivent aussi **par courriel**, avec un lien direct vers le rapport.
 - **Pièces jointes** dans le rapport (PDF, images, Word, Excel, PowerPoint, CSV, texte ; 10 Mo par fichier), lues selon la règle du champ.
 - **Modèles de rapport** (administrateurs) : champs à choisir ou à glisser, ordre, propriétés de chaque champ, affectation aux équipes et aux personnes, versions.
 - **Mes rapports** : tous les rapports déjà envoyés, semaine par semaine, avec passage d'une semaine à l'autre.
@@ -17,11 +22,12 @@ Application web de suivi des projets de la DPO (UNIBANK) :
 - **Tâches** : créer, renommer, préciser, changer de projet, **confier** à quelqu'un (à soi-même, aux personnes qu'on suit, et, sur un projet qu'on dirige, aux membres de son équipe projet ; à une personne hors division, voir plus bas) ; les deux personnes sont prévenues. Une tâche commencée s'**annule** avec un motif (et se rétablit) ; seule une tâche sans histoire se supprime.
 - **Noms cliquables** : partout, le nom d'une personne ouvre sa fiche (poste, équipe, supérieur, projets), le nom d'un projet ouvre le projet, quand on a le droit de le voir.
 - **Rapports au conseil** : le rapport mensuel des projets stratégiques, au format du tableau Word de la banque (avec le logo) ; et des **rapports ponctuels**, faits à tout moment pour une demande ou un événement imprévu : un titre, la demande, les projets choisis, la période couverte. Un exécutif les approuve ; ils ne changent pas les dates du rapport mensuel.
-- **Vues d'un projet** : vue d'ensemble, liste, tableau (colonnes par état, avec glisser-déposer), Gantt (jours, semaines ou mois), calendrier des échéances, charge de l'équipe du projet. Le portefeuille a aussi une chronologie de tous les projets.
+- **Vues d'un projet** : vue d'ensemble, liste, tableau (colonnes par état, avec glisser-déposer) ; derrière « Plus de vues » : Gantt (jours, semaines ou mois), calendrier des échéances, charge de l'équipe du projet. Le portefeuille a aussi une chronologie de tous les projets.
 - **Charge de travail** : les heures de tâches prévues pour chaque personne, semaine par semaine, comparées à ses heures disponibles ; repère qui est chargé ou surchargé, et l'indique au moment de confier une tâche.
 - **Personnes hors division** : collègues d'autres départements, consultants, prestataires. Ils peuvent participer à une réunion, recevoir une tâche, entrer dans l'équipe d'un projet ou diriger un projet d'une autre division. Chacun peut en ajouter un au moment où il en a besoin (nom et département ou société) ; aucune adresse n'est demandée.
 - **Projets d'autres divisions** : un projet porté par une autre division, sur lequel la DPO travaille, garde son chef de projet (hors division) et reçoit un **référent DPO**, qui le gère dans l'application.
-- **Organisation** : personnes, équipes, supérieurs, rôles et heures disponibles par semaine ; les personnes hors division (fiche, accès limité, fusion des doublons).
+- **Organisation** : personnes, équipes, supérieurs, rôles et heures disponibles par semaine ; les personnes hors division (fiche, accès limité, fusion des doublons). **Importer** l'organisation depuis Excel (le modèle contient l'organisation actuelle) ou depuis Active Directory : on voit d'abord ce qui changerait, puis on importe.
+- **Suivi du pilote** (administrateurs, exécutifs) : rapports envoyés et à l'heure, tâches mises à jour avant vendredi, écrans réellement ouverts, courriels de rappel ; en nombres agrégés seulement, personne n'y est suivi individuellement.
 - **Assistant** (facultatif) : un bouton flottant sur chaque écran, branché sur le fournisseur d'IA choisi par la banque.
 
 Application multipage (chaque écran est une page rendue par le serveur), en français, avec thème clair et sombre. Elle fonctionne sur ordinateur et sur téléphone. Sur téléphone, la barre du bas a quatre entrées (Semaine, Rapport, Équipe ou Projets, Plus) ; « Plus » mène à tout le reste.
@@ -157,6 +163,8 @@ Lancer le serveur par un gestionnaire de services (systemd, par exemple) pour qu
 | `IA_URL`, `IA_CLE`, `IA_MODELE`, `IA_DELAI` | Connexion au fournisseur d'IA (voir plus bas) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_DOMAINE` | Connexion avec le compte Google de la banque (voir plus bas). Sans elles, connexion par mot de passe seulement |
 | `AD_URL`, `AD_DOMAINE`, `AD_BASE_DN`, `AD_CA`, `AD_GROUPE`, `AD_LIAISON`, `AD_ESSAIS_MAX` | Connexion avec le compte Windows de la banque (Active Directory, voir plus bas) |
+| `SMTP_HOTE`, `SMTP_PORT`, `SMTP_TLS`, `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE`, `SMTP_EXPEDITEUR`, `SMTP_CA` | Rappels du vendredi par courriel (voir plus bas). Sans eux, aucun courriel |
+| `RAPPELS_INTERVALLE_MINUTES` | Fréquence de la tournée des rappels (5 minutes par défaut) |
 
 ### Mise à jour
 
@@ -200,6 +208,10 @@ Conserver les sauvegardes hors du serveur, et tester une restauration au moins u
 - Journal des actions sensibles (connexions, changements de rôles, envois, approbations, pièces déposées et téléchargées) dans la table `journal`.
 - Pièces jointes : formats de bureau seulement, reconnus à l'extension **et** au contenu ; toujours servies en téléchargement (jamais affichées dans la page), seulement à qui peut lire le champ.
 - Le conteneur tourne avec un utilisateur sans privilèges.
+- La recherche et la barre ne proposent que ce que la personne voit déjà (mêmes règles que les pages) ; mettre à jour ou confier une tâche depuis la barre suit les mêmes règles que sa fiche.
+- Après la connexion, l'application ne renvoie que vers quelques pages connues d'elle-même (lien d'un courriel), jamais vers une autre adresse.
+- Suivi du pilote : les écrans ouverts sont notés « telle personne, tel écran, tel jour », sans durée ni contenu, et ne s'affichent qu'en nombres.
+- Import de l'organisation : administrateurs seulement ; rôles jamais importés ; tout ou rien ; fichier lu sans exécuter ni suivre quoi que ce soit (valeurs des cellules seulement), taille limitée.
 
 **Avant la mise en production** : revue de sécurité selon la politique de la banque, sauvegardes testées, `DATE_DEMO` vide, `COOKIE_SECURISE=1`, aucune donnée de démonstration. Une première revue interne (injections, autorisations, session, pièces jointes, assistant, dépendances) est consignée dans `docs/securite-tests.md` ; elle prépare la revue externe, elle ne la remplace pas.
 
@@ -237,7 +249,25 @@ Quand `AD_URL`, `AD_DOMAINE` et `AD_BASE_DN` sont renseignés, la page de connex
 
 Ce que fait l'application : la personne se lie à l'annuaire avec **son propre** identifiant et mot de passe (aucun compte de service n'est stocké) ; le mot de passe n'est ni gardé ni écrit au journal ; un mot de passe vide n'est jamais envoyé (AD accepterait une liaison anonyme) ; l'identifiant est filtré et la recherche construite par la bibliothèque (pas d'injection LDAP) ; un compte désactivé, verrouillé ou au mot de passe expiré est refusé avec un message clair ; un identifiant inconnu et un mauvais mot de passe ont la même réponse.
 
-**Aucun compte n'est créé** : l'adresse du compte AD (`mail`, sinon `userPrincipalName`) doit être celle d'une personne existante et active dans *Organisation*. Une personne hors division ne se connecte ainsi que si son accès est ouvert. Le mot de passe provisoire de l'application n'est demandé qu'à la connexion par mot de passe.
+**La connexion ne crée aucun compte** : l'adresse du compte AD (`mail`, sinon `userPrincipalName`) doit être celle d'une personne existante et active dans *Organisation* (ajoutée une à une, ou par l'import ci-dessous). Une personne hors division ne se connecte ainsi que si son accès est ouvert. Le mot de passe provisoire de l'application n'est demandé qu'à la connexion par mot de passe.
+
+### Rappels du vendredi par courriel
+
+Quand `SMTP_HOTE`, `SMTP_EXPEDITEUR` et `APP_URL` sont renseignés, chaque personne qui rédige un rapport reçoit au plus deux courriels par semaine : « votre rapport est prêt à relire » à l'heure prévue par son modèle de rapport, puis un rappel à l'heure de rappel si le rapport n'est pas parti. Rien la nuit (entre 20 h et 7 h, le courriel attend le matin) ; rien si le rapport est parti ; un modèle sans heure de rappel n'envoie que le premier. Le courriel ne contient **rien du rapport** : un lien vers la page du rapport (après la connexion, si besoin).
+
+Pour l'informatique :
+
+1. Un relais SMTP de la banque (Exchange, Microsoft 365, Google Workspace) et une adresse d'expédition, par exemple `SMTP_EXPEDITEUR=Pilotage des projets <pilotage@unibankhaiti.com>`.
+2. `SMTP_TLS=starttls` (par défaut, port 587 : passage obligatoire en TLS), `implicite` (port 465), ou `aucun` pour un relais interne sans compte. Un mot de passe ne passe jamais en clair : avec `SMTP_UTILISATEUR`, le TLS est obligatoire. TLS 1.2 au moins ; le certificat du serveur est toujours vérifié (`SMTP_CA` pour une autorité interne).
+3. Rien d'autre à installer : la tournée tourne dans l'application, toutes les cinq minutes. Chaque envoi est réservé en base (table `envois_courriel`) : un courriel ne part qu'une fois, même avec plusieurs copies de l'application. Un envoi manqué est retenté vingt minutes plus tard ; le *Suivi du pilote* montre les envois et les erreurs de la semaine.
+
+### Importer l'organisation (administrateurs)
+
+*Organisation › Importer* ajoute les personnes qui manquent et met à jour poste, équipe (créée si besoin) et supérieur. On voit d'abord ce qui changerait (ajouts, avant → après, équipes créées), puis on importe. Les rôles (directeur, exécutif, administrateur) ne s'importent jamais ; personne n'est désactivé ni supprimé ; une personne absente du fichier reste telle quelle.
+
+- **Excel ou CSV** : partir du modèle (*Télécharger le modèle Excel*), qui contient déjà l'organisation actuelle : une ligne par personne, reconnue par son courriel ; une case vide ne change rien. Le moindre problème (adresse illisible, doublon, supérieur introuvable, boucle de supérieurs…) est signalé avec son numéro de ligne, et rien n'est importé tant qu'il reste. CSV d'Excel en français accepté (point-virgule).
+- **Active Directory** (si la connexion Windows est configurée) : l'administrateur lit l'annuaire avec son propre compte Windows (rien n'est gardé) ; on lit les comptes actifs du groupe `AD_GROUPE` (groupes imbriqués compris), ou d'une unité d'organisation indiquée sous `AD_BASE_DN` ; poste (`title`), service (`department`, facultatif) et supérieur (`manager`). Les comptes qu'on ne peut pas importer (personne hors division, nom manquant…) sont laissés de côté et listés. Le résultat se télécharge aussi en Excel, pour le retoucher avant de l'importer.
+- Les personnes ajoutées n'ont pas de mot de passe : elles se connectent avec leur compte Google ou Windows de la banque ; sinon, un administrateur leur donne un mot de passe provisoire depuis leur fiche.
 
 ---
 
