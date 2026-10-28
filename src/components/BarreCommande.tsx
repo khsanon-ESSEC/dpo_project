@@ -85,6 +85,8 @@ export function BarreCommande({
   const [reponse, setReponse] = useState<Reponse>(null);
   const [occupes, setOccupes] = useState<Disponibilite[]>([]);
   const [vide, setVide] = useState(false);
+  // La liste ne s'ouvre que pendant qu'on est dans la barre : une barre préremplie (page Rechercher) reste fermée.
+  const [actif, setActif] = useState(false);
   const [recents, setRecents] = useState<string[]>([]);
   const [vu, setVu] = useState(0);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -200,7 +202,7 @@ export function BarreCommande({
 
   // ---------- Recherche en direct (mode recherche) ----------
   useEffect(() => {
-    if (mode !== "recherche" || liste || tache || genre !== "tache" || cleNom(texte).length < 2) {
+    if (!actif || mode !== "recherche" || liste || tache || genre !== "tache" || cleNom(texte).length < 2) {
       setResultats(null);
       return;
     }
@@ -215,7 +217,7 @@ export function BarreCommande({
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [texte, mode, liste, tache, genre]);
+  }, [texte, mode, liste, tache, genre, actif]);
 
   // ---------- Question : la réponse s'affiche pendant qu'on écrit ----------
   useEffect(() => {
@@ -386,13 +388,16 @@ export function BarreCommande({
           ]
         : [];
   const actives = liste ? choix.map((_, i) => i) : lignes.map((l, i) => (l.action ? i : -1)).filter((i) => i >= 0);
-  const ouvert = liste ? choix.length > 0 : lignes.length > 0;
+  const ouvert = actif && (liste ? choix.length > 0 : lignes.length > 0);
 
   const clavier = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
       if (liste) setListe(null);
-      else if (vide) setVide(false);
-      else setSurligne(-1);
+      else {
+        setVide(false);
+        setSurligne(-1);
+        setActif(false);
+      }
       return;
     }
     // Retour arrière dans une barre vide : la dernière étiquette s'en va.
@@ -484,14 +489,19 @@ export function BarreCommande({
               setAnnulable(false);
               setSurligne(-1);
               setVide(!e.target.value);
+              setActif(true);
               reperer(e.target.value, e.target.selectionStart ?? e.target.value.length);
             }}
-            onFocus={() => setVide(true)}
+            onFocus={() => {
+              setVide(true);
+              setActif(true);
+            }}
             onKeyDown={clavier}
             onBlur={() =>
               setTimeout(() => {
                 setListe(null);
                 setVide(false);
+                setActif(false);
               }, 150)
             }
             maxLength={300}
