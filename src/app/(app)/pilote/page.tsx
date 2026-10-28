@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { exigerInterne } from "@/lib/auth/session";
-import { dateCourte } from "@/lib/dates";
+import { ajouterJours, dateCourte } from "@/lib/dates";
 import { suiviPilote } from "@/lib/donnees/pilote";
 import { courrielActif } from "@/lib/courriel";
 import { bilanCourriels } from "@/lib/donnees/courriels";
 import { semaineCourante } from "@/lib/donnees/rapport";
 import { Bandeau } from "@/components/Bandeau";
 import { ONGLETS_ORGANISATION, SousOnglets } from "@/components/SousOnglets";
+import { Courbes, valeurTexte } from "@/components/Courbes";
+import { debutDesDonnees } from "@/lib/donnees/bilan";
 
 export const metadata: Metadata = { title: "Suivi du pilote" };
 
@@ -20,7 +22,12 @@ const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : null);
 export default async function PagePilote() {
   const u = await exigerInterne();
   if (!u.administrateur && !u.executif) notFound();
-  const s = await suiviPilote();
+  const [s, debuts] = await Promise.all([suiviPilote(), debutDesDonnees()]);
+  // Avant que l'application serve (premier rapport, première donnée), une semaine n'a pas de valeur, pas un zéro.
+  const servait = (w: { lundi: string }, depuis: string | null) => !!depuis && ajouterJours(w.lundi, 6) >= depuis;
+  // Les mises à jour et les ouvertures ne sont enregistrées que par l'application : avant la première, pas de valeur.
+  const premiereVue = s.semaines.find((w) => w.actifs > 0)?.lundi ?? null;
+  const premiereMaj = s.semaines.find((w) => w.tachesAJour > 0)?.lundi ?? null;
   const courriel = courrielActif() ? await bilanCourriels(semaineCourante()) : null;
   const derniere = [...s.semaines].reverse().find((w) => w.attendu);
 
@@ -67,6 +74,40 @@ export default async function PagePilote() {
       </Bandeau>
       <div className="page" style={{ maxWidth: 980 }}>
         <SousOnglets onglets={u.administrateur ? ONGLETS_ORGANISATION : ONGLETS_ORGANISATION.filter((o) => o.href === "/organisation" || o.href === "/pilote")} courant="/pilote" label="Organisation" />
+        <section aria-labelledby="p-tendances">
+          <h2 id="p-tendances" className="carte__titre" style={{ marginBottom: 12 }}>
+            Douze semaines
+          </h2>
+          <div className="bilan-graphes">
+            {[
+              { titre: "Rapports envoyés", valeur: (w: (typeof s.semaines)[number]) => (w.attendu && servait(w, debuts.rapports) ? pct(w.envoyes, w.redacteurs) : null) },
+              { titre: "Rapports à l'heure", valeur: (w: (typeof s.semaines)[number]) => (w.attendu && servait(w, debuts.rapports) ? pct(w.aLheure, w.redacteurs) : null) },
+              { titre: "Tâches mises à jour avant vendredi", valeur: (w: (typeof s.semaines)[number]) => (premiereMaj && w.lundi >= premiereMaj ? pct(w.tachesAJour, w.redacteurs) : null) },
+              { titre: "Personnes qui ont ouvert l'application", valeur: (w: (typeof s.semaines)[number]) => (premiereVue && w.lundi >= premiereVue ? pct(w.actifs, s.utilisateurs) : null) },
+            ].map((m) => {
+              const derniere = [...s.semaines].reverse().find((w) => m.valeur(w) !== null);
+              return (
+                <article key={m.titre} className="carte graphe-carte">
+                  <header className="graphe-carte__tete">
+                    <h3 className="graphe-carte__titre">{m.titre}</h3>
+                    <p className="graphe-carte__valeur">
+                      {valeurTexte(derniere ? m.valeur(derniere) : null, "pourcent")}
+                      <span className="graphe-carte__ecart">{derniere ? `semaine du ${dateCourte(derniere.lundi)}` : "pas encore de semaine complète"}</span>
+                    </p>
+                  </header>
+                  <Courbes
+                    titre={`${m.titre}, semaine par semaine`}
+                    unite="pourcent"
+                    nomActuel={m.titre}
+                    hauteur={100}
+                    points={s.semaines.map((w) => ({ cle: w.lundi, libelle: `semaine du ${dateCourte(w.lundi)}`, court: dateCourte(w.lundi), actuel: m.valeur(w), avant: null, enCours: w.courante }))}
+                  />
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
         <section className="carte" aria-labelledby="p-semaines">
           <h2 id="p-semaines" className="carte__titre">
             Semaine par semaine
@@ -85,7 +126,7 @@ export default async function PagePilote() {
                 </tr>
               </thead>
               <tbody>
-                {s.semaines.map((w) => (
+                {s.semaines.slice(-6).map((w) => (
                   <tr key={w.lundi}>
                     <th scope="row">
                       {dateCourte(w.lundi)}

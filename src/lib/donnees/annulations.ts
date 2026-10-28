@@ -12,6 +12,7 @@ import { histoireDeTache, retirerIndicateur, supprimerTache } from "@/lib/donnee
 import { supprimerReunion } from "@/lib/donnees/reunions";
 import { noter } from "@/lib/journal";
 import { peutGererProjet } from "@/lib/projets";
+import { oublierReportFin } from "./reports-fin";
 
 export const DUREE_ANNULATION_MINUTES = 3;
 
@@ -205,6 +206,7 @@ async function defaire(a: Acces, d: Annulable): Promise<{ ok: true; message: str
         .update(schema.projets)
         .set({ sante: v.sante, santeMotif: v.santeMotif, santeLe: v.santeLe ? new Date(v.santeLe) : null, dateFinPrevue: v.dateFinPrevue, dateLancementPrevue: v.dateLancementPrevue, majLe: new Date() })
         .where(eq(schema.projets.id, p.id));
+      if (p.dateFinPrevue !== v.dateFinPrevue) await oublierReportFin(p.id, v.dateFinPrevue, p.dateFinPrevue);
       return { ok: true, message: `« ${p.titre} » est revenu comme avant.` };
     }
     case "jalon": {

@@ -8,6 +8,7 @@ import { peutDecider } from "@/lib/projets";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { Chronologie } from "./Chronologie";
+import { Glissements, RepartitionSante } from "@/components/Graphiques";
 
 export const metadata: Metadata = { title: "Projets" };
 
@@ -115,6 +116,36 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
               ))}
             </ul>
           </section>
+        ) : null}
+        {vue === "cartes" && !archives && tous.length ? (
+          <div className="portefeuille-graphes">
+            <section className="carte" aria-labelledby="p-sante">
+              <h2 id="p-sante" className="carte__titre" style={{ marginBottom: 14 }}>
+                Santé des projets
+              </h2>
+              <RepartitionSante
+                compte={{
+                  dans_les_temps: tous.filter((p) => p.sante === "dans_les_temps").length,
+                  a_surveiller: tous.filter((p) => p.sante === "a_surveiller").length,
+                  en_retard: tous.filter((p) => p.sante === "en_retard").length,
+                }}
+              />
+            </section>
+            <section className="carte" aria-labelledby="p-glissements">
+              <h2 id="p-glissements" className="carte__titre" style={{ marginBottom: 4 }}>
+                Fin prévue, comparée à la fin initiale
+              </h2>
+              <p className="note" style={{ margin: "0 0 10px" }}>
+                Du plus grand retard au plus petit. Le détail des reports est sur la fiche de chaque projet.
+              </p>
+              <Glissements
+                jour={aujourdhui()}
+                projets={tous
+                  .filter((p) => p.dateFinInitiale && p.dateFinPrevue)
+                  .map((p) => ({ id: p.id, code: p.code, titre: p.titre, initiale: p.dateFinInitiale!, prevue: p.dateFinPrevue! }))}
+              />
+            </section>
+          </div>
         ) : null}
         {vue === "chronologie" ? <Chronologie projets={projets} /> : null}
         <div className="grille-projets" hidden={vue === "chronologie"}>

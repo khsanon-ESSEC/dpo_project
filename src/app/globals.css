@@ -5697,33 +5697,42 @@ a.lien-projet:focus-visible {
   margin-left: 42px;
 }
 .courbes__axe-x span {
+  /* Centré sur son point, quitte à déborder sur la case voisine (un libellé sur deux est caché au-delà de six). */
+  display: flex;
+  justify-content: center;
   flex: 1 1 0;
   min-width: 0;
-  text-align: center;
   font-size: 11px;
   line-height: 14px;
   color: var(--discret);
   white-space: nowrap;
-  overflow: hidden;
 }
 .courbes__axe-x span[data-cache="1"] {
   visibility: hidden;
 }
-.tendance {
+@media (max-width: 599px) {
+  .courbes__axe-x[data-etroit="1"] span {
+    visibility: hidden;
+  }
+  .courbes__axe-x[data-etroit="1"] span[data-tiers="1"] {
+    visibility: visible;
+  }
+}
+.tendance-courbe {
   position: relative;
   display: inline-block;
   width: 76px;
   height: 24px;
   vertical-align: middle;
 }
-.tendance svg {
+.tendance-courbe svg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   overflow: visible;
 }
-.tendance polyline {
+.tendance-courbe polyline {
   fill: none;
   stroke: var(--graphe-avant);
   stroke-width: 1.5px;
@@ -5731,7 +5740,7 @@ a.lien-projet:focus-visible {
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
-.tendance__point {
+.tendance-courbe__point {
   position: absolute;
   width: 8px;
   height: 8px;
@@ -5740,7 +5749,7 @@ a.lien-projet:focus-visible {
   background: var(--arc);
   box-shadow: 0 0 0 2px var(--surface);
 }
-.tendance--vide {
+.tendance-courbe--vide {
   width: auto;
   height: auto;
   color: var(--discret);
@@ -5781,4 +5790,473 @@ a.lien-projet:focus-visible {
 }
 .comparaison td.comparaison__tendance {
   width: 92px;
+}
+
+/* ---------- Carte de chaleur de la charge ---------- */
+.chaleur {
+  border-collapse: separate;
+  /* L'espace couleur de la carte entre les cases : chacune se lit seule. */
+  border-spacing: 3px;
+  min-width: 100%;
+}
+.chaleur th,
+.chaleur td {
+  padding: 0;
+  text-align: center;
+  font-weight: 400;
+}
+.chaleur thead th {
+  padding: 0 2px 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--discret);
+  white-space: nowrap;
+}
+.chaleur thead th small {
+  display: block;
+  font-size: 11px;
+}
+.chaleur thead th:first-child,
+.chaleur tbody th {
+  text-align: left;
+}
+.chaleur tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  padding-right: 10px;
+}
+.chaleur__groupe th {
+  padding: 14px 0 4px;
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+.chaleur__personne {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  color: var(--encre);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.chaleur__personne:hover .chaleur__nom {
+  text-decoration: underline;
+}
+.chaleur__nom {
+  display: flex;
+  flex-direction: column;
+  font-size: 14px;
+  line-height: 18px;
+}
+.chaleur__nom small {
+  font-size: 12px;
+  color: var(--discret);
+}
+.chaleur__case {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  height: 40px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+  color: var(--encre);
+  text-decoration: none;
+  transition: box-shadow 120ms ease;
+}
+a.chaleur__case:hover,
+a.chaleur__case:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--arc);
+  outline: none;
+}
+.chaleur__case--libre {
+  border: 1px dashed var(--filet);
+  color: var(--discret);
+}
+.chaleur__case--normale {
+  background: color-mix(in srgb, var(--ok-point) 24%, var(--surface));
+}
+.chaleur__case--chargee {
+  background: color-mix(in srgb, var(--veille-point) 38%, var(--surface));
+}
+.chaleur__case--surchargee {
+  background: color-mix(in srgb, var(--retard-point) 46%, var(--surface));
+  font-weight: 600;
+}
+
+/* ---------- Reports de la date de fin (fiche projet) ---------- */
+.reports-fin {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.reports-fin__resume {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--discret);
+}
+.reports-fin__resume strong {
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 400;
+  color: var(--encre);
+}
+.reports-fin__piste {
+  position: relative;
+  height: 24px;
+}
+.reports-fin__trait {
+  position: absolute;
+  top: 11px;
+  height: 2px;
+  background: var(--graphe-avant);
+  border-radius: 1px;
+}
+.reports-fin__aujourdhui {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed var(--filet-fort);
+}
+.reports-fin__point {
+  position: absolute;
+  top: 7px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--graphe-avant);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.reports-fin__point--initiale {
+  background: var(--surface);
+  border: 2px solid var(--graphe-avant);
+}
+.reports-fin__point--actuelle {
+  width: 12px;
+  height: 12px;
+  top: 6px;
+  margin-left: -6px;
+  background: var(--arc);
+}
+.reports-fin__bornes {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--discret);
+}
+.reports-fin__bornes span {
+  display: flex;
+  flex-direction: column;
+}
+.reports-fin__bornes span:last-child {
+  text-align: right;
+}
+.reports-fin__bornes strong {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--encre);
+}
+.reports-fin__liste {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.reports-fin__liste li {
+  display: flex;
+  flex-direction: column;
+  padding-top: 6px;
+  border-top: 1px solid var(--filet);
+}
+.reports-fin__le {
+  font-size: 12px;
+  color: var(--discret);
+}
+
+/* ---------- Santé et glissements du portefeuille ---------- */
+.portefeuille-graphes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  align-items: start;
+  gap: 16px;
+}
+@media (max-width: 899px) {
+  .portefeuille-graphes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.sante-barre {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sante-barre__piste {
+  display: flex;
+  gap: 2px;
+  height: 14px;
+}
+.sante-barre__part {
+  flex-basis: 0;
+  min-width: 6px;
+  border-radius: 3px;
+}
+.sante-barre__part--dans_les_temps {
+  background: var(--ok-point);
+}
+.sante-barre__part--a_surveiller {
+  background: var(--veille-point);
+}
+.sante-barre__part--en_retard {
+  background: var(--retard-point);
+}
+.sante-barre__legende {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--encre-2);
+}
+.sante-barre__legende li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sante-barre__legende strong {
+  min-width: 18px;
+  font-weight: 500;
+  color: var(--encre);
+  font-variant-numeric: tabular-nums;
+}
+.sante-barre__cle {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+.glissements {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.glissements__liste {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.glissements__ligne,
+.glissements__axe {
+  display: grid;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr) 64px;
+  align-items: center;
+  gap: 12px;
+}
+.glissements__ligne {
+  min-height: 40px;
+  color: var(--encre);
+  text-decoration: none;
+  border-top: 1px solid var(--filet);
+}
+.glissements__ligne:hover .glissements__titre {
+  text-decoration: underline;
+}
+.glissements__nom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.glissements__titre {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 18px;
+}
+.glissements__piste {
+  position: relative;
+  height: 40px;
+}
+.glissements__trait {
+  position: absolute;
+  top: 19px;
+  height: 2px;
+  background: var(--graphe-avant);
+}
+.glissements__trait--retard {
+  background: color-mix(in srgb, var(--retard-point) 70%, var(--surface));
+}
+.glissements__point {
+  position: absolute;
+  top: 15px;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border-radius: 50%;
+  background: var(--arc);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.glissements__point--retard {
+  background: var(--retard-point);
+}
+.glissements__point--initiale {
+  background: var(--surface);
+  border: 2px solid var(--graphe-avant);
+}
+.glissements__aujourdhui {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed var(--filet-fort);
+}
+.glissements__ecart {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.glissements__reperes {
+  position: relative;
+  height: 18px;
+  border-top: 1px solid var(--filet-fort);
+}
+.glissements__reperes span {
+  position: absolute;
+  top: 3px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--discret);
+  white-space: nowrap;
+}
+@media (max-width: 599px) {
+  /* Sur un téléphone, un repère sur deux : ils se chevaucheraient. */
+  .glissements__reperes span[data-impair="1"] {
+    display: none;
+  }
+}
+.glissements__reperes .glissements__repere-jour {
+  top: -18px;
+  font-weight: 500;
+  color: var(--encre-2);
+}
+.glissements__legende {
+  margin: 4px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--discret);
+}
+.glissements__legende span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.glissements__cle {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--arc);
+}
+.glissements__cle--initiale {
+  background: var(--surface);
+  border: 2px solid var(--graphe-avant);
+}
+.glissements__cle--retard {
+  background: var(--retard-point);
+}
+@media (max-width: 599px) {
+  .glissements__ligne,
+  .glissements__axe {
+    grid-template-columns: 44px minmax(0, 1fr) 56px;
+    gap: 8px;
+  }
+  .glissements__titre {
+    display: none;
+  }
+}
+
+/* ---------- Barres horizontales (réunions par projet) ---------- */
+.barres {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.barres__ligne {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr) 72px;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  color: var(--encre);
+  text-decoration: none;
+}
+a.barres__ligne:hover .barres__libelle {
+  text-decoration: underline;
+}
+.barres__nom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.barres__libelle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  line-height: 18px;
+}
+.barres__piste {
+  height: 10px;
+}
+.barres__plein {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: var(--arc);
+}
+.barres__valeur {
+  text-align: right;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--encre-2);
+}
+@media (max-width: 599px) {
+  .barres__ligne {
+    grid-template-columns: minmax(0, 1fr) 64px;
+    grid-template-rows: auto auto;
+    row-gap: 4px;
+  }
+  .barres__piste {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
 }

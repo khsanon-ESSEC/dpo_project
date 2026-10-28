@@ -16,6 +16,7 @@ import { noter } from "@/lib/journal";
 import type { Champ } from "@/lib/modeles";
 import { peutGererProjet } from "@/lib/projets";
 import { redigeUnRapport } from "@/lib/regles";
+import { noterReportFin } from "./reports-fin";
 
 export type ResultatBarre = { message: string; ok?: boolean; annulation?: string; lien?: string; projetId?: string };
 
@@ -135,6 +136,7 @@ export async function mettreAJourProjetDepuisBarre(u: Utilisateur, a: Acces, o: 
       .where(eq(schema.projets.id, p.id))
       .returning({ majLe: schema.projets.majLe });
     await noter(u.id, "projet_modifie", p.id, { ...valeurs, barre: true });
+    if (m.genre === "fin") await noterReportFin(p.id, p.dateFinPrevue, m.date, u.id);
     annulation = await enregistrerAnnulation(u.id, { genre: "projet", projetId: p.id, apresMajLe: apres.majLe.toISOString(), avant });
   }
   return {

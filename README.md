@@ -13,7 +13,7 @@ Application web de suivi des projets de la DPO (UNIBANK) :
 - **Formulaires écrits comme la barre** : une ligne du rapport (« Recette validée UR », « … projet retail », ou `/` pour le projet : plus de liste « Sans projet ») ; les actions décidées en réunion (« Envoyer le compte rendu pour Fabienne vendredi ») ; le titre d'une nouvelle tâche remplit le projet, la personne, l'échéance et le temps estimé ; la fiche d'une tâche et celle d'un projet ont une ligne « En une ligne » en tête, le formulaire complet reste dessous.
 - **Ma semaine** : la journée d'aujourd'hui (tâches faites, échéances, réunions) et la frise de la semaine ; un clic sur un jour montre ce qui s'est passé ce jour-là ; les flèches remontent aux semaines précédentes.
 - **À faire** (onglet à côté de « Mon bilan ») : la liste des tâches ouvertes de chacun, cochées au fil de la semaine, et les tâches qu'on a confiées à des personnes hors division, pour les suivre.
-- **Réunions** : chacun note les réunions auxquelles il a participé (sujet, jour, heure, durée, projet, participants, notes). Une seule personne la note : elle compte pour chaque participant, qui est prévenu et peut s'en retirer. Le temps en réunion apparaît dans sa semaine, dans son rapport du vendredi (pour son supérieur direct), dans la charge (il réduit le temps disponible) et dans le bilan. Les **actions décidées** en réunion deviennent des tâches (pour qui, pour quand), rattachées à la réunion.
+- **Réunions** : chacun note les réunions auxquelles il a participé (sujet, jour, heure, durée, projet, participants, notes). Une seule personne la note : elle compte pour chaque participant, qui est prévenu et peut s'en retirer. Le temps en réunion apparaît dans sa semaine, dans son rapport du vendredi (pour son supérieur direct), dans la charge (il réduit le temps disponible) et dans le bilan. Les **actions décidées** en réunion deviennent des tâches (pour qui, pour quand), rattachées à la réunion. Sous la semaine, les **huit dernières semaines en chiffres** : heures de réunion par semaine et par projet, pour soi et, pour un chef, pour l'équipe qu'il suit (en heures-personnes : une réunion compte pour chaque participant).
 - **Mon bilan** : la semaine comparée à la précédente, et les huit dernières semaines (tâches terminées, heures livrées, terminées à temps, temps en réunion, rapport envoyé).
 - **Rapport de la semaine** : un formulaire configuré par les administrateurs (modèles de rapport), préparé à partir des tâches, relu et envoyé au supérieur. Chaque chef de projet reçoit les lignes et les feux de son projet.
   - **Il se prépare seul au fil de la semaine** : à chaque ouverture, le brouillon reprend ce qui a changé dans les tâches (terminées, en cours, bloquées). Ce que la personne a retiré ne revient pas.
@@ -28,16 +28,16 @@ Application web de suivi des projets de la DPO (UNIBANK) :
 - **Modèles de rapport** (administrateurs) : champs à choisir ou à glisser, ordre, propriétés de chaque champ, affectation aux équipes et aux personnes, versions.
 - **Mes rapports** : tous les rapports déjà envoyés, semaine par semaine, avec passage d'une semaine à l'autre.
 - **Mon équipe** : qui a envoyé son rapport, les blocages, les retards, le temps en réunion de la semaine, avec relance ; la fiche de chacun montre sa charge, ses tâches et ses réunions de la semaine (heures et liste) ; un directeur ou un exécutif y voit toute la structure sous lui, regroupée par équipe ; l'historique des rapports de l'équipe (par semaine ou par personne) ; la charge de travail ; le **bilan de l'équipe**, mois contre mois, personne par personne (les exécutifs le voient pour toute la banque).
-- **Projets** : portefeuille, fiches projet, indicateurs vérifiables, glissement des dates. Chacun peut **proposer un projet** ; un directeur ou un exécutif l'accepte (en nommant le chef de projet) ou la refuse avec un motif. Le chef de projet établit l'**équipe du projet** et modifie la fiche (titre, code, dates, statut, indicateurs). Un projet qui a une histoire s'**archive** ; seul un projet vide (une erreur) se supprime.
+- **Projets** : portefeuille, fiches projet, indicateurs vérifiables, glissement des dates. En tête du portefeuille, la **santé des projets** (dans les temps, à surveiller, en retard) et la **fin prévue comparée à la fin initiale**, du plus grand retard au plus petit. Sur la fiche, la **courbe d'avancement** (tâches terminées et tâches au total, semaine par semaine) et l'**historique des reports** de la fin prévue (quand, de quelle date à quelle date). Chacun peut **proposer un projet** ; un directeur ou un exécutif l'accepte (en nommant le chef de projet) ou la refuse avec un motif. Le chef de projet établit l'**équipe du projet** et modifie la fiche (titre, code, dates, statut, indicateurs). Un projet qui a une histoire s'**archive** ; seul un projet vide (une erreur) se supprime.
 - **Tâches** : créer, renommer, préciser, changer de projet, **confier** à quelqu'un (à soi-même, aux personnes qu'on suit, et, sur un projet qu'on dirige, aux membres de son équipe projet ; à une personne hors division, voir plus bas) ; les deux personnes sont prévenues. Une tâche commencée s'**annule** avec un motif (et se rétablit) ; seule une tâche sans histoire se supprime.
 - **Noms cliquables** : partout, le nom d'une personne ouvre sa fiche (poste, équipe, supérieur, projets) ; le nom ou le code d'un projet (« UR ») ouvre le projet, quand on a le droit de le voir, y compris dans une rangée qui mène à une tâche.
 - **Rapports au conseil** : le rapport mensuel des projets stratégiques, au format du tableau Word de la banque (avec le logo) ; et des **rapports ponctuels**, faits à tout moment pour une demande ou un événement imprévu : un titre, la demande, les projets choisis, la période couverte. Un exécutif les approuve ; ils ne changent pas les dates du rapport mensuel.
 - **Vues d'un projet** : vue d'ensemble, liste, tableau (colonnes par état, avec glisser-déposer) ; derrière « Plus de vues » : Gantt (jours, semaines ou mois), calendrier des échéances, charge de l'équipe du projet. Le portefeuille a aussi une chronologie de tous les projets.
-- **Charge de travail** : les heures de tâches prévues pour chaque personne, semaine par semaine, comparées à ses heures disponibles ; repère qui est chargé ou surchargé, et l'indique au moment de confier une tâche.
+- **Charge de travail** : les heures de tâches prévues pour chaque personne, semaine par semaine, comparées à ses heures disponibles ; repère qui est chargé ou surchargé, et l'indique au moment de confier une tâche. Vue **Carte** : huit semaines d'un coup d'œil, une case colorée par personne et par semaine ; vue **Détail** : le tableau des heures.
 - **Personnes hors division** : collègues d'autres départements, consultants, prestataires. Ils peuvent participer à une réunion, recevoir une tâche, entrer dans l'équipe d'un projet ou diriger un projet d'une autre division. Chacun peut en ajouter un au moment où il en a besoin (nom et département ou société) ; aucune adresse n'est demandée.
 - **Projets d'autres divisions** : un projet porté par une autre division, sur lequel la DPO travaille, garde son chef de projet (hors division) et reçoit un **référent DPO**, qui le gère dans l'application.
 - **Organisation** : personnes, équipes, supérieurs, rôles et heures disponibles par semaine ; les personnes hors division (fiche, accès limité, fusion des doublons). **Importer** l'organisation depuis Excel (le modèle contient l'organisation actuelle) ou depuis Active Directory : on voit d'abord ce qui changerait, puis on importe.
-- **Suivi du pilote** (administrateurs, exécutifs) : rapports envoyés et à l'heure, tâches mises à jour avant vendredi, écrans réellement ouverts, courriels de rappel ; en nombres agrégés seulement, personne n'y est suivi individuellement.
+- **Suivi du pilote** (administrateurs, exécutifs) : rapports envoyés et à l'heure, tâches mises à jour avant vendredi, écrans réellement ouverts, courriels de rappel, avec la courbe des douze dernières semaines ; en nombres agrégés seulement, personne n'y est suivi individuellement.
 - **Assistant** (facultatif) : un bouton flottant sur chaque écran, branché sur le fournisseur d'IA choisi par la banque.
 
 Application multipage (chaque écran est une page rendue par le serveur), en français, avec thème clair et sombre. Elle fonctionne sur ordinateur et sur téléphone. Sur téléphone, la barre du bas a quatre entrées (Semaine, Rapport, Équipe ou Projets, Plus) ; « Plus » mène à tout le reste.
@@ -108,6 +108,14 @@ Ces règles sont écrites dans `src/lib/charge.ts` et vérifiées par les tests.
   - Chiffres clés, une courbe par mesure, la jauge des rapports, le tableau mois par mois ; pour chaque personne, ses chiffres et sa propre courbe : chacun n'est comparé qu'à lui-même, jamais rangé parmi les autres.
 
 Ces chiffres décrivent ce qui est enregistré dans l'application ; ils ne mesurent ni la qualité du travail ni ce qui n'est pas noté. L'écran le rappelle. Règles : `src/lib/bilan.ts`, testées.
+
+## Graphiques : d'où viennent les chiffres
+
+- Tous les graphiques sont dessinés par le serveur (sans script dans le navigateur). Les valeurs sont toujours écrites (étiquettes, chiffres, tableaux) : la couleur seule ne porte jamais l'information. Les courbes et les colonnes montrent aussi chaque valeur au survol, au toucher et au clavier.
+- **Reports de la fin prévue** : chaque changement de la date de fin d'un projet (fiche du projet ou barre, « /UR fin prévue 20/12 ») est gardé dans la table `reports_fin_projet` ; « Annuler » le retire. Les reports faits avant cette version ne sont pas connus un à un : seul l'écart entre la fin initiale et la fin prévue l'est.
+- **Avancement d'un projet** : à la fin de chaque semaine, les tâches créées jusque-là et celles terminées (les tâches annulées ne comptent pas), sur douze semaines au plus.
+- **Réunions en chiffres** et **charge** : mêmes règles que la semaine, le rapport et la charge ; un projet qu'on ne voit pas compte dans « Autres projets », sans son nom.
+- **Suivi du pilote** : une semaine d'avant les premières données de l'application n'a pas de valeur (pas un zéro).
 
 ## Personnes hors division et projets d'autres divisions
 
@@ -306,7 +314,7 @@ Sur une base **vide** et jamais en production :
 
 ```bash
 DATE_DEMO=2026-10-30 node scripts/semer.mjs
-node scripts/semer-historique.mjs   # facultatif : un an d'activité passée, pour le bilan sur 6 mois ou un exercice
+node scripts/semer-historique.mjs   # facultatif : un an d'activité passée (bilan sur 6 mois ou un exercice) et des reports de la fin des projets
 ```
 
 Le lanceur du Mac ajoute cet historique tout seul, une fois. Le script ne touche qu'une base de démonstration (adresses `@demo.dpo.local`) et n'est pas copié dans l'image Docker.
@@ -347,7 +355,7 @@ Après une modification de `src/db/schema.ts` : `npm run db:generate`, puis vér
 ```
 src/app/(app)/      écrans (une page par route), avec leurs actions serveur
 src/app/api/        assistant, export Word du rapport au conseil, santé
-src/components/     navigation, assistant, cases à cocher, thème
+src/components/     navigation, assistant, cases à cocher, thème ; Courbes.tsx, Colonnes.tsx, Graphiques.tsx : graphiques
 src/db/             schéma de la base (Drizzle)
 src/lib/regles.ts   qui voit quoi (sans base, testé)
 src/lib/acces.ts    couche d'accès utilisée par toutes les pages
@@ -355,7 +363,7 @@ src/lib/charge.ts   calcul de la charge de travail (sans base, testé)
 src/lib/modeles.ts  modèles de rapport : champs, validation, dépliage, visibilité (sans base, testé)
 src/lib/projets.ts  gestion des projets et des tâches : qui assigne, gère, décide ; supprimer ou archiver (sans base, testé)
 src/lib/bilan.ts    bilan d'activité par période (sans base, testé)
-src/lib/donnees/    lectures et écritures par domaine
+src/lib/donnees/    lectures et écritures par domaine (graphiques.ts, reports-fin.ts : données des graphiques)
 src/lib/ia.ts       connecteur d'IA interchangeable
 src/lib/auth/       session, mots de passe, connexion Google et Windows (google-regles.ts, ad-regles.ts : sans base, testés)
 scripts/essai/      fournisseur Google et annuaire AD factices, pour les essais seulement (exclus de l'image Docker)

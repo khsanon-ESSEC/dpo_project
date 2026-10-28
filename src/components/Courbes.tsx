@@ -77,7 +77,10 @@ export function Courbes({
   // La valeur finale se pose du côté où la courbe n'arrive pas (dessous si elle descend vers le dernier point).
   const veille = dernier && dernier.i > 0 ? points[dernier.i - 1].actuel : null;
   // Tout en haut, l'étiquette passe dessous (elle irait sur la légende).
-  const dessous = dernier ? y(dernier.p.actuel!) < 16 || (veille !== null && veille > dernier.p.actuel!) : false;
+  // Et si l'autre courbe passe juste au-dessus du point, l'étiquette passe dessous aussi (elle la chevaucherait).
+  const autre = dernier && nomAvant ? dernier.p.avant : null;
+  const gene = dernier && autre != null && autre >= dernier.p.actuel! && y(dernier.p.actuel!) - y(autre) < 26;
+  const dessous = dernier ? y(dernier.p.actuel!) < 16 || (veille !== null && veille > dernier.p.actuel!) || !!gene : false;
   const tousLesPoints = n <= 6;
   const idT = `courbe-${titre.replace(/[^a-z]/gi, "").toLowerCase()}`;
   // Six mois et plus : noms courts (« sept. ») ; au-delà de six, un sur deux.
@@ -150,9 +153,10 @@ export function Courbes({
           ))}
         </div>
       </div>
-      <div className="courbes__axe-x" aria-hidden="true">
+      {/* Au-delà de neuf points, sur un écran étroit, un libellé sur trois seulement. */}
+      <div className="courbes__axe-x" aria-hidden="true" data-etroit={n > 9 ? "1" : undefined}>
         {points.map((p, i) => (
-          <span key={p.cle} data-cache={n > 6 && i % 2 === 1 ? "1" : undefined}>
+          <span key={p.cle} data-cache={n > 6 && i % 2 === 1 ? "1" : undefined} data-tiers={i % 3 === 0 ? "1" : undefined}>
             {court ? p.court : p.libelle.split(" ")[0]}
           </span>
         ))}
@@ -165,7 +169,7 @@ export function Courbes({
 export function Tendance({ valeurs, libelles, unite }: { valeurs: (number | null)[]; libelles: string[]; unite: Unite }) {
   const n = valeurs.length;
   const connues = valeurs.filter((v): v is number => v !== null);
-  if (connues.length < 2) return <span className="tendance tendance--vide">—</span>;
+  if (connues.length < 2) return <span className="tendance-courbe tendance-courbe--vide">—</span>;
   const max = Math.max(1, ...connues);
   const x = (i: number) => (n === 1 ? 50 : (i / (n - 1)) * 100);
   const y = (v: number) => 90 - (v / max) * 80;
@@ -173,11 +177,11 @@ export function Tendance({ valeurs, libelles, unite }: { valeurs: (number | null
   const derniere = valeurs.map((v, i) => ({ v, i })).filter((e) => e.v !== null).at(-1)!;
   const texte = valeurs.map((v, i) => `${libelles[i]} : ${valeurTexte(v, unite)}`).join(", ");
   return (
-    <span className="tendance" role="img" aria-label={texte} title={texte}>
+    <span className="tendance-courbe" role="img" aria-label={texte} title={texte}>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
         <polyline points={pts.join(" ")} />
       </svg>
-      <span className="tendance__point" style={{ left: `${x(derniere.i)}%`, top: `${y(derniere.v!)}%` }} aria-hidden="true" />
+      <span className="tendance-courbe__point" style={{ left: `${x(derniere.i)}%`, top: `${y(derniere.v!)}%` }} aria-hidden="true" />
     </span>
   );
 }

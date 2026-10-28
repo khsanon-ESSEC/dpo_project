@@ -220,6 +220,16 @@ Demandé avant la mise en service : tout faire tourner, chercher les bogues et l
 - Image de base Docker (`node:22-bookworm-slim`) : la figer par son empreinte (`@sha256:…`) et la mettre à jour à date fixe.
 - Mot de passe provisoire : il n'expire pas tant qu'il n'a pas servi (il doit être changé à la première connexion). Lui donner une durée de vie (par exemple sept jours) demande une colonne de plus : à décider avec la banque.
 
+## Graphiques (28 octobre 2026)
+
+Nouvelles lectures de données, vérifiées à la lecture du code et par des tests contre la base de démonstration (`tests/graphiques-base.test.ts`) **[vérifié par tests]** sauf mention :
+
+- **Reports de la fin prévue** (nouvelle table `reports_fin_projet`) : écrits seulement par les deux chemins qui changent déjà la date (fiche du projet, barre), après leurs contrôles ; lus sur la fiche d'un projet que la personne voit déjà. « Annuler » retire le report qu'il avait noté.
+- **Portefeuille** : santé et glissements calculés sur les projets du portefeuille de la personne, rien de plus. **[déduction]**
+- **Réunions en chiffres** : pour soi, ses propres réunions ; pour l'équipe, seulement les personnes que l'on suit déjà (mêmes règles que Équipe et Bilan), en heures totales, sans intitulé ni participants. Un projet que la personne ne voit pas est compté dans « Autres projets », sans son nom ni son code. **[déduction]**
+- **Suivi du pilote** : nombres agrégés par semaine, réservé aux administrateurs et aux exécutifs, comme avant. **[déduction]**
+- **Charge en carte** : mêmes personnes et mêmes chiffres que le tableau de la charge, présentés autrement. **[déduction]**
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.

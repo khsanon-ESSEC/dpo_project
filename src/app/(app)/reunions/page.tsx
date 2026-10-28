@@ -17,6 +17,32 @@ import { ChoixParticipants } from "./ChoixParticipants";
 import { VerifierCreneau } from "./VerifierCreneau";
 import { ActionsReunion } from "./ActionsReunion";
 import { assignables } from "@/lib/donnees/gestion";
+import { reunionsEnChiffres } from "@/lib/donnees/graphiques";
+import { Colonnes } from "@/components/Colonnes";
+import { BarresListe, type Barre } from "@/components/Graphiques";
+
+/** Les huit semaines qui finissent par celle-ci : une colonne par semaine, et les heures par projet. */
+async function enChiffres(ids: string[], semaine: string, projets: Map<string, { code: string; titre: string }>) {
+  const lundis = Array.from({ length: 8 }, (_, i) => ajouterJours(semaine, -7 * (7 - i)));
+  const { parSemaine, parProjet } = await reunionsEnChiffres(ids, lundis[0], ajouterJours(semaine, 6));
+  const colonnes = lundis.map((l) => {
+    const m = parSemaine.get(l) ?? 0;
+    return { cle: l, libelle: dateCourte(l), libelleCourt: `${Number(l.slice(8))}/${Number(l.slice(5, 7))}`, valeur: m / 60, texte: m ? dureeTexte(m) : "0 h" };
+  });
+  // Par projet : ceux qu'on voit ; les autres ensemble ; au-delà de six, « autres projets ».
+  const visibles: Barre[] = [];
+  let autres = 0;
+  let sans = 0;
+  for (const [id, m] of parProjet) {
+    if (!id) sans += m;
+    else if (projets.has(id)) visibles.push({ cle: id, code: projets.get(id)!.code, libelle: projets.get(id)!.titre, valeur: m, texte: dureeTexte(m), lien: `/projets/${id}` });
+    else autres += m;
+  }
+  visibles.sort((a, b) => b.valeur - a.valeur);
+  for (const b of visibles.splice(6)) autres += b.valeur;
+  const barres = [...visibles, ...(autres ? [{ cle: "autres", libelle: "Autres projets", valeur: autres, texte: dureeTexte(autres) }] : []), ...(sans ? [{ cle: "sans", libelle: "Sans projet", valeur: sans, texte: dureeTexte(sans) }] : [])];
+  return { colonnes, barres, total: [...parSemaine.values()].reduce((s, m) => s + m, 0) };
+}
 
 export const metadata: Metadata = { title: "Réunions" };
 
@@ -54,6 +80,15 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
   const parJour = new Map<string, typeof liste>();
   for (const r of liste) parJour.set(r.jour, [...(parJour.get(r.jour) ?? []), r]);
   const visible = (id: string | null) => !!id && (visibles === "tous" || visibles.has(id));
+  // En chiffres : vous, et l'équipe que vous suivez (heures-personnes : chaque participant compte).
+  const projetsVus = new Map(projets.map((p) => [p.id, { code: p.code, titre: p.titre }]));
+  const equipe = u.externe ? [] : a.suivis === "toutes" ? [...org.personnes.values()].filter((p) => p.actif && !p.externe).map((p) => p.id) : [...a.suivis];
+  const groupesChiffres = [
+    { titre: "Vous", sous: "en réunion sur ces huit semaines", ...(await enChiffres([u.id], semaine, projetsVus)) },
+    ...(equipe.length > 1
+      ? [{ titre: a.toutVoir ? "Toute la division" : a.directeur ? "Votre direction" : "Votre équipe", sous: `heures-personnes, ${equipe.length} personnes`, ...(await enChiffres(equipe, semaine, projetsVus)) }]
+      : []),
+  ];
 
   return (
     <>
@@ -282,6 +317,29 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
             </form>
           </section>
         </div>
+        <section aria-labelledby="r-chiffres">
+          <h2 id="r-chiffres" className="carte__titre" style={{ marginBottom: 12 }}>
+            Les huit semaines jusqu&apos;à celle-ci
+          </h2>
+          <div className="bilan-graphes">
+            {groupesChiffres.map((g) => (
+              <article key={g.titre} className="carte graphe-carte">
+                <header className="graphe-carte__tete">
+                  <h3 className="graphe-carte__titre">{g.titre}</h3>
+                  <p className="graphe-carte__valeur">
+                    {g.total ? dureeTexte(g.total) : "0 h"}
+                    <span className="graphe-carte__ecart">{g.sous}</span>
+                  </p>
+                </header>
+                <Colonnes titre="Par semaine" colonnes={g.colonnes} choisie={semaine} />
+                <h4 className="colonnes-graphe__titre" style={{ margin: "12px 0 0" }}>
+                  Par projet
+                </h4>
+                <BarresListe titre={`${g.titre} : heures de réunion par projet`} barres={g.barres} />
+              </article>
+            ))}
+          </div>
+        </section>
       </div>
     </>
   );

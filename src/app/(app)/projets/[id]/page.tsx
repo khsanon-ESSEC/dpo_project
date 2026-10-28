@@ -20,6 +20,10 @@ import { LienPersonne } from "@/components/Liens";
 import { ChoixPersonne } from "@/components/ChoixPersonne";
 import { changerIndicateur, mettreAJourProjet } from "./actions";
 import { OngletsVues } from "./commun";
+import { avancementDuProjet } from "@/lib/donnees/graphiques";
+import { reportsFinDe } from "@/lib/donnees/reports-fin";
+import { Courbes } from "@/components/Courbes";
+import { FriseReports } from "@/components/Graphiques";
 
 export const metadata: Metadata = { title: "Projet" };
 
@@ -65,6 +69,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const rapports = auteurs ? await lignesDuProjetCetteSemaine(id, auteurs) : null;
   const jour = aujourdhui();
   const atteints = f.indicateurs.filter((i) => i.etat === "atteint").length;
+  const [avancement, reports] = await Promise.all([avancementDuProjet(id, jour), reportsFinDe(id)]);
   const ancienne = f.dernier?.dateFinPrevue ?? null;
   const glissement = ancienne && p.dateFinPrevue ? Math.round(ecartJours(ancienne, p.dateFinPrevue) / 7) : 0;
 
@@ -342,6 +347,33 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
               </ol>
             </section>
 
+            {avancement.length >= 2 ? (
+              <section className="carte" aria-labelledby="p-avancement">
+                <h2 id="p-avancement" className="carte__titre" style={{ marginBottom: 4 }}>
+                  Avancement
+                </h2>
+                <p className="note" style={{ margin: "0 0 12px" }}>
+                  {avancement.at(-1)!.faites} tâche{avancement.at(-1)!.faites > 1 ? "s" : ""} terminée{avancement.at(-1)!.faites > 1 ? "s" : ""} sur {avancement.at(-1)!.total}, semaine après semaine : quand les deux courbes
+                  s&apos;écartent, le travail s&apos;ajoute plus vite qu&apos;il ne se termine.
+                </p>
+                <Courbes
+                  titre="Avancement du projet, semaine par semaine"
+                  unite="nombre"
+                  nomActuel="Tâches terminées"
+                  nomAvant="Tâches au total"
+                  points={avancement.map((w) => ({
+                    cle: w.lundi,
+                    libelle: `semaine du ${dateCourte(w.lundi)}`,
+                    court: dateCourte(w.lundi),
+                    actuel: w.faites,
+                    avant: w.total,
+                    libelleAvant: "au total",
+                    enCours: w.enCours,
+                  }))}
+                />
+              </section>
+            ) : null}
+
             <section className="carte carte--liste" aria-labelledby="p-taches">
               <div className="carte__entete">
                 <h2 id="p-taches" className="carte__titre">
@@ -462,6 +494,14 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                   </li>
                 ))}
               </ol>
+              {(p.dateFinInitiale && p.dateFinPrevue && p.dateFinInitiale !== p.dateFinPrevue) || reports.length ? (
+                <div style={{ marginTop: 8, paddingTop: 16, borderTop: "1px solid var(--filet)" }}>
+                  <h3 className="carte__titre" style={{ marginBottom: 10 }}>
+                    Reports de la fin
+                  </h3>
+                  <FriseReports initiale={p.dateFinInitiale} actuelle={p.dateFinPrevue} reports={reports.map((r) => ({ avant: r.avant, apres: r.apres, le: dateLocale(r.creeLe) }))} jour={jour} />
+                </div>
+              ) : null}
             </section>
 
             {peutModifier && actif ? (

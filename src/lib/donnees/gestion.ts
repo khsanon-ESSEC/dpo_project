@@ -12,6 +12,7 @@ import { chargerOrganisation, personneActuelle } from "@/lib/organisation";
 import { codeSuggere, codeValide, peutAssigner, projetOuvert, projetSupprimable, STATUTS_ACCEPTES, tacheSupprimable, verifierChefEtReferent, type StatutProjet } from "@/lib/projets";
 import { membresDeLaDirection, nomComplet, resoudreSuperieur } from "@/lib/regles";
 import { trouverOuCreerExterne } from "./externes";
+import { noterReportFin } from "./reports-fin";
 
 const date = (v: unknown) => {
   const s = String(v ?? "").trim();
@@ -202,6 +203,7 @@ export async function modifierProjet(projetId: string, d: ModifProjet, parId: st
     majLe: new Date(),
   };
   await db.update(schema.projets).set(valeurs).where(eq(schema.projets.id, projetId));
+  await noterReportFin(projetId, p.dateFinPrevue, valeurs.dateFinPrevue, parId);
   if (chef && chef !== p.chefProjetId && chef !== parId && !chefP?.externe)
     await db.insert(schema.notifications).values({ personneId: chef, type: "projet", texte: `Vous êtes chef du projet « ${titre} »`, lien: `/projets/${projetId}` });
   if (referent && referent !== p.referentId && referent !== parId)

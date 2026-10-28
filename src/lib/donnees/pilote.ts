@@ -65,7 +65,7 @@ export function libelleEcran(e: string): string {
   return L[e] ?? e;
 }
 
-export async function suiviPilote(semaines = 6) {
+export async function suiviPilote(semaines = 12) {
   const jour = aujourdhui();
   const org = await chargerOrganisation();
   // Rédacteurs : personnes actives de la division qui envoient un rapport (ni exécutifs, ni hors division).
@@ -87,6 +87,12 @@ export async function suiviPilote(semaines = 6) {
         .where(and(inArray(schema.evenementsTache.auteurId, redacteurs), gte(schema.evenementsTache.creeLe, debut)))
     : [];
 
+  // Personnes qui ont ouvert l'application chaque semaine (au moins un écran).
+  const vues = await db
+    .selectDistinct({ jour: schema.consultations.jour, personneId: schema.consultations.personneId })
+    .from(schema.consultations)
+    .where(gte(schema.consultations.jour, lundis[0]));
+
   const parSemaine = [];
   for (const l of lundis) {
     const vendredi = ajouterJours(l, 4);
@@ -99,7 +105,8 @@ export async function suiviPilote(semaines = 6) {
       if (instantLocal(r.envoyeLe!) <= limite) aLheure += 1;
     }
     const actifs = new Set(evenements.filter((e) => e.auteurId && dateLocale(e.creeLe) >= l && dateLocale(e.creeLe) <= vendredi).map((e) => e.auteurId));
-    parSemaine.push({ lundi: l, attendu, redacteurs: redacteurs.length, envoyes: envoyes.length, aLheure, tachesAJour: actifs.size, enCours: l === courante && !attendu });
+    const ouvert = new Set(vues.filter((v) => v.jour >= l && v.jour <= ajouterJours(l, 6)).map((v) => v.personneId));
+    parSemaine.push({ lundi: l, attendu, redacteurs: redacteurs.length, envoyes: envoyes.length, aLheure, tachesAJour: actifs.size, actifs: ouvert.size, enCours: l === courante && !attendu, courante: l === courante });
   }
 
   // Écrans : quatre dernières semaines.

@@ -421,6 +421,23 @@ export const historiqueProjet = pgTable(
 );
 
 /**
+ * Chaque changement de la date de fin prévue d'un projet (fiche, barre, correction) : de quoi montrer quand
+ * et de combien la fin a glissé. La date de fin initiale reste sur le projet.
+ */
+export const reportsFinProjet = pgTable(
+  "reports_fin_projet",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    projetId: uuid("projet_id").notNull().references(() => projets.id, { onDelete: "cascade" }),
+    avant: date(),
+    apres: date(),
+    parId: uuid("par_id").references(() => personnes.id, { onDelete: "set null" }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("reports_fin_projet_idx").on(t.projetId, t.creeLe)],
+);
+
+/**
  * Rapports au conseil : le rapport mensuel (un par mois) et les rapports ponctuels, faits à tout moment
  * pour une demande ou un événement imprévu, au même format.
  */
