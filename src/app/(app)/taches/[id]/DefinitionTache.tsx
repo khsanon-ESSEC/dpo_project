@@ -17,6 +17,7 @@ export function DefinitionTache({
   base,
   parProjet,
   externesPartout,
+  horsProjet = true,
 }: {
   tacheId: string;
   titre: string;
@@ -28,12 +29,14 @@ export function DefinitionTache({
   base: string[];
   parProjet: Record<string, string[]>;
   externesPartout: boolean;
+  /** Hors projet, peut-on choisir une personne hors division ? (Non pour un accès limité.) */
+  horsProjet?: boolean;
 }) {
   const [etat, action, enCours] = useActionState<EtatTache, FormData>(definirTache, { message: null });
   const [projet, setProjet] = useState(projetId);
   const [pour, setPour] = useState(assigneId);
   const permis = new Set([...base, ...(parProjet[projet] ?? []), assigneId]);
-  const externesPermis = externesPermisPour(projet, parProjet, externesPartout);
+  const externesPermis = externesPermisPour(projet, parProjet, externesPartout, horsProjet);
   const choix = personnes.filter((p) => permis.has(p.id) || (p.externe && externesPermis));
   const pourValide = pour === NOUVELLE_PERSONNE && externesPermis ? pour : choix.some((p) => p.id === pour) ? pour : assigneId;
   return (

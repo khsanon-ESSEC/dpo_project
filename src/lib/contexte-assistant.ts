@@ -7,6 +7,7 @@ import { monEquipe } from "@/lib/donnees/equipe";
 import { ficheProjet, portefeuille } from "@/lib/donnees/projets";
 import { formulaireDe, lignesDuProjetCetteSemaine, lignesDuRapport, obtenirOuCreerRapport, reponsesDuRapport } from "@/lib/donnees/rapport";
 import { estDecoratif, libelleRessenti, type Champ } from "@/lib/modeles";
+import { redigeUnRapport } from "@/lib/regles";
 import { tachesDe } from "@/lib/donnees/semaine";
 import { chargeDesPersonnes } from "@/lib/donnees/charge";
 import { LIBELLE_NIVEAU } from "@/lib/charge";
@@ -29,6 +30,9 @@ export async function contexteAssistant(u: Utilisateur, ecran: string, chemin: s
 
   if (ecran === "semaine" || ecran === "rapport") {
     await mesTaches();
+  }
+  // Le rapport de la semaine, seulement pour qui en rédige un (ni exécutif, ni personne hors division).
+  if ((ecran === "semaine" || ecran === "rapport") && redigeUnRapport(u)) {
     const r = await obtenirOuCreerRapport(u.id);
     const [lignes, reponses] = await Promise.all([lignesDuRapport(r.id), reponsesDuRapport(r.id)]);
     const f = formulaireDe(r);

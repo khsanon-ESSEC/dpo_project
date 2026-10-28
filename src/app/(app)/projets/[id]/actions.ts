@@ -14,7 +14,7 @@ async function exigerDroitProjet(projetId: string) {
   const u = await exigerUtilisateur();
   const a = await acces(u);
   const p = await exigerProjetVisible(a, projetId);
-  if (!peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir }, p)) throw new Error("Seuls le chef de projet (ou le référent DPO), sa direction et les exécutifs modifient ce projet.");
+  if (!peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir, suivis: a.suivis }, p)) throw new Error("Seuls le chef de projet (ou le référent DPO), sa direction et les exécutifs modifient ce projet.");
   return { u, p };
 }
 

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { responsableId } from "@/lib/projets";
 import { suitPersonne } from "@/lib/acces";
 import { dateCourte } from "@/lib/dates";
@@ -17,6 +18,8 @@ export const metadata: Metadata = { title: "Charge de l'équipe du projet" };
 export default async function PageChargeProjet({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const ctx = await chargerVueProjet(id);
+  // Une personne hors division ne voit pas la charge de travail des autres.
+  if (ctx.u.externe) notFound();
   // Le chef d'un projet d'une autre division est hors division : c'est le référent DPO qui figure ici.
   const { semaines, membres } = await chargeDuProjet(id, responsableId(ctx.projet));
   const voitCharge = ctx.a.toutVoir || ctx.a.directeur || ctx.a.equipeDirecte.length > 0;

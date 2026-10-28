@@ -19,6 +19,7 @@ import {
 } from "@/lib/donnees/conseil";
 import { demanderIA } from "@/lib/ia";
 import { noter } from "@/lib/journal";
+import { peutModifierRapportConseil } from "@/lib/regles";
 
 async function exigerConseil() {
   const u = await exigerUtilisateur();
@@ -37,6 +38,8 @@ async function ligneModifiable(ligneId: string, a: Acces) {
     .innerJoin(schema.rapportsConseil, eq(schema.rapportsConseil.id, schema.lignesConseil.rapportId))
     .where(eq(schema.lignesConseil.id, ligneId));
   if (!l || l.rapport.statut !== "brouillon") throw new Error("Ce rapport n'est plus modifiable.");
+  // Un rapport ponctuel appartient à son auteur : les autres directeurs ne le modifient pas.
+  if (!peutModifierRapportConseil({ moiId: a.moi.id, toutVoir: a.toutVoir }, l.rapport)) throw new Error("Seul son auteur ou un exécutif modifie ce rapport.");
   const visibles = await idsProjetsVisibles(a);
   if (visibles !== "tous" && !visibles.has(l.ligne.projetId)) throw new Error("Ce projet n'est pas dans votre direction.");
   return l;
@@ -114,7 +117,7 @@ async function ponctuelModifiable(rapportId: string) {
   const { u, a } = await exigerConseil();
   const r = await rapportConseil(rapportId);
   if (!r || r.genre !== "ponctuel" || r.statut !== "brouillon") throw new Error("Ce rapport n'est plus modifiable.");
-  if (!a.toutVoir && r.creeParId !== u.id) throw new Error("Seul son auteur ou un exécutif modifie ce rapport.");
+  if (!peutModifierRapportConseil({ moiId: u.id, toutVoir: a.toutVoir }, r)) throw new Error("Seul son auteur ou un exécutif modifie ce rapport.");
   return { u, a, r };
 }
 
@@ -135,7 +138,8 @@ export async function ajouterProjet(rapportId: string, form: FormData) {
 
 export async function retirerLigne(rapportId: string, ligneId: string) {
   const { u, a } = await ponctuelModifiable(rapportId);
-  await ligneModifiable(ligneId, a);
+  const { ligne } = await ligneModifiable(ligneId, a);
+  if (ligne.rapportId !== rapportId) throw new Error("Cette ligne n'appartient pas à ce rapport.");
   await retirerLigneDuRapport(ligneId, u.id);
   revalider();
 }

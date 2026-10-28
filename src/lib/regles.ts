@@ -64,8 +64,8 @@ export function redigeUnRapport(p: Pick<Roles, "executif"> & { externe?: boolean
   return !p.executif && !p.externe;
 }
 
-export function peutAdministrer(p: Pick<Roles, "administrateur">): boolean {
-  return p.administrateur;
+export function peutAdministrer(p: Pick<Roles, "administrateur"> & { externe?: boolean }): boolean {
+  return p.administrateur && !p.externe;
 }
 
 function actif(org: OrgDonnees, id: string | null | undefined): PersonneOrg | null {
@@ -170,4 +170,13 @@ export function nomComplet(p: { prenom: string; nom: string }): string {
 export function initiales(p: { prenom: string; nom: string }): string {
   const premiere = (s: string) => s.trim().charAt(0).toUpperCase();
   return `${premiere(p.prenom)}${premiere(p.nom)}`;
+}
+
+/**
+ * Rapport au conseil en brouillon : le mensuel se complète par la direction (projets qu'elle voit) et les
+ * exécutifs ; un rapport ponctuel appartient à son auteur, et seul un exécutif peut le modifier à sa place.
+ */
+export function peutModifierRapportConseil(a: { moiId: string; toutVoir: boolean }, r: { genre: string; statut: string; creeParId: string | null }): boolean {
+  if (r.statut !== "brouillon") return false;
+  return r.genre !== "ponctuel" || a.toutVoir || r.creeParId === a.moiId;
 }

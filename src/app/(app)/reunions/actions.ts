@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { acces, idsProjetsVisibles } from "@/lib/acces";
+import { acces, contactsVisibles, idsProjetsVisibles, type Acces } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { lundiDe } from "@/lib/dates";
 import { modifierReunion, noterReunion, quitterReunion, supprimerReunion, type SaisieReunion } from "@/lib/donnees/reunions";
@@ -35,6 +35,16 @@ const saisie = (form: FormData): SaisieReunion => ({
   participants: form.getAll("participants").map(String).filter((id) => UUID.test(id)),
 });
 
+/**
+ * Hors division (accès limité) : on ne note une réunion qu'avec des personnes avec qui l'on travaille déjà,
+ * et l'on ne crée pas de nouvelle fiche hors division.
+ */
+async function bornerPourExterne(a: Acces, form: FormData, d: SaisieReunion): Promise<SaisieReunion> {
+  if (!a.moi.externe) return avecExternes(form, d, a.moi.id);
+  const contacts = await contactsVisibles(a);
+  return { ...d, participants: d.participants.filter((id) => contacts.has(id)) };
+}
+
 const semaineDe = (jour: string) => (/^\d{4}-\d{2}-\d{2}$/.test(jour) ? lundiDe(jour) : "");
 
 const revalider = () => {
@@ -46,7 +56,7 @@ const revalider = () => {
 export async function noter(form: FormData) {
   const u = await exigerUtilisateur();
   const a = await acces(u);
-  const d = await avecExternes(form, saisie(form), u.id);
+  const d = await bornerPourExterne(a, form, saisie(form));
   const r = await noterReunion(a, d, await idsProjetsVisibles(a));
   revalider();
   const s = semaineDe(d.jour);
@@ -58,7 +68,7 @@ export async function modifier(id: string, form: FormData) {
   if (!UUID.test(id)) return;
   const u = await exigerUtilisateur();
   const a = await acces(u);
-  const d = await avecExternes(form, saisie(form), u.id);
+  const d = await bornerPourExterne(a, form, saisie(form));
   const r = await modifierReunion(a, id, d, await idsProjetsVisibles(a));
   revalider();
   const s = semaineDe(d.jour);

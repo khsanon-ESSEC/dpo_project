@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { acces } from "@/lib/acces";
-import { exigerUtilisateur } from "@/lib/auth/session";
+import { exigerInterne } from "@/lib/auth/session";
 import { ajouterJours, lundiDe, moisAnnee } from "@/lib/dates";
 import { auteursDontJeLisLesRapports, historiqueDe, rapportsDeLEquipe, semaineCourante } from "@/lib/donnees/rapport";
 import { chargerOrganisation } from "@/lib/organisation";
@@ -20,7 +20,7 @@ export const metadata: Metadata = { title: "Rapports de l'équipe" };
  */
 export default async function PageRapportsEquipe({ searchParams }: { searchParams: Promise<{ semaine?: string; personne?: string }> }) {
   const { semaine: s0, personne } = await searchParams;
-  const u = await exigerUtilisateur();
+  const u = await exigerInterne();
   const a = await acces(u);
   const org = await chargerOrganisation();
   const auteurs = await auteursDontJeLisLesRapports(a);

@@ -118,8 +118,8 @@ describe.skipIf(!URL_TEST)("personnes hors division et projets d'autres division
     expect(wb.projetsDiriges.has(oc)).toBe(true);
     const [p] = await D.db.select().from(D.schema.projets).where(eq(D.schema.projets.id, oc));
     expect(p.division).toBe("Division Réseau et succursales");
-    expect(peutGererProjet({ moiId: wb.moi.id, directeur: false, toutVoir: false }, p)).toBe(true);
-    expect(peutGererProjet({ moiId: qui("sophonie.charles").id, directeur: false, toutVoir: false }, p)).toBe(false);
+    expect(peutGererProjet({ moiId: wb.moi.id, directeur: false, toutVoir: false, suivis: wb.suivis }, p)).toBe(true);
+    expect(peutGererProjet({ moiId: qui("sophonie.charles").id, directeur: false, toutVoir: false, suivis: new Set([qui("sophonie.charles").id]) }, p)).toBe(false);
     // Le référent confie une tâche à un membre de l'équipe du projet, même s'il ne le suit pas.
     expect(await G.creerTacheGeree(wb, { ...base, titre: "Relire les maquettes", projetId: oc, assigneId: qui("joel.dorval").id })).toHaveProperty("id");
     // Dans le rapport de Sophonie, les lignes du projet OC vont au référent, pas à la cheffe du Réseau.

@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { and, eq, gt, ne } from "drizzle-orm";
 import { hash, verify } from "@node-rs/argon2";
 import { db, schema } from "@/db";
@@ -104,6 +104,23 @@ export async function exigerUtilisateur(): Promise<Utilisateur> {
   return u;
 }
 
+/**
+ * Pages et actions réservées à la division : une personne hors division, même avec un accès limité,
+ * n'y entre pas (ni équipe, ni charge, ni rapport, ni conseil, ni proposition de projet).
+ */
+export async function exigerInterne(): Promise<Utilisateur> {
+  const u = await exigerUtilisateur();
+  if (u.externe) notFound();
+  return u;
+}
+
+/**
+ * Empreinte de leurre : avec une adresse inconnue (ou sans accès), on vérifie quand même un mot de passe,
+ * pour que la réponse prenne le même temps et ne révèle pas quelles adresses existent.
+ */
+let leurre: Promise<string> | null = null;
+const empreinteLeurre = () => (leurre ??= hacherMotDePasse(randomBytes(16).toString("hex")));
+
 export type ResultatConnexion = { ok: true } | { ok: false; message: string };
 
 export async function verifierIdentifiants(courrielSaisi: string, motDePasse: string): Promise<ResultatConnexion> {
@@ -113,6 +130,7 @@ export async function verifierIdentifiants(courrielSaisi: string, motDePasse: st
 
   const [p] = await db.select().from(schema.personnes).where(eq(schema.personnes.courriel, courriel)).limit(1);
   if (!p || !p.actif || !p.motDePasseHash) {
+    await verify(await empreinteLeurre(), motDePasse).catch(() => false);
     await noter(null, "connexion_refusee", courriel);
     return refus;
   }

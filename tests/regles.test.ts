@@ -1,16 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  libellesRoles,
-  membresDeLaDirection,
-  peutVoirLigneCommeChefDeProjet,
-  peutVoirRapportComplet,
-  personnesSuivies,
-  resoudreSuperieur,
-  subordonnesDirects,
-  type EquipeOrg,
-  type OrgDonnees,
-  type PersonneOrg,
-} from "@/lib/regles";
+import { libellesRoles, membresDeLaDirection, peutVoirLigneCommeChefDeProjet, peutVoirRapportComplet, personnesSuivies, resoudreSuperieur, subordonnesDirects, type EquipeOrg, type OrgDonnees, type PersonneOrg, peutAdministrer, peutModifierRapportConseil } from "@/lib/regles";
 
 /**
  * Organisation de test :
@@ -127,5 +116,20 @@ describe("rôles cumulables", () => {
       "Administrateur",
     ]);
     expect(libellesRoles({ directeur: false, executif: true, administrateur: false, nbRapports: 0, nbProjetsDiriges: 0 })).toEqual(["Exécutif"]);
+  });
+});
+
+describe("rapport au conseil et administration", () => {
+  const ponctuel = { genre: "ponctuel", statut: "brouillon", creeParId: "auteur" };
+  it("un rapport ponctuel ne se modifie que par son auteur ou un exécutif", () => {
+    expect(peutModifierRapportConseil({ moiId: "auteur", toutVoir: false }, ponctuel)).toBe(true);
+    expect(peutModifierRapportConseil({ moiId: "autre-directeur", toutVoir: false }, ponctuel)).toBe(false);
+    expect(peutModifierRapportConseil({ moiId: "exec", toutVoir: true }, ponctuel)).toBe(true);
+    expect(peutModifierRapportConseil({ moiId: "auteur", toutVoir: false }, { ...ponctuel, statut: "approuve" })).toBe(false);
+    expect(peutModifierRapportConseil({ moiId: "directeur", toutVoir: false }, { genre: "mensuel", statut: "brouillon", creeParId: null })).toBe(true);
+  });
+  it("une personne hors division n'administre jamais", () => {
+    expect(peutAdministrer({ administrateur: true })).toBe(true);
+    expect(peutAdministrer({ administrateur: true, externe: true })).toBe(false);
   });
 });

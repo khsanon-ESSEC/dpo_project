@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { exigerUtilisateur } from "@/lib/auth/session";
+import { exigerInterne } from "@/lib/auth/session";
 import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet } from "@/lib/regles";
 import { Bandeau } from "@/components/Bandeau";
@@ -12,7 +12,7 @@ export const metadata: Metadata = { title: "Proposer un projet" };
 /** Tout le monde peut proposer un projet : il naît en « Requête », la direction l'accepte ou le refuse. */
 export default async function PageProposerProjet({ searchParams }: { searchParams: Promise<{ erreur?: string }> }) {
   const { erreur } = await searchParams;
-  const u = await exigerUtilisateur();
+  const u = await exigerInterne();
   const org = await chargerOrganisation();
   const personnes = [...org.personnes.values()]
     .filter((p) => p.actif)

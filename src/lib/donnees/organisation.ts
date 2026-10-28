@@ -87,6 +87,19 @@ async function verifierDernierAdministrateur(personneId: string, resteAdministra
   }
 }
 
+/**
+ * Une personne hors division n'a ni rôle, ni équipe, ni supérieur ici, et n'est le supérieur ni le chef
+ * d'équipe de personne : sa fiche se gère dans « Hors division ».
+ */
+async function verifierInterne(personneId: string | null, superieurId: string | null) {
+  const org = await chargerOrganisation();
+  if (personneId && org.personnes.get(personneId)?.externe) throw new Error("Cette personne est hors division : modifiez sa fiche dans « Hors division ».");
+  if (superieurId) {
+    const s = org.personnes.get(superieurId);
+    if (!s || s.externe || !s.actif) throw new Error("Le supérieur est une personne active de la division.");
+  }
+}
+
 /** Le rôle Exécutif ouvre tout : seul un exécutif peut le donner ou le retirer. */
 async function verifierDroitExecutif(parId: string, personneId: string | null, executif: boolean) {
   const org = await chargerOrganisation();
@@ -106,6 +119,7 @@ export async function modifierPersonne(parId: string, personneId: string, m: Mod
     vus.add(courant);
     courant = org.personnes.get(courant)?.superieurId ?? null;
   }
+  await verifierInterne(personneId, m.superieurId);
   await verifierDroitExecutif(parId, personneId, m.executif);
   await verifierDernierAdministrateur(personneId, m.administrateur && m.actif);
   await db
@@ -117,12 +131,14 @@ export async function modifierPersonne(parId: string, personneId: string, m: Mod
 }
 
 export async function definirChefEquipe(parId: string, equipeId: string, chefId: string | null) {
+  if (chefId) await verifierInterne(null, chefId);
   await db.update(schema.equipes).set({ chefId }).where(eq(schema.equipes.id, equipeId));
   await noter(parId, "chef_equipe", equipeId, { chefId });
 }
 
 /** Crée une personne avec un mot de passe provisoire, affiché une seule fois. */
 export async function creerPersonne(parId: string, d: Roles & { prenom: string; nom: string; courriel: string; poste: string; equipeId: string | null; superieurId: string | null }) {
+  await verifierInterne(null, d.superieurId);
   await verifierDroitExecutif(parId, null, d.executif);
   const provisoire = randomBytes(9).toString("base64url");
   const [p] = await db

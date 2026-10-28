@@ -5,7 +5,7 @@ import { exigerUtilisateur } from "@/lib/auth/session";
 import { dateCourte, dateLocale, dateLongue } from "@/lib/dates";
 import { lignesConseil, projetsPourRapport, rapportConseil } from "@/lib/donnees/conseil";
 import { chargerOrganisation } from "@/lib/organisation";
-import { nomComplet } from "@/lib/regles";
+import { nomComplet, peutModifierRapportConseil } from "@/lib/regles";
 import { iaDisponible } from "@/lib/ia";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
@@ -26,7 +26,7 @@ export default async function PagePonctuel({ params }: { params: Promise<{ id: s
   const lignes = (await lignesConseil(r.id, r.statut)).filter((l) => visibles === "tous" || visibles.has(l.projet.id));
   if (!lignes.length && r.creeParId !== u.id && !a.toutVoir) notFound();
   const brouillon = r.statut === "brouillon";
-  const modifiable = brouillon && (a.toutVoir || r.creeParId === u.id);
+  const modifiable = peutModifierRapportConseil({ moiId: u.id, toutVoir: a.toutVoir }, r);
   const org = await chargerOrganisation();
   const auteur = r.creeParId ? org.personnes.get(r.creeParId) : undefined;
   const approuvePar = r.approuveParId ? org.personnes.get(r.approuveParId) : undefined;
@@ -152,7 +152,7 @@ export default async function PagePonctuel({ params }: { params: Promise<{ id: s
         <TableauConseil
           lignes={lignes}
           visibles={visibles}
-          brouillon={brouillon}
+          brouillon={modifiable}
           ia={iaDisponible()}
           rapportRetirable={modifiable && lignes.length > 1 ? r.id : null}
           entete={

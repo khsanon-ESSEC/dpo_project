@@ -24,7 +24,7 @@ export default async function PageModifierProjet({ params, searchParams }: { par
   const u = await exigerUtilisateur();
   const a = await acces(u);
   const p = await exigerProjetVisible(a, id);
-  if (!peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir }, p)) notFound();
+  if (!peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir, suivis: a.suivis }, p)) notFound();
   const [indicateurs, activite, org] = await Promise.all([
     db.select().from(schema.indicateurs).where(eq(schema.indicateurs.projetId, id)).orderBy(asc(schema.indicateurs.ordre)),
     activiteDuProjet(id),

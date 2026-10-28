@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { acces, suitPersonne } from "@/lib/acces";
-import { exigerUtilisateur } from "@/lib/auth/session";
+import { exigerInterne } from "@/lib/auth/session";
 import { aujourdhui, dateCourte, echeanceRelative } from "@/lib/dates";
 import { heuresDe, heuresTexte, LIBELLE_NIVEAU } from "@/lib/charge";
 import { chargeDesPersonnes } from "@/lib/donnees/charge";
@@ -19,7 +19,7 @@ export const metadata: Metadata = { title: "Tâches et charge d'une personne" };
 export default async function PagePersonne({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ semaine?: string }> }) {
   const { id } = await params;
   const { semaine: s0 } = await searchParams;
-  const u = await exigerUtilisateur();
+  const u = await exigerInterne();
   const a = await acces(u);
   if (!/^[0-9a-f-]{36}$/.test(id) || !suitPersonne(a, id)) notFound();
   const org = await chargerOrganisation();

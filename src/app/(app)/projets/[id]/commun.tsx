@@ -22,10 +22,10 @@ const VUES: { id: Vue; libelle: string; icone: string; chemin: string }[] = [
 export const cheminVue = (projetId: string, vue: Vue) => `/projets/${projetId}${VUES.find((v) => v.id === vue)!.chemin}`;
 
 /** Onglets des vues d'un projet. Chaque vue est une page à part (application multipage). */
-export function OngletsVues({ projetId, vue }: { projetId: string; vue: Vue }) {
+export function OngletsVues({ projetId, vue, sansCharge = false }: { projetId: string; vue: Vue; sansCharge?: boolean }) {
   return (
     <nav className="vues" aria-label="Vues du projet">
-      {VUES.map((v) => (
+      {VUES.filter((v) => !(sansCharge && v.id === "charge")).map((v) => (
         <a key={v.id} href={cheminVue(projetId, v.id)} aria-current={v.id === vue ? "page" : undefined}>
           <Icone nom={v.icone} taille={16} />
           {v.libelle}
@@ -74,7 +74,7 @@ export function EnTeteVue({ ctx, vue, children }: { ctx: ContexteVue; vue: Vue; 
       </Bandeau>
       <div className="page" style={{ paddingBottom: 0 }}>
         <div className="ligne-actions">
-          <OngletsVues projetId={projet.id} vue={vue} />
+          <OngletsVues projetId={projet.id} vue={vue} sansCharge={!!ctx.u.externe} />
           <a href={`/taches/nouvelle?projet=${projet.id}&retour=${encodeURIComponent(cheminVue(projet.id, vue))}`} className="bouton-contour">
             <Icone nom="ajouter" taille={16} /> Nouvelle tâche
           </a>

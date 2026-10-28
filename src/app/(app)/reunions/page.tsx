@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { acces, idsProjetsVisibles } from "@/lib/acces";
+import { acces, idsProjetsVisibles, contactsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { ajouterJours, aujourdhui, dateCourte, jourComplet, lundiDe } from "@/lib/dates";
 import { capacites } from "@/lib/donnees/charge";
@@ -34,15 +34,17 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
   const part = Math.round((minutes / 60 / capacite) * 100);
   const enModif = idModif ? liste.find((r) => r.id === idModif && r.noteeParId === u.id) : undefined;
   const jourParDefaut = semaine === courante ? jour : semaine;
+  // Hors division (accès limité) : seulement les personnes avec qui elle travaille, pas l'annuaire.
+  const contacts = u.externe ? await contactsVisibles(a) : null;
   const personnes = [...org.personnes.values()]
-    .filter((p) => p.actif && p.id !== u.id)
+    .filter((p) => p.actif && p.id !== u.id && (!contacts || contacts.has(p.id)))
     .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
     .sort((x, y) => Number(x.externe) - Number(y.externe))
     .map((p) => ({
       id: p.id,
       nom: nomComplet(p),
       externe: p.externe,
-      detail: p.externe ? ["Hors division", p.organisation].filter(Boolean).join(" · ") : [p.poste, p.equipeId ? org.equipes.get(p.equipeId)?.nom : null].filter(Boolean).join(" · "),
+      detail: p.externe ? ["Hors division", p.organisation].filter(Boolean).join(" · ") : [p.poste, !contacts && p.equipeId ? org.equipes.get(p.equipeId)?.nom : null].filter(Boolean).join(" · "),
     }));
   const parJour = new Map<string, typeof liste>();
   for (const r of liste) parJour.set(r.jour, [...(parJour.get(r.jour) ?? []), r]);
@@ -228,7 +230,7 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
                   ))}
                 </select>
               </div>
-              <ChoixParticipants personnes={personnes} choisis={enModif ? enModif.participants.map((p) => p.id).filter((id) => id !== u.id) : []} />
+              <ChoixParticipants personnes={personnes} choisis={enModif ? enModif.participants.map((p) => p.id).filter((id) => id !== u.id) : []} autresPermis={!u.externe} />
               <div className="champ">
                 <label htmlFor="r-notes">Notes (facultatif)</label>
                 <textarea id="r-notes" name="notes" rows={3} maxLength={2000} defaultValue={enModif?.notes ?? ""} placeholder="Décisions, suites à donner" />

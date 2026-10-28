@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
-import { exigerUtilisateur } from "@/lib/auth/session";
+import { exigerInterne, exigerUtilisateur } from "@/lib/auth/session";
 import {
   champDeRubrique,
   completerBrouillon,
@@ -22,7 +22,7 @@ import { libelleSante, RUBRIQUES, valeurAcceptable, type Rubrique } from "@/lib/
 
 /** Le rapport doit appartenir à la personne connectée et être encore un brouillon. */
 async function monBrouillon(rapportId: string) {
-  const u = await exigerUtilisateur();
+  const u = await exigerInterne();
   const [r] = await db
     .select()
     .from(schema.rapportsHebdo)

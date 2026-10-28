@@ -35,12 +35,12 @@ Application multipage (chaque écran est une page rendue par le serveur), en fra
 | Chacun | — | Ses tâches, son rapport de la semaine, ses réunions, son bilan, les projets sur lesquels il travaille (dont ceux de son équipe projet) ; la fiche de chacun (poste, équipe, supérieur, projets visibles) |
 | Supérieur (chef d'équipe) | Automatique : des personnes lui envoient leur rapport | Les tâches et les rapports de ses subordonnés directs |
 | Chef de projet | Automatique : désigné sur la fiche projet | Tout son projet, qu'il gère (fiche, indicateurs, équipe projet, archivage) ; dans les rapports de la semaine, **seulement** les lignes et les feux de son projet, dans les champs ouverts à tous |
-| Directeur | Interrupteur dans *Organisation* | Les projets, tâches et rapports des membres de **sa direction** (toutes les personnes placées sous lui, à tous les niveaux) ; décide des demandes de projet qu'il voit ; les projets stratégiques de sa direction dans le rapport au conseil |
+| Directeur | Interrupteur dans *Organisation* | Les projets, tâches et rapports des membres de **sa direction** (toutes les personnes placées sous lui, à tous les niveaux) ; décide des demandes de projet qu'il voit ; **gère** (fiche, équipe, archivage) les projets dont le chef ou le référent est dans sa direction, pas ceux d'une autre direction où travaillent les siens ; les projets stratégiques de sa direction dans le rapport au conseil |
 | Exécutif | Interrupteur dans *Organisation* (seul un exécutif peut le donner) | **Tout** ; approuve les rapports au conseil. Ne rédige pas de rapport de la semaine |
 | Administrateur | Interrupteur dans *Organisation* | Gère les personnes, les équipes, les supérieurs, les accès et les **modèles de rapport**. Ne donne **aucun** accès supplémentaire aux rapports ni aux tâches |
 
 | Référent DPO | Désigné sur la fiche d'un projet d'une autre division | Les droits du chef de projet sur ce projet ; reçoit les lignes et les feux du projet dans les rapports de la semaine |
-| Personne hors division | Ajoutée par n'importe qui, au besoin | Par défaut, **aucun accès** : une simple fiche. Un administrateur peut lui ouvrir un **accès limité** (adresse et mot de passe provisoire) : ses tâches, ses réunions, les projets où elle intervient ; ni rapport, ni équipe, ni charge |
+| Personne hors division | Ajoutée par n'importe qui, au besoin | Par défaut, **aucun accès** : une simple fiche. Un administrateur peut lui ouvrir un **accès limité** (adresse et mot de passe provisoire) : ses tâches (elle ne s'en confie qu'à elle-même), ses réunions, les projets où elle intervient, les fiches des personnes avec qui elle travaille ; ni rapport, ni équipe, ni charge, ni annuaire de la division. Chef d'un projet d'une autre division, elle ne le gère pas ici : c'est le référent DPO |
 
 Les rôles se cumulent. Chaque personne a **un seul** supérieur. Si le poste de responsable d'une équipe est vacant, les rapports remontent au niveau suivant. Un brouillon de rapport n'est visible que par son auteur. Il reste toujours au moins un administrateur.
 
@@ -191,7 +191,8 @@ Conserver les sauvegardes hors du serveur, et tester une restauration au moins u
 - Blocage de 15 minutes après 5 essais manqués.
 - Sessions stockées en base sous forme d'empreinte ; cookie `httpOnly`, `SameSite=Lax`, réservé à HTTPS.
 - Désactiver une personne ferme immédiatement ses sessions ; changer son mot de passe déconnecte ses autres appareils.
-- On ne rattache une tâche qu'à un projet qu'on a le droit de voir : un projet caché ne s'ouvre pas en s'y confiant une tâche.
+- On ne rattache une tâche qu'à un projet qu'on a le droit de voir : un projet caché ne s'ouvre pas en s'y confiant une tâche. Une tâche annulée n'ouvre plus le projet.
+- La connexion répond dans le même temps que l'adresse existe ou non (on ne peut pas deviner les adresses valides).
 - Chaque lecture passe par la couche d'accès (`src/lib/acces.ts`) : une page inaccessible répond « introuvable », sans dire si elle existe.
 - En-têtes de sécurité stricts (CSP sans ressource externe, interdiction d'affichage dans un cadre). Polices, logos et scripts sont servis par l'application elle-même.
 - Journal des actions sensibles (connexions, changements de rôles, envois, approbations, pièces déposées et téléchargées) dans la table `journal`.

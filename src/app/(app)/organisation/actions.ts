@@ -6,6 +6,7 @@ import { exigerUtilisateur } from "@/lib/auth/session";
 import { creerPersonne, definirChefEquipe, modifierPersonne, reinitialiserMotDePasse } from "@/lib/donnees/organisation";
 import { fermerAccesExterne, fusionnerExternes, modifierExterne, ouvrirAccesExterne } from "@/lib/donnees/externes";
 import { peutAdministrer } from "@/lib/regles";
+import { personneActuelle } from "@/lib/organisation";
 
 async function exigerAdministrateur() {
   const u = await exigerUtilisateur();
@@ -45,7 +46,10 @@ export async function enregistrerPersonne(_: EtatFiche, form: FormData): Promise
 
 export async function nouveauMotDePasse(_: EtatFiche, form: FormData): Promise<EtatFiche> {
   const u = await exigerAdministrateur();
-  const provisoire = await reinitialiserMotDePasse(u.id, String(form.get("personneId") ?? ""));
+  const personneId = String(form.get("personneId") ?? "");
+  // L'accès d'une personne hors division s'ouvre et se ferme dans sa fiche « Hors division ».
+  if ((await personneActuelle(personneId))?.externe) return { message: "Cette personne est hors division : ouvrez son accès depuis sa fiche." };
+  const provisoire = await reinitialiserMotDePasse(u.id, personneId);
   return { message: null, ok: true, provisoire };
 }
 
@@ -72,7 +76,7 @@ export async function ajouterPersonne(_: EtatFiche, form: FormData): Promise<Eta
   } catch (e) {
     const m = (e as Error).message;
     if (m.includes("unique") || m.includes("duplicate")) return { message: "Cette adresse courriel existe déjà." };
-    return { message: m.startsWith("Seul") ? m : "Création impossible." };
+    return { message: m.startsWith("Seul") || m.startsWith("Le supérieur") ? m : "Création impossible." };
   }
 }
 

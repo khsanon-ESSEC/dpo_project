@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { acces } from "@/lib/acces";
-import { exigerUtilisateur } from "@/lib/auth/session";
+import { exigerInterne } from "@/lib/auth/session";
 import { dateCourte } from "@/lib/dates";
 import { chargeDesPersonnes, type LigneCharge } from "@/lib/donnees/charge";
 import { chargerOrganisation } from "@/lib/organisation";
@@ -20,7 +20,7 @@ const RANG = { surchargee: 3, chargee: 2, normale: 1, libre: 0 } as const;
  */
 export default async function PageCharge({ searchParams }: { searchParams: Promise<{ equipe?: string }> }) {
   const { equipe } = await searchParams;
-  const u = await exigerUtilisateur();
+  const u = await exigerInterne();
   const a = await acces(u);
   if (!a.toutVoir && !a.directeur && a.equipeDirecte.length === 0) notFound();
   const org = await chargerOrganisation();

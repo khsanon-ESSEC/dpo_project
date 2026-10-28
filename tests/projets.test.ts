@@ -45,11 +45,15 @@ describe("qui confie une tâche à qui", () => {
 });
 
 describe("gérer et décider", () => {
-  it("le chef du projet, les directeurs et les exécutifs gèrent un projet accepté", () => {
+  it("le chef du projet, le directeur de sa direction et les exécutifs gèrent un projet accepté", () => {
     expect(peutGererProjet(chef, { chefProjetId: "chef", statut: "en_cours" })).toBe(true);
     expect(peutGererProjet(employe, { chefProjetId: "chef", statut: "en_cours" })).toBe(false);
-    expect(peutGererProjet({ ...employe, directeur: true }, { chefProjetId: "chef" })).toBe(true);
+    expect(peutGererProjet({ ...employe, directeur: true, suivis: new Set(["e", "chef"]) }, { chefProjetId: "chef" })).toBe(true);
     expect(peutGererProjet(executif, { chefProjetId: "chef" })).toBe(true);
+  });
+  it("un directeur ne gère pas le projet d'une autre direction, même si l'un des siens y travaille", () => {
+    expect(peutGererProjet({ ...employe, directeur: true, suivis: new Set(["e", "a"]) }, { chefProjetId: "chef" })).toBe(false);
+    expect(peutGererProjet({ ...employe, directeur: true, suivis: new Set(["e", "a"]) }, { chefProjetId: "chef", statut: "requete", demandeParId: "a" })).toBe(true);
   });
   it("une demande se corrige par son auteur, pas par le chef suggéré", () => {
     expect(peutGererProjet(employe, { chefProjetId: "chef", statut: "requete", demandeParId: "e" })).toBe(true);
@@ -117,6 +121,8 @@ describe("personnes hors division et projets d'autres divisions", () => {
     expect(responsableId({ chefProjetId: "c" })).toBe("c");
     expect(peutGererProjet({ ...employe, moiId: "r" }, projet)).toBe(true);
     expect(peutGererProjet(employe, projet)).toBe(false);
+    // Le chef hors division ne gère pas le projet dans l'application : c'est son référent.
+    expect(peutGererProjet({ ...employe, moiId: "externe" }, projet)).toBe(false);
     expect(peutAssigner({ ...employe, moiId: "r", projetsDiriges: new Set(["P3"]) }, "r2", { id: "P3", chefProjetId: "externe", referentId: "r", membres: new Set(["r2"]) })).toBe(true);
   });
   it("un chef hors division demande un référent de la DPO", () => {

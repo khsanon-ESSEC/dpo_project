@@ -37,7 +37,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
   const visibles = await idsProjetsVisibles(a);
   const projets = (await tousLesProjetsActifs()).filter((x) => visibles === "tous" || visibles.has(x.id) || x.id === t.projetId);
   if (projet && !projets.some((x) => x.id === projet.id)) projets.unshift({ id: projet.id, code: projet.code, titre: projet.titre });
-  const { personnes, base, parProjet, externesPartout } = await assignables(a);
+  const { personnes, base, parProjet, externesPartout, horsProjet } = await assignables(a);
   const actuel = org.personnes.get(t.assigneId)!;
   if (!personnes.some((x) => x.id === t.assigneId)) personnes.push({ id: t.assigneId, nom: nomComplet(actuel), externe: actuel.externe, organisation: actuel.organisation });
   const supprimable = tacheSupprimable({ statut: t.statut, ...(await histoireDeTache(t.id)) });
@@ -153,6 +153,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
             base={base}
             parProjet={parProjet}
             externesPartout={externesPartout}
+            horsProjet={horsProjet}
           />
         )}
         {t.annuleeLe ? null : (

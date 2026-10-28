@@ -1,18 +1,18 @@
 # Revue de sécurité — Pilotage des projets DPO
 
-Revue menée le 27 octobre 2026 sur la version compilée, lancée en local (base de démonstration), avant la mise en production. Elle **ne remplace pas** la revue externe prévue avec le service de sécurité de la banque (Mandiant) ; elle la prépare.
+Revue menée le 27 octobre 2026 sur la version compilée, lancée en local (base de démonstration), avant la mise en production, en deux passes (la seconde complète et corrige la première, voir « Seconde passe »). Elle **ne remplace pas** la revue externe prévue avec le service de sécurité de la banque (Mandiant) ; elle la prépare.
 
 ## Méthode
 
 - **Lecture du code** : toutes les actions serveur (13 fichiers `"use server"`) et toutes les routes d'API (`src/app/api/**`), la couche d'accès (`src/lib/acces.ts`, `regles.ts`, `projets.ts`), la session (`src/lib/auth/session.ts`), les pièces jointes et le connecteur d'IA. Une revue indépendante des autorisations a été menée en parallèle.
 - **Analyse des dépendances** : `npm audit`, recherche de secrets dans le dépôt et dans tout l'historique Git.
-- **Vérifications fonctionnelles** : la suite de tests (133, dont un nouveau test de sécurité) et le parcours de bout en bout (ordinateur et téléphone), qui confirment qu'aucune correction n'a cassé un usage légitime.
+- **Vérifications fonctionnelles** : la suite de tests (142 après la seconde passe, dont `tests/securite-base.test.ts`) et les trois parcours de bout en bout (gestion, réunions, personnes hors division ; ordinateur et téléphone), qui confirment qu'aucune correction n'a cassé un usage légitime.
 
 Chaque constat est marqué **[vérifié]** (observé directement) ou **[déduction]** (raisonné sur le code, sans exécution dédiée).
 
 ## Résultat global
 
-Un défaut d'autorisation important a été trouvé et corrigé ; deux points plus faibles ont été renforcés ; une dépendance critique a été mise à jour. Après correction, la suite de tests et les parcours passent, et `npm audit` ne signale **aucune** vulnérabilité dans les dépendances de production.
+Première passe : un défaut d'autorisation important corrigé, deux points plus faibles renforcés, une dépendance critique mise à jour. Seconde passe : deux défauts sur les rapports ponctuels au conseil, un accès trop large des personnes hors division, une règle des directeurs resserrée et cinq points mineurs, tous corrigés. Après correction, la suite de tests et les parcours passent, et `npm audit` ne signale **aucune** vulnérabilité dans les dépendances de production.
 
 ## Corrections apportées
 
@@ -43,7 +43,7 @@ Un défaut d'autorisation important a été trouvé et corrigé ; deux points pl
 - **[vérifié] Injection SQL** : toutes les requêtes passent par Drizzle (paramétrées). Aucun `sql.raw`, `.unsafe(`, ni concaténation de chaîne dans une requête. Les rares `sql\`…\`` n'utilisent que des noms de colonnes et `now()` / `select 1`, sans donnée saisie.
 - **[vérifié] XSS** : rendu par React (échappement par défaut), aucun `dangerouslySetInnerHTML` ni `innerHTML`. Les réponses de l'assistant sont affichées comme texte.
 - **[déduction] CSRF** : actions serveur Next.js (contrôle d'origine intégré), cookie `SameSite=Lax`, CSP `form-action 'self'`.
-- **[vérifié] Autorisations** : chaque action et chaque route appelle `exigerUtilisateur()` puis vérifie l'objet visé (tâche, projet, rapport, réunion, pièce) via `src/lib/acces.ts`. Une ressource interdite répond « introuvable » sans révéler son existence. L'approbation d'un rapport au conseil exige le rôle exécutif ; seul un exécutif accorde le rôle exécutif ; un administrateur n'obtient aucun accès supplémentaire aux rapports.
+- **[vérifié] Autorisations** : chaque action et chaque route appelle `exigerUtilisateur()` puis vérifie l'objet visé (tâche, projet, rapport, réunion, pièce) via `src/lib/acces.ts`. Une ressource interdite répond « introuvable » sans révéler son existence. L'approbation d'un rapport au conseil exige le rôle exécutif ; seul un exécutif accorde le rôle exécutif ; un administrateur n'obtient aucun accès supplémentaire aux rapports. *Rectification* : la première version de ce rapport affirmait ce point sans réserve ; deux actions des rapports ponctuels au conseil ne vérifiaient pas l'auteur du rapport (voir la seconde passe, point 5).
 - **[vérifié] Personnes hors division** : sans accès, aucune session ni alerte ; avec un accès limité, la consultante ne voit que ses tâches et ses projets — ni rapport, ni équipe, ni charge (confirmé par le parcours).
 - **[vérifié] Mots de passe et connexion** : Argon2id, 12 caractères minimum, blocage 15 min après 5 échecs ; jeton de session stocké en empreinte SHA-256, cookie `httpOnly` / `SameSite=Lax` / `secure`.
 - **[vérifié] Pièces jointes** : formats de bureau seulement, reconnus à l'extension **et** à la signature du fichier ; 10 Mo max ; servies en téléchargement (`Content-Disposition: attachment`, CSP `sandbox`, `nosniff`), jamais affichées ; lisibles seulement par qui peut lire le champ. Stockées en base (pas de chemin de fichier → pas de traversée de répertoire).
@@ -51,6 +51,38 @@ Un défaut d'autorisation important a été trouvé et corrigé ; deux points pl
 - **[vérifié] Assistant d'IA** : désactivé par défaut ; une fois activé, il ne reçoit que ce que la personne a le droit de voir (mêmes filtres d'accès), seulement sur question ; la consigne précise que le contenu des données est une information, jamais une instruction ; la clé reste sur le serveur (`server-only`), jamais dans le navigateur. Limite de 10 questions/minute/personne.
 - **[vérifié] Secrets** : aucune clé d'API dans le dépôt ni dans l'historique Git. Les fichiers `.env*` sont ignorés (sauf `.env.example`). La clé du prototype (Gemini) n'a jamais été versionnée ici.
 - **[vérifié] En-têtes** : CSP sans ressource externe, `frame-ancestors 'none'`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Permissions-Policy` restrictive, `poweredByHeader` désactivé.
+
+## Seconde passe : corrections
+
+### 5. [Modéré, corrigé] Rapports ponctuels au conseil modifiables par un autre directeur
+
+**[vérifié]** Un directeur pouvait réécrire l'état d'avancement d'une ligne, ou la retirer, dans le rapport ponctuel en brouillon d'un autre directeur, dès qu'il voyait le projet concerné : la règle « seul son auteur ou un exécutif » n'était appliquée qu'aux actions sur le rapport lui-même. Le retrait d'une ligne ne vérifiait pas non plus que la ligne appartenait au rapport indiqué.
+
+**Correction** : une seule règle, `peutModifierRapportConseil` (`src/lib/regles.ts`), appliquée à toutes les actions des rapports au conseil et à la page (les formulaires ne s'affichent plus pour qui ne peut pas modifier) ; le retrait vérifie l'appartenance de la ligne. Testé (`tests/regles.test.ts`).
+
+### 6. [Modéré, corrigé] Accès limité des personnes hors division trop large
+
+**[vérifié]** Une consultante avec un accès limité voyait l'annuaire complet de la division (noms, postes, équipes) dans « Avec qui » des réunions, ouvrait la fiche de n'importe qui (avec équipe, supérieur, subordonnés), pouvait proposer un projet, et des pages comme Équipe, Charge ou Rapport ne lui étaient pas explicitement fermées. Chef d'un projet d'une autre division, elle en aurait eu les droits de chef (dont la lecture des lignes des rapports du vendredi), alors que c'est le référent DPO qui gère ce projet.
+
+**Correction** :
+- `exigerInterne()` (`src/lib/auth/session.ts`) ferme à une personne hors division Équipe (et ses sous-pages), Charge, Rapport, Mes rapports, la proposition de projet et la vue Charge d'un projet ; le rapport au conseil et l'organisation lui sont aussi fermés, même si on lui donnait un rôle par erreur.
+- `contactsVisibles()` (`src/lib/acces.ts`) : elle ne voit et ne choisit que les personnes avec qui elle travaille (chef, référent, équipe et personnes chargées de tâches de ses projets, participants de ses réunions, personnes qui lui ont confié une tâche) ; leurs fiches s'ouvrent sans l'organisation interne.
+- Elle ne se confie de tâche qu'à elle-même et ne crée pas de nouvelle fiche hors division (ni par une tâche, ni par une réunion).
+- Le chef hors division d'un projet ne le dirige pas dans l'application quand il a un référent : c'est le référent qui le gère et lit les lignes.
+
+Testé (`tests/securite-base.test.ts`) et vérifié dans le parcours (chaque page fermée répond « introuvable »).
+
+### 7. [Règle resserrée] Un directeur ne gère que les projets de sa direction
+
+Un directeur pouvait modifier, archiver ou réorganiser tout projet qu'il voyait, y compris celui d'une autre direction où l'un des siens avait une tâche. Désormais, il gère les projets dont le responsable (le référent DPO, sinon le chef) est dans sa direction ; il continue de **voir** les autres. Les exécutifs gèrent tout. `peutGererProjet` (`src/lib/projets.ts`), testé.
+
+### 8. [Faibles, corrigés] Points mineurs
+
+- **Hiérarchie** : une fiche hors division ne peut plus recevoir de rôle interne, ni être nommée supérieur ou chef d'équipe ; son accès s'ouvre seulement depuis sa fiche « Hors division ».
+- **Tâche annulée** : elle n'ouvre plus le projet à son ancien titulaire (avant, retirer quelqu'un de l'équipe ne lui fermait pas le projet s'il y gardait une tâche annulée).
+- **Assistant** : il ne crée plus de brouillon de rapport pour une personne qui n'en rédige pas (exécutif, hors division).
+- **Connexion** : la réponse prend le même temps que l'adresse existe ou non **[vérifié]** (environ 100 ms dans les deux cas) ; on ne peut plus deviner les adresses valides au chronomètre. Après cinq échecs, le message de blocage reste propre aux comptes existants : compromis volontaire pour l'utilisateur.
+- **Image Docker** : le dossier `.local` (base de l'essai local) en est exclu.
 
 ## Recommandations restantes
 

@@ -21,7 +21,7 @@ export default async function PageNouvelleTache({ searchParams }: { searchParams
   const projets = (await tousLesProjetsActifs()).filter((p) => visibles === "tous" || visibles.has(p.id));
 
   // À qui confier : soi, les personnes qu'on suit ; sur un projet qu'on dirige, les membres de son équipe.
-  const { personnes, base, parProjet, externesPartout } = await assignables(a);
+  const { personnes, base, parProjet, externesPartout, horsProjet } = await assignables(a);
 
   // Indication de charge : heures pour les personnes qu'on suit, seulement le niveau pour les autres.
   // Pas de charge mesurée pour les personnes hors division.
@@ -48,6 +48,7 @@ export default async function PageNouvelleTache({ searchParams }: { searchParams
           base={base}
           parProjet={parProjet}
           externesPartout={externesPartout}
+            horsProjet={horsProjet}
           indications={indications}
           projetParDefaut={projet && projets.some((p) => p.id === projet) ? projet : ""}
           pourParDefaut={pour && personnes.some((p) => p.id === pour) ? pour : u.id}

@@ -71,6 +71,6 @@ export function ChoixPour({
 }
 
 /** Les personnes hors division peuvent-elles recevoir une tâche de ce projet (« » = hors projet) ? */
-export function externesPermisPour(projet: string, parProjet: Record<string, string[]>, externesPartout: boolean): boolean {
-  return externesPartout || projet === "" || projet in parProjet;
+export function externesPermisPour(projet: string, parProjet: Record<string, string[]>, externesPartout: boolean, horsProjet = true): boolean {
+  return externesPartout || (projet === "" && horsProjet) || projet in parProjet;
 }

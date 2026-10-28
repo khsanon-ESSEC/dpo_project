@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { acces } from "@/lib/acces";
-import { exigerUtilisateur } from "@/lib/auth/session";
+import { exigerInterne } from "@/lib/auth/session";
 import { aujourdhui, dateCourte, moisAnnee } from "@/lib/dates";
 import { additionner, ecart, mois, moisPrecedent, moisSuivant, type Mesures } from "@/lib/bilan";
 import { nombre } from "@/lib/charge";
@@ -50,7 +50,7 @@ function Cellules({ m, avant }: { m: Mesures; avant: Mesures }) {
 
 export default async function PageBilanEquipe({ searchParams }: { searchParams: Promise<{ mois?: string }> }) {
   const { mois: m0 } = await searchParams;
-  const u = await exigerUtilisateur();
+  const u = await exigerInterne();
   const a = await acces(u);
   if (!(a.equipeDirecte.length > 0 || a.directeur || a.toutVoir)) redirect("/bilan");
   const jour = aujourdhui();

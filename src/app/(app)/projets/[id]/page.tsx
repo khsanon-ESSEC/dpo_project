@@ -37,7 +37,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const f = await ficheProjet(id);
   const p = f.projet;
   // Chef du projet, directeur de la direction concernée (le projet lui est visible), exécutifs.
-  const peutModifier = peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir }, p);
+  const peutModifier = peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir, suivis: a.suivis }, p);
   const demande = p.statut === "requete";
   const refuse = p.statut === "refuse";
   const actif = !demande && !refuse && !p.archiveLe;
@@ -260,7 +260,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
           </div>
         ) : null}
         <div className="ligne-actions">
-          <OngletsVues projetId={p.id} vue="apercu" />
+          <OngletsVues projetId={p.id} vue="apercu" sansCharge={!!u.externe} />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             {peutModifier ? (
               <a href={`/projets/${p.id}/modifier`} className="bouton-contour">

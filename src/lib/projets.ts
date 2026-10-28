@@ -70,7 +70,7 @@ export type Acteur = {
   toutVoir: boolean;
 };
 
-const suit = (a: Acteur, id: string) => a.suivis === "toutes" || a.suivis.has(id);
+const suit = (a: Pick<Acteur, "suivis">, id: string) => a.suivis === "toutes" || a.suivis.has(id);
 
 /** Qui a les droits de chef de projet dans l'application : le référent de la DPO s'il y en a un, sinon le chef. */
 export function responsableId(p: { chefProjetId: string | null; referentId?: string | null }): string | null {
@@ -87,13 +87,17 @@ export function peutAssigner(a: Acteur, assigneId: string, projet: { id: string;
 }
 
 /**
- * Modifier un projet, gérer son équipe, l'archiver : son chef, la direction qui le voit, les exécutifs.
- * Une demande (ou un refus) n'a pas encore de chef : son auteur la corrige, la direction décide.
+ * Modifier un projet, gérer son équipe, l'archiver : son responsable (le référent DPO, sinon le chef),
+ * le directeur de la direction de ce responsable, les exécutifs. Un directeur ne gère pas le projet
+ * d'une autre direction, même si l'un des siens y travaille.
+ * Une demande (ou un refus) n'a pas encore de chef : son auteur la corrige ; le directeur de l'auteur aussi.
  */
-export function peutGererProjet(a: Pick<Acteur, "moiId" | "directeur" | "toutVoir">, projet: { chefProjetId: string | null; referentId?: string | null; statut?: string; demandeParId?: string | null }): boolean {
-  if (a.toutVoir || a.directeur) return true;
-  if (projet.statut === "requete" || projet.statut === "refuse") return projet.demandeParId === a.moiId;
-  return projet.chefProjetId === a.moiId || projet.referentId === a.moiId;
+export function peutGererProjet(a: Pick<Acteur, "moiId" | "directeur" | "toutVoir" | "suivis">, projet: { chefProjetId: string | null; referentId?: string | null; statut?: string; demandeParId?: string | null }): boolean {
+  if (a.toutVoir) return true;
+  if (projet.statut === "requete" || projet.statut === "refuse") return projet.demandeParId === a.moiId || (a.directeur && !!projet.demandeParId && suit(a, projet.demandeParId));
+  const responsable = responsableId(projet);
+  if (!responsable) return false;
+  return responsable === a.moiId || (a.directeur && suit(a, responsable));
 }
 
 /**

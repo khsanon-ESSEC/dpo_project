@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { and, eq, isNull, ne, or } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { acces, idsProjetsVisibles, suitPersonne } from "@/lib/acces";
+import { acces, contactsVisibles, idsProjetsVisibles, suitPersonne } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet, resoudreSuperieur, subordonnesDirects } from "@/lib/regles";
@@ -26,9 +26,13 @@ export default async function PageFichePersonne({ params }: { params: Promise<{ 
   const org = await chargerOrganisation();
   const p = org.personnes.get(id);
   if (!p) notFound();
-  const sup = resoudreSuperieur(org, id);
-  const equipe = p.equipeId ? org.equipes.get(p.equipeId) : null;
-  const subordonnes = subordonnesDirects(org, id);
+  // Une personne hors division (accès limité) ne consulte que les fiches des personnes avec qui elle
+  // travaille, et sans l'organisation interne (équipe, supérieur, subordonnés).
+  const limite = !!u.externe;
+  if (limite && !(await contactsVisibles(a)).has(id)) notFound();
+  const sup = limite ? null : resoudreSuperieur(org, id);
+  const equipe = !limite && p.equipeId ? org.equipes.get(p.equipeId) : null;
+  const subordonnes = limite ? [] : subordonnesDirects(org, id);
   const visibles = await idsProjetsVisibles(a);
   const [diriges, membre] = await Promise.all([
     db
@@ -85,7 +89,7 @@ export default async function PageFichePersonne({ params }: { params: Promise<{ 
                     <dt>Département ou société</dt>
                     <dd>{p.organisation || "Non précisé"}</dd>
                   </div>
-                ) : (
+                ) : limite ? null : (
                   <>
                     <div>
                       <dt>Équipe</dt>

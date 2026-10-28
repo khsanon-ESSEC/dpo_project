@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { acces, idsProjetsVisibles, suitPersonne } from "@/lib/acces";
-import { exigerUtilisateur } from "@/lib/auth/session";
+import { exigerInterne } from "@/lib/auth/session";
 import { ajouterJours, dateCourte, dateLocale, heure } from "@/lib/dates";
 import { lireRapport, rapportsVoisins } from "@/lib/donnees/rapport";
 import { piecesDuRapport } from "@/lib/donnees/pieces";
@@ -18,7 +18,7 @@ export const metadata: Metadata = { title: "Rapport de la semaine" };
 export default async function PageRapportRecu({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
-  const u = await exigerUtilisateur();
+  const u = await exigerInterne();
   const a = await acces(u);
   const lu = await lireRapport(a, id);
   if (!lu) notFound();

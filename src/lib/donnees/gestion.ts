@@ -325,6 +325,11 @@ export async function projetPourAssignation(projetId: string | null) {
  */
 export async function assignables(a: Acces) {
   const org = await chargerOrganisation();
+  // Hors division (accès limité) : on ne se confie une tâche qu'à soi-même.
+  if (a.moi.externe) {
+    const moi = org.personnes.get(a.moi.id)!;
+    return { personnes: [{ id: moi.id, nom: "Moi", externe: false, organisation: moi.organisation }], base: [moi.id], parProjet: {} as Record<string, string[]>, externes: [] as string[], externesPartout: false, horsProjet: false };
+  }
   const actives = [...org.personnes.values()].filter((p) => p.actif);
   const base = actives.filter((p) => !p.externe && (p.id === a.moi.id || a.suivis === "toutes" || a.suivis.has(p.id))).map((p) => p.id);
   const externes = actives.filter((p) => p.externe).map((p) => p.id);
@@ -339,7 +344,7 @@ export async function assignables(a: Acces) {
     .map((id) => org.personnes.get(id)!)
     .sort((x, y) => Number(y.id === a.moi.id) - Number(x.id === a.moi.id) || Number(x.externe) - Number(y.externe) || x.nom.localeCompare(y.nom, "fr"))
     .map((p) => ({ id: p.id, nom: p.id === a.moi.id ? "Moi" : nomComplet(p), externe: p.externe, organisation: p.organisation }));
-  return { personnes, base, parProjet, externes, externesPartout };
+  return { personnes, base, parProjet, externes, externesPartout, horsProjet: true };
 }
 
 /** Assigner sur un projet fait entrer la personne dans l'équipe du projet (si elle n'y est pas). */
@@ -359,6 +364,8 @@ export type NouvelExterne = { nom: string; organisation: string };
 
 /** Crée la fiche hors division demandée, une fois la règle d'assignation vérifiée pour une personne hors division. */
 async function assigneEffectif(a: Acces, d: { assigneId: string; nouvelExterne?: NouvelExterne | null }, projet: Awaited<ReturnType<typeof projetPourAssignation>>) {
+  // Hors division (accès limité) : pas de tâche confiée à quelqu'un d'autre, pas de nouvelle fiche.
+  if (a.moi.externe && (d.nouvelExterne || d.assigneId !== a.moi.id)) return { erreur: "Avec un accès limité, on ne se confie une tâche qu'à soi-même." };
   if (!d.nouvelExterne) return { id: d.assigneId };
   if (!peutAssigner(acteur(a), "", projet, true)) return { erreur: "Sur ce projet, seuls son chef (ou son référent) et la direction confient une tâche à une personne hors division." };
   if (!d.nouvelExterne.nom.trim()) return { erreur: "Donnez le nom de la personne hors division." };

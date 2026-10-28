@@ -17,7 +17,7 @@ const plat = (s: string) =>
  * « Quelqu'un d'autre » ajoute une personne hors division (autre département, consultant) : sa fiche
  * est créée à l'enregistrement de la réunion. Envoyés : participants (identifiants), externes (JSON).
  */
-export function ChoixParticipants({ personnes, choisis: initiaux }: { personnes: Personne[]; choisis: string[] }) {
+export function ChoixParticipants({ personnes, choisis: initiaux, autresPermis = true }: { personnes: Personne[]; choisis: string[]; autresPermis?: boolean }) {
   const [choisis, setChoisis] = useState<string[]>(initiaux);
   const [nouvelles, setNouvelles] = useState<Nouvelle[]>([]);
   const [filtre, setFiltre] = useState("");
@@ -129,11 +129,11 @@ export function ChoixParticipants({ personnes, choisis: initiaux }: { personnes:
             </button>
           </div>
         </div>
-      ) : (
+      ) : autresPermis ? (
         <button type="button" className="lien-discret participants__autre" onClick={() => setAjout({ nom: filtre.trim(), organisation: "" })}>
           + Quelqu&apos;un d&apos;autre, hors division (autre département, consultant)
         </button>
-      )}
+      ) : null}
     </fieldset>
   );
 }

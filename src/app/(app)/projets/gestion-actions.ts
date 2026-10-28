@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { acces, exigerProjetVisible } from "@/lib/acces";
-import { exigerUtilisateur } from "@/lib/auth/session";
+import { exigerInterne, exigerUtilisateur } from "@/lib/auth/session";
 import {
   ajouterIndicateur,
   ajouterMembre,
@@ -28,7 +28,7 @@ async function exigerGestion(projetId: string) {
   const u = await exigerUtilisateur();
   const a = await acces(u);
   const p = await exigerProjetVisible(a, projetId);
-  if (!peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir }, p)) throw new Error("Seuls le chef de projet, sa direction et les exécutifs gèrent ce projet.");
+  if (!peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir, suivis: a.suivis }, p)) throw new Error("Seuls le chef de projet, sa direction et les exécutifs gèrent ce projet.");
   return { u, a, p };
 }
 
@@ -38,7 +38,7 @@ const revalider = (projetId?: string) => {
 };
 
 export async function proposer(form: FormData) {
-  const u = await exigerUtilisateur();
+  const u = await exigerInterne();
   const r = await proposerProjet(
     {
       titre: String(form.get("titre") ?? ""),

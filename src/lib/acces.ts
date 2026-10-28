@@ -5,7 +5,7 @@
 import "server-only";
 import { cache } from "react";
 import { notFound } from "next/navigation";
-import { eq, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Utilisateur } from "@/lib/auth/session";
 import { chargerOrganisation } from "@/lib/organisation";
@@ -28,13 +28,20 @@ export type Acces = {
 
 export const acces = cache(async (moi: Utilisateur): Promise<Acces> => {
   const org = await chargerOrganisation();
-  // Projets que je dirige : j'en suis le chef, ou le référent de la DPO (chef hors division).
-  const diriges = await db.select({ id: schema.projets.id }).from(schema.projets).where(or(eq(schema.projets.chefProjetId, moi.id), eq(schema.projets.referentId, moi.id)));
+  // Projets que je dirige : j'en suis le référent de la DPO, ou le chef s'il n'y a pas de référent.
+  // Le chef hors division d'un projet d'une autre division ne le dirige pas ici : c'est son référent.
+  // Une personne hors division (accès limité) ne dirige aucun projet et n'a aucun rôle étendu.
+  const diriges = moi.externe
+    ? []
+    : await db
+        .select({ id: schema.projets.id })
+        .from(schema.projets)
+        .where(or(eq(schema.projets.referentId, moi.id), and(eq(schema.projets.chefProjetId, moi.id), isNull(schema.projets.referentId))));
   const membre = await db.select({ id: schema.membresProjet.projetId }).from(schema.membresProjet).where(eq(schema.membresProjet.personneId, moi.id));
   return {
     moi,
-    toutVoir: voitTout(moi),
-    directeur: moi.directeur,
+    toutVoir: !moi.externe && voitTout(moi),
+    directeur: !moi.externe && moi.directeur,
     suivis: personnesSuivies(org, moi),
     projetsDiriges: new Set(diriges.map((d) => d.id)),
     projetsMembre: new Set(membre.map((d) => d.id)),
@@ -71,7 +78,8 @@ export async function exigerTacheVisible(a: Acces, tacheId: string) {
 export async function idsProjetsVisibles(a: Acces): Promise<Set<string> | "tous"> {
   if (a.toutVoir) return "tous";
   const ids = new Set([...a.projetsDiriges, ...a.projetsMembre]);
-  const lignes = await db.selectDistinct({ projetId: schema.taches.projetId, assigneId: schema.taches.assigneId }).from(schema.taches);
+  // Une tâche annulée n'ouvre plus le projet à la personne à qui elle était confiée.
+  const lignes = await db.selectDistinct({ projetId: schema.taches.projetId, assigneId: schema.taches.assigneId }).from(schema.taches).where(isNull(schema.taches.annuleeLe));
   for (const l of lignes) if (l.projetId && suitPersonne(a, l.assigneId)) ids.add(l.projetId);
   const membres = await db.select({ projetId: schema.membresProjet.projetId, personneId: schema.membresProjet.personneId }).from(schema.membresProjet);
   for (const m of membres) if (suitPersonne(a, m.personneId)) ids.add(m.projetId);
@@ -110,5 +118,28 @@ export async function estMonSuperieur(moiId: string, personneId: string) {
 
 /** Rapport au conseil : exécutifs (tout) et directeurs (projets de leur direction). */
 export function exigerAccesConseil(a: Acces) {
-  if (!a.toutVoir && !a.directeur) notFound();
+  if (a.moi.externe || (!a.toutVoir && !a.directeur)) notFound();
+}
+
+/**
+ * Les personnes qu'une personne hors division (accès limité) peut voir et choisir : le chef, le
+ * référent, l'équipe et les personnes chargées de tâches des projets où elle intervient, les
+ * participants de ses réunions et les personnes qui lui ont confié une tâche. Pas l'annuaire entier.
+ */
+export async function contactsVisibles(a: Acces): Promise<Set<string>> {
+  const ids = new Set<string>([a.moi.id]);
+  const visibles = await idsProjetsVisibles(a);
+  const projetIds = visibles === "tous" ? [] : [...visibles];
+  if (projetIds.length) {
+    for (const p of await db.select({ chef: schema.projets.chefProjetId, referent: schema.projets.referentId }).from(schema.projets).where(inArray(schema.projets.id, projetIds))) {
+      if (p.chef) ids.add(p.chef);
+      if (p.referent) ids.add(p.referent);
+    }
+    for (const m of await db.select({ id: schema.membresProjet.personneId }).from(schema.membresProjet).where(inArray(schema.membresProjet.projetId, projetIds))) ids.add(m.id);
+    for (const t of await db.select({ id: schema.taches.assigneId }).from(schema.taches).where(and(inArray(schema.taches.projetId, projetIds), isNull(schema.taches.annuleeLe)))) ids.add(t.id);
+  }
+  for (const t of await db.select({ par: schema.taches.creeParId }).from(schema.taches).where(eq(schema.taches.assigneId, a.moi.id))) if (t.par) ids.add(t.par);
+  const mesReunions = db.select({ id: schema.participantsReunion.reunionId }).from(schema.participantsReunion).where(eq(schema.participantsReunion.personneId, a.moi.id));
+  for (const p of await db.select({ id: schema.participantsReunion.personneId }).from(schema.participantsReunion).where(inArray(schema.participantsReunion.reunionId, mesReunions))) ids.add(p.id);
+  return ids;
 }

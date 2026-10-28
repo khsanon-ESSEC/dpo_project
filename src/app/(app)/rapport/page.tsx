@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { exigerUtilisateur } from "@/lib/auth/session";
+import { exigerInterne } from "@/lib/auth/session";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { ajouterJours, dateCourte, dateLocale, heure } from "@/lib/dates";
 import {
@@ -43,7 +43,7 @@ const LIBELLE_RUBRIQUE_COURT: Record<string, string> = { fait: "Fait", en_cours:
 
 export default async function PageRapport({ searchParams }: { searchParams: Promise<{ envoi?: string; piece?: string; champ?: string }> }) {
   const { envoi, piece, champ: champPiece } = await searchParams;
-  const u = await exigerUtilisateur();
+  const u = await exigerInterne();
   // Les exécutifs ne rédigent pas de rapport : ils lisent ceux de tout le monde.
   if (!redigeUnRapport(u)) redirect("/equipe/rapports");
   const a = await acces(u);

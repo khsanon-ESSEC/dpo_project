@@ -20,6 +20,7 @@ export function FormulaireNouvelleTache({
   base,
   parProjet,
   externesPartout,
+  horsProjet = true,
   indications,
   projetParDefaut,
   pourParDefaut,
@@ -34,6 +35,8 @@ export function FormulaireNouvelleTache({
   parProjet: Record<string, string[]>;
   /** Direction et exécutifs : personnes hors division sur tous les projets. */
   externesPartout: boolean;
+  /** Hors projet, peut-on choisir une personne hors division ? (Non pour un accès limité.) */
+  horsProjet?: boolean;
   indications: Record<string, Indication>;
   projetParDefaut: string;
   pourParDefaut: string;
@@ -45,7 +48,7 @@ export function FormulaireNouvelleTache({
   const [echeance, setEcheance] = useState("");
   const [projet, setProjet] = useState(projetParDefaut);
   const permis = new Set([...base, ...(parProjet[projet] ?? [])]);
-  const externesPermis = externesPermisPour(projet, parProjet, externesPartout);
+  const externesPermis = externesPermisPour(projet, parProjet, externesPartout, horsProjet);
   const choix = personnes.filter((p) => permis.has(p.id) || (p.externe && externesPermis));
   const pourValide = pour === NOUVELLE_PERSONNE && externesPermis ? pour : choix.some((p) => p.id === pour) ? pour : (choix[0]?.id ?? "");
 

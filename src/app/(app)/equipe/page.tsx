@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { acces } from "@/lib/acces";
-import { exigerUtilisateur } from "@/lib/auth/session";
+import { exigerInterne } from "@/lib/auth/session";
 import { aujourdhui, dateCourte, dateLocale, heure, jourAbrege, jourComplet } from "@/lib/dates";
 import { monEquipe } from "@/lib/donnees/equipe";
 import { chargeDesPersonnes } from "@/lib/donnees/charge";
@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Mon équipe" };
 
 export default async function PageEquipe({ searchParams }: { searchParams: Promise<{ filtre?: string; relance?: string }> }) {
   const { filtre = "tous", relance } = await searchParams;
-  const u = await exigerUtilisateur();
+  const u = await exigerInterne();
   const a = await acces(u);
   const jour = aujourdhui();
 

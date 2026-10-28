@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { exigerUtilisateur } from "@/lib/auth/session";
+import { exigerInterne } from "@/lib/auth/session";
 import { moisAnnee } from "@/lib/dates";
 import { mesRapports, semaineCourante, serieDeRapports } from "@/lib/donnees/rapport";
 import { chargerOrganisation } from "@/lib/organisation";
@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Mes rapports" };
 
 /** Tous mes rapports du vendredi, du plus récent au plus ancien, regroupés par mois. */
 export default async function PageMesRapports() {
-  const u = await exigerUtilisateur();
+  const u = await exigerInterne();
   if (!redigeUnRapport(u)) redirect("/equipe/rapports");
   const semaine = semaineCourante();
   const [liste, org] = await Promise.all([mesRapports(u.id), chargerOrganisation()]);
