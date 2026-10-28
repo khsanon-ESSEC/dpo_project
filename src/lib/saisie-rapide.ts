@@ -201,3 +201,130 @@ export function analyserMiseAJour(saisie: string, aujourdhui: string): MiseAJour
   if (note) morceaux.push({ type: "note", texte: `Note : ${note}` });
   return { statut, blocage: null, echeance: e.echeance, heures: h.heures, note, morceaux };
 }
+
+// ---------------------------------------------------------------------------
+// Noter une réunion : « Réunion comité de pilotage /unib @fab jeudi 10h 1h30 »
+// ---------------------------------------------------------------------------
+
+export type MorceauReunion = { type: "projet" | "jour" | "heure" | "duree"; texte: string };
+export type AnalyseReunion = { titre: string; projet: ProjetSaisie | null; jour: string; heure: string | null; dureeMinutes: number; morceaux: MorceauReunion[] };
+
+/** La ligne commence par « réunion » (ou « réu », « rdv ») : c'est une réunion à noter, pas une tâche. */
+export const DEBUT_REUNION = /^\s*(?:r[ée]union|r[ée]u|rdv|rendez-vous)(?=$|[\s:,–—-])[\s:,–—-]*/i;
+export const estReunion = (saisie: string) => DEBUT_REUNION.test(saisie);
+
+export const DUREE_PAR_DEFAUT = 60;
+
+/** « 1 h 30 », « 45 min ». */
+export function texteDuree(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h ? `${h} h${m ? ` ${String(m).padStart(2, "0")}` : ""}` : `${m} min`;
+}
+
+// Le jour d'une réunion se dit le plus souvent dans la semaine en cours, passée ou à venir (on note aussi ce
+// qui a eu lieu) : « lundi » = le lundi de cette semaine ; « lundi prochain » / « lundi dernier ».
+const REGLES_JOUR: Regle[] = [
+  { motif: new RegExp(`${D}(?:le\\s+)?avant[- ]hier${F}`, "i"), date: (_, t) => ajouterJours(t, -2) },
+  { motif: new RegExp(`${D}(?:le\\s+)?apr[eè]s[- ]demain${F}`, "i"), date: (_, t) => ajouterJours(t, 2) },
+  { motif: new RegExp(`${D}hier${F}`, "i"), date: (_, t) => ajouterJours(t, -1) },
+  { motif: new RegExp(`${D}(?:aujourd['’]?hui|ce\\s+matin|cet\\s+apr[eè]s-midi|ce\\s+soir)${F}`, "i"), date: (_, t) => t },
+  { motif: new RegExp(`${D}demain${F}`, "i"), date: (_, t) => ajouterJours(t, 1) },
+  {
+    motif: new RegExp(`${D}(?:le\\s+|ce\\s+)?(${JOURS.join("|")})(\\s+(?:prochain|dernier))?${F}`, "i"),
+    date: (m, t) => {
+      const cible = JOURS.indexOf(m[1].toLowerCase());
+      const decalage = !m[2] ? 0 : /prochain/i.test(m[2]) ? 7 : -7;
+      return ajouterJours(lundiDe(t), cible + decalage);
+    },
+  },
+  {
+    motif: new RegExp(`${D}(?:le\\s+)?(\\d{1,2})[/.](\\d{1,2})(?:[/.](\\d{2}|\\d{4}))?${F}`, "i"),
+    date: (m, t) => dateValide(m[3] ? (m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])) : Number(t.slice(0, 4)), Number(m[2]), Number(m[1])),
+  },
+  {
+    motif: new RegExp(`${D}(?:le\\s+)?(1er|\\d{1,2})\\s+(${NOMS_MOIS})\\.?(?:\\s+(\\d{4}))?${F}`, "i"),
+    date: (m, t) => {
+      const mo = MOIS.find(([r]) => r.test(m[2].toLowerCase()))?.[1];
+      return mo ? dateValide(m[3] ? Number(m[3]) : Number(t.slice(0, 4)), mo, m[1].toLowerCase() === "1er" ? 1 : Number(m[1])) : null;
+    },
+  },
+  { motif: new RegExp(`${D}le\\s+(1er|\\d{1,2})${F}`, "i"), date: (m, t) => dateValide(Number(t.slice(0, 4)), Number(t.slice(5, 7)), m[1].toLowerCase() === "1er" ? 1 : Number(m[1])) },
+];
+
+const hhmm = (h: number, m: number) => (h >= 0 && h <= 23 && m >= 0 && m <= 59 ? `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}` : null);
+
+export function analyserReunion(saisie: string, aujourdhui: string, projets: ProjetSaisie[]): AnalyseReunion {
+  let texte = ` ${String(saisie ?? "").replace(DEBUT_REUNION, "").replace(/\s+/g, " ").trim().slice(0, 300)} `;
+  const morceaux: MorceauReunion[] = [];
+
+  let projet: ProjetSaisie | null = null;
+  const parCode = new Map(projets.map((p) => [p.code.toUpperCase(), p]));
+  const nu = new RegExp(`${D}([A-Z0-9]{2,4})${F}`, "g");
+  for (let m = nu.exec(texte); m; m = nu.exec(texte)) {
+    if (/[A-Z]/.test(m[1]) && parCode.has(m[1])) {
+      projet = parCode.get(m[1])!;
+      texte = sans(texte, m);
+      break;
+    }
+  }
+  if (projet) morceaux.push({ type: "projet", texte: `${projet.code} · ${projet.titre}` });
+
+  // Heure et durée : « de 10h à 11h30 », « à 14h », « 10h 1h30 », « 45 min », « pendant 2h ».
+  let heure: string | null = null;
+  let duree: number | null = null;
+  const plage = new RegExp(`${D}de\\s+(\\d{1,2})\\s?h\\s?(\\d{2})?\\s+[àa]\\s+(\\d{1,2})\\s?h\\s?(\\d{2})?${F}`, "i").exec(texte);
+  if (plage) {
+    const debut = Number(plage[1]) * 60 + Number(plage[2] ?? 0);
+    const fin = Number(plage[3]) * 60 + Number(plage[4] ?? 0);
+    heure = hhmm(Number(plage[1]), Number(plage[2] ?? 0));
+    if (heure && fin > debut) duree = fin - debut;
+    texte = sans(texte, plage);
+  }
+  const minutesSeules = new RegExp(`${D}(?:pendant\\s+|dur[ée]e\\s*:?\\s*)?(\\d{1,3})\\s?min(?:utes?)?${F}`, "i").exec(texte);
+  if (minutesSeules && duree === null) {
+    duree = Number(minutesSeules[1]);
+    texte = sans(texte, minutesSeules);
+  }
+  const enHeures = (marque: RegExp) => marque.exec(texte);
+  const aHeure = enHeures(new RegExp(`${D}(?:[àa]|vers)\\s+(\\d{1,2})\\s?h\\s?(\\d{2})?${F}`, "i"));
+  if (aHeure && !heure) {
+    heure = hhmm(Number(aHeure[1]), Number(aHeure[2] ?? 0));
+    texte = sans(texte, aHeure);
+  }
+  const pendant = enHeures(new RegExp(`${D}(?:pendant|dur[ée]e\\s*:?)\\s+(\\d{1,2})\\s?h\\s?(\\d{2})?${F}`, "i"));
+  if (pendant && duree === null) {
+    duree = Number(pendant[1]) * 60 + Number(pendant[2] ?? 0);
+    texte = sans(texte, pendant);
+  }
+  // Ce qui reste (« 10h », « 1h30 ») : à partir de 7 h, c'est l'heure ; en dessous, la durée.
+  for (let i = 0; i < 2; i++) {
+    const m = new RegExp(`${D}(\\d{1,2})\\s?h\\s?(\\d{2})?${F}`, "i").exec(texte);
+    if (!m) break;
+    const h = Number(m[1]);
+    const mn = Number(m[2] ?? 0);
+    if (!heure && h >= 7) heure = hhmm(h, mn);
+    else if (duree === null) duree = h * 60 + mn;
+    else break;
+    texte = sans(texte, m);
+  }
+
+  // Jour : aujourd'hui sauf mention.
+  let jour = aujourdhui;
+  for (const r of REGLES_JOUR) {
+    const m = r.motif.exec(texte);
+    const d = m ? r.date(m, aujourdhui) : null;
+    if (m && d) {
+      jour = d;
+      texte = sans(texte, m);
+      break;
+    }
+  }
+  morceaux.push({ type: "jour", texte: jourComplet(jour) });
+  if (heure) morceaux.push({ type: "heure", texte: `à ${heure.replace(":", " h ").replace(" h 00", " h")}` });
+  const dureeMinutes = duree !== null && duree >= 5 && duree <= 600 ? duree : DUREE_PAR_DEFAUT;
+  morceaux.push({ type: "duree", texte: texteDuree(dureeMinutes) });
+  // « Réunion comité de pilotage » : le titre est « Comité de pilotage ».
+  const titre = nettoyer(texte, 160);
+  return { titre: titre.charAt(0).toUpperCase() + titre.slice(1), projet, jour, heure, dureeMinutes, morceaux };
+}

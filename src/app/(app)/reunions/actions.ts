@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { acces, contactsVisibles, idsProjetsVisibles, type Acces } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
-import { lundiDe } from "@/lib/dates";
+import { aujourdhui, dateCourte, lundiDe } from "@/lib/dates";
+import { tousLesProjetsActifs } from "@/lib/donnees/projets";
+import { analyserReunion, texteDuree } from "@/lib/saisie-rapide";
 import { modifierReunion, noterReunion, quitterReunion, supprimerReunion, type SaisieReunion } from "@/lib/donnees/reunions";
 import { trouverOuCreerExterne } from "@/lib/donnees/externes";
 import { creerTacheGeree } from "@/lib/donnees/gestion";
@@ -130,4 +132,38 @@ export async function quitter(id: string, semaine: string) {
   revalider();
   const s = semaineDe(semaine);
   redirect(`/reunions?${s ? `semaine=${s}` : ""}${"erreur" in r ? `&erreur=${encodeURIComponent(r.erreur)}` : ""}`);
+}
+
+export type EtatReunionRapide = { message: string | null; ok?: boolean; n?: number; semaine?: string };
+
+/**
+ * Noter une réunion depuis la barre (« Réunion comité de pilotage /unib @fab jeudi 10h 1h30 ») : la saisie est
+ * relue ici ; mêmes règles que le formulaire de la page Réunions (projet visible, participants actifs ; hors
+ * division, seulement ses contacts).
+ */
+export async function noterReunionRapide(etat: EtatReunionRapide, form: FormData): Promise<EtatReunionRapide> {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const visibles = await idsProjetsVisibles(a);
+  const projets = (await tousLesProjetsActifs()).filter((p) => visibles === "tous" || visibles.has(p.id));
+  const r = analyserReunion(String(form.get("saisie") ?? ""), aujourdhui(), projets);
+  if (!r.titre) return { message: "Donnez un titre à la réunion : « Réunion comité de pilotage jeudi 10h ».", n: etat.n };
+  const choisi = String(form.get("projetId") ?? "");
+  const projet = choisi ? projets.find((p) => p.id === choisi) : r.projet;
+  if (choisi && !projet) return { message: "Projet introuvable.", n: etat.n };
+  let participants = form.getAll("participants").map(String).filter((id) => UUID.test(id)).slice(0, 50);
+  if (a.moi.externe) {
+    const contacts = await contactsVisibles(a);
+    participants = participants.filter((id) => contacts.has(id));
+  }
+  const n = await noterReunion(a, { titre: r.titre, jour: r.jour, heure: r.heure ?? "", dureeMinutes: r.dureeMinutes, projetId: projet?.id ?? "", notes: "", participants }, visibles);
+  if ("erreur" in n) return { message: n.erreur, n: etat.n };
+  revalider();
+  const autres = participants.length;
+  return {
+    message: `Réunion notée : « ${r.titre} », ${dateCourte(r.jour)}${r.heure ? ` à ${r.heure.replace(":", " h ").replace(" h 00", " h")}` : ""}, ${texteDuree(r.dureeMinutes)}${autres ? ` ; ${autres > 1 ? "les participants la voient dans leur semaine" : "l'autre participant la voit dans sa semaine"}` : ""}.`,
+    ok: true,
+    n: (etat.n ?? 0) + 1,
+    semaine: lundiDe(r.jour),
+  };
 }

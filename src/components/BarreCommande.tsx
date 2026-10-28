@@ -2,7 +2,8 @@
 
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { ajouterTacheRapide, mettreAJourTacheRapide, type EtatSaisieRapide } from "@/app/(app)/taches/actions";
-import { analyserMiseAJour, analyserSaisie, LIBELLES_STATUT, type ProjetSaisie, type StatutTache } from "@/lib/saisie-rapide";
+import { noterReunionRapide, type EtatReunionRapide } from "@/app/(app)/reunions/actions";
+import { analyserMiseAJour, analyserReunion, analyserSaisie, estReunion, LIBELLES_STATUT, type ProjetSaisie, type StatutTache } from "@/lib/saisie-rapide";
 import { dateCourte } from "@/lib/dates";
 import { cleNom } from "@/lib/projets";
 import { Icone } from "@/components/Icone";
@@ -30,7 +31,9 @@ type Ligne = { cle: string; libelle: string; sous?: string; code?: string | null
  *   ou une personne est choisi, Entrée ajoute la tâche ;
  * - une tâche choisie avec « # » : ce qu'on écrit la met à jour (« faite », « bloquée attente DTI »,
  *   « en cours », une date, une durée, une note ; « @ » la confie, « / » la change de projet). Sans rien
- *   écrire, Entrée l'ouvre.
+ *   écrire, Entrée l'ouvre ;
+ * - une ligne qui commence par « Réunion » note une réunion : « / » le projet, « @ » les participants
+ *   (plusieurs), le jour, l'heure (10h) et la durée (1h30) écrits dans le texte.
  */
 export function BarreCommande({
   mode,
@@ -39,6 +42,7 @@ export function BarreCommande({
   base,
   parProjet,
   taches,
+  participants = [],
   moiId,
   aujourdhui,
   retour,
@@ -51,6 +55,8 @@ export function BarreCommande({
   base: string[];
   parProjet: Record<string, string[]>;
   taches: TacheBarre[];
+  /** « Réunion … » puis « @ » : les personnes qu'on peut inviter. */
+  participants?: PersonneBarre[];
   moiId: string;
   aujourdhui: string;
   retour: string;
@@ -60,9 +66,11 @@ export function BarreCommande({
 }) {
   const [etatAjout, actionAjout, ajoutEnCours] = useActionState<EtatSaisieRapide, FormData>(ajouterTacheRapide, { message: null, n: 0 });
   const [etatMaj, actionMaj, majEnCours] = useActionState<EtatSaisieRapide, FormData>(mettreAJourTacheRapide, { message: null, n: 0 });
-  const [dernier, setDernier] = useState<"ajout" | "maj">("ajout");
-  const etat = dernier === "maj" ? etatMaj : etatAjout;
-  const enCours = ajoutEnCours || majEnCours;
+  const [etatReunion, actionReunion, reunionEnCours] = useActionState<EtatReunionRapide, FormData>(noterReunionRapide, { message: null, n: 0 });
+  const [dernier, setDernier] = useState<"ajout" | "maj" | "reunion">("ajout");
+  const etat: EtatSaisieRapide & EtatReunionRapide = dernier === "maj" ? etatMaj : dernier === "reunion" ? etatReunion : etatAjout;
+  const enCours = ajoutEnCours || majEnCours || reunionEnCours;
+  const [invites, setInvites] = useState<PersonneBarre[]>([]);
   const [texte, setTexte] = useState(initial);
   const [tache, setTache] = useState<TacheBarre | null>(null);
   const [projet, setProjet] = useState<ProjetSaisie | null>(null);
@@ -70,7 +78,7 @@ export function BarreCommande({
   const [liste, setListe] = useState<Liste | null>(null);
   const [surligne, setSurligne] = useState(-1);
   const [resultats, setResultats] = useState<Resultats>(null);
-  const [vu, setVu] = useState({ ajout: 0, maj: 0 });
+  const [vu, setVu] = useState({ ajout: 0, maj: 0, reunion: 0 });
   // Refus du serveur (règle d'assignation, date impossible…) : affiché jusqu'à la prochaine frappe.
   const [erreur, setErreur] = useState<string | null>(null);
   useEffect(() => {
@@ -79,6 +87,9 @@ export function BarreCommande({
   useEffect(() => {
     if (etatMaj.message && !etatMaj.ok) setErreur(etatMaj.message);
   }, [etatMaj]);
+  useEffect(() => {
+    if (etatReunion.message && !etatReunion.ok) setErreur(etatReunion.message);
+  }, [etatReunion]);
   const champ = useRef<HTMLInputElement>(null);
   const formulaire = useRef<HTMLFormElement>(null);
   const idListe = useId();
@@ -89,6 +100,7 @@ export function BarreCommande({
     setProjet(null);
     setPersonne(null);
     setTache(null);
+    setInvites([]);
     setListe(null);
     setResultats(null);
   };
@@ -100,11 +112,17 @@ export function BarreCommande({
     setVu({ ...vu, maj: etatMaj.n ?? 0 });
     vider();
   }
+  if (etatReunion.ok && etatReunion.n !== vu.reunion) {
+    setVu({ ...vu, reunion: etatReunion.n ?? 0 });
+    vider();
+  }
 
-  const analyse = !tache && texte.trim() ? analyserSaisie(texte, aujourdhui, projets) : null;
+  const reunion = !tache && estReunion(texte);
+  const analyseReunion = reunion ? analyserReunion(texte, aujourdhui, projets) : null;
+  const analyse = !tache && !reunion && texte.trim() ? analyserSaisie(texte, aujourdhui, projets) : null;
   const maj = tache ? analyserMiseAJour(texte, aujourdhui) : null;
   const rienAChanger = !!maj && !maj.morceaux.length && !projet && !personne;
-  const projetEffectifId = projet?.id ?? (tache ? tache.projetId : (analyse?.projet?.id ?? null));
+  const projetEffectifId = projet?.id ?? (tache ? tache.projetId : (analyse?.projet?.id ?? analyseReunion?.projet?.id ?? null));
 
   // Personnes qu'on peut choisir : soi, celles qu'on suit, l'équipe des projets qu'on dirige ; hors division
   // seulement sur un projet qu'on dirige (mêmes règles que le formulaire complet).
@@ -130,7 +148,12 @@ export function BarreCommande({
           .filter((p) => !liste.requete || cleNom(`${p.code} ${p.titre}`).includes(cleNom(liste.requete)))
           .slice(0, 8)
           .map((p) => ({ id: p.id, libelle: p.titre, sous: p.code }))
-      : personnesPermises
+      : reunion
+        ? participants
+            .filter((p) => !invites.some((i) => i.id === p.id) && (!liste.requete || cleNom(`${p.nom} ${p.organisation ?? ""}`).includes(cleNom(liste.requete))))
+            .slice(0, 8)
+            .map((p) => ({ id: p.id, libelle: p.nom, sous: p.externe ? ["Hors division", p.organisation].filter(Boolean).join(" · ") : p.organisation || undefined }))
+        : personnesPermises
           .filter((p) => !liste.requete || cleNom(`${p.nom} ${p.organisation ?? ""}`).includes(cleNom(liste.requete)))
           .slice(0, 8)
           .map((p) => ({ id: p.id, libelle: p.id === moiId ? "Moi" : p.nom, sous: p.externe ? ["Hors division", p.organisation].filter(Boolean).join(" · ") : undefined }));
@@ -159,6 +182,8 @@ export function BarreCommande({
     const avant = valeur.slice(0, curseur);
     const m = /(^|\s)([/@#])([^/@#]{0,40})$/.exec(avant);
     if (!m) return setListe(null);
+    // Dans une réunion, « # » (une tâche) n'a pas de sens.
+    if (m[2] === "#" && estReunion(valeur)) return setListe(null);
     const requete = m[3];
     const type = m[2] === "/" ? "projet" : m[2] === "#" ? "tache" : "personne";
     setListe({ type, debut: avant.length - requete.length - 1, requete });
@@ -176,7 +201,10 @@ export function BarreCommande({
       setPersonne(null);
       nouveau = nouveau.trim() ? `${nouveau.trim()} ` : "";
     } else if (liste.type === "projet") setProjet(projets.find((p) => p.id === c.id) ?? null);
-    else setPersonne(personnes.find((p) => p.id === c.id) ?? null);
+    else if (reunion) {
+      const p = participants.find((x) => x.id === c.id);
+      if (p) setInvites([...invites, p]);
+    } else setPersonne(personnes.find((p) => p.id === c.id) ?? null);
     setTexte(nouveau);
     setListe(null);
     const position = liste.type === "tache" ? nouveau.length : liste.debut;
@@ -193,6 +221,13 @@ export function BarreCommande({
       setDernier("maj");
       return formulaire.current?.requestSubmit();
     }
+    if (reunion) {
+      if (analyseReunion?.titre) {
+        setDernier("reunion");
+        formulaire.current?.requestSubmit();
+      }
+      return;
+    }
     if (analyse?.titre) {
       setDernier("ajout");
       formulaire.current?.requestSubmit();
@@ -206,7 +241,10 @@ export function BarreCommande({
   const lignes: Ligne[] =
     mode === "recherche" && !liste && !tache && texte.trim()
       ? [
-          ...(analyse?.titre ? [{ cle: "ajouter", libelle: `Ajouter la tâche « ${analyse.titre} »`, sous: "pour vous ; / pour un projet, @ pour une personne", code: "+", action: ajouter }] : []),
+          ...(analyseReunion?.titre
+            ? [{ cle: "ajouter", libelle: `Noter la réunion « ${analyseReunion.titre} »`, sous: analyseReunion.morceaux.filter((m) => m.type !== "projet").map((m) => m.texte).join(" · "), code: "+", action: ajouter }]
+            : []),
+          ...(analyse?.titre ? [{ cle: "ajouter", libelle: `Ajouter la tâche « ${analyse.titre} »`, sous: "pour vous ; / pour un projet, @ pour une personne ; « Réunion … » pour noter une réunion", code: "+", action: ajouter }] : []),
           ...(resultats?.projets.liste ?? []).map((p) => ({ cle: `p-${p.id}`, libelle: p.texte, sous: p.sous || "Projet", code: p.code, action: () => (window.location.href = `/projets/${p.id}`) })),
           ...(resultats?.taches.liste ?? []).map((t) => ({ cle: `t-${t.id}`, libelle: t.texte, sous: t.sous || "Tâche", code: t.code, action: () => (window.location.href = `/taches/${t.id}`) })),
           ...(resultats?.personnes.liste ?? []).map((p) => ({ cle: `n-${p.id}`, libelle: p.texte, sous: p.sous || "Personne", code: null, action: () => (window.location.href = `/personnes/${p.id}`) })),
@@ -223,9 +261,10 @@ export function BarreCommande({
       return;
     }
     // Retour arrière dans une barre vide : la dernière étiquette s'en va (tâche, personne, projet).
-    if (e.key === "Backspace" && !texte && (tache || personne || projet)) {
+    if (e.key === "Backspace" && !texte && (tache || personne || projet || invites.length)) {
       e.preventDefault();
-      if (personne) setPersonne(null);
+      if (invites.length) setInvites(invites.slice(0, -1));
+      else if (personne) setPersonne(null);
       else if (projet) setProjet(null);
       else setTache(null);
       return;
@@ -243,7 +282,7 @@ export function BarreCommande({
     if (e.key === "Enter") {
       e.preventDefault();
       if (mode === "recherche" && surligne >= 0 && lignes[surligne]) return lignes[surligne].action();
-      if (mode === "tache" || tache || projet || personne) return ajouter();
+      if (mode === "tache" || tache || reunion || projet || personne) return ajouter();
       return chercher();
     }
   };
@@ -262,13 +301,13 @@ export function BarreCommande({
   return (
     <form
       ref={formulaire}
-      action={tache ? actionMaj : actionAjout}
+      action={tache ? actionMaj : reunion ? actionReunion : actionAjout}
       className="saisie-rapide"
       role={mode === "recherche" ? "search" : undefined}
-      onSubmit={(e) => (tache ? rienAChanger : !analyse?.titre) && e.preventDefault()}
+      onSubmit={(e) => (tache ? rienAChanger : reunion ? !analyseReunion?.titre : !analyse?.titre) && e.preventDefault()}
     >
       <label htmlFor={`${idListe}-champ`} className="visuellement-cache">
-        {tache ? `Mettre à jour la tâche « ${tache.titre} »` : mode === "recherche" ? "Rechercher, ou ajouter une tâche" : "Ajouter une tâche"}
+        {tache ? `Mettre à jour la tâche « ${tache.titre} »` : mode === "recherche" ? "Rechercher, ajouter une tâche ou noter une réunion" : "Ajouter une tâche, ou noter une réunion"}
       </label>
       <div className="commande">
         <div className="saisie-rapide__ligne">
@@ -279,7 +318,7 @@ export function BarreCommande({
               <span aria-hidden="true">×</span>
             </button>
           ) : (
-            <Icone nom={mode === "recherche" ? "loupe" : "ajouter"} taille={18} />
+            <Icone nom={reunion ? "reunion" : mode === "recherche" ? "loupe" : "ajouter"} taille={18} />
           )}
           <input
             ref={champ}
@@ -314,14 +353,14 @@ export function BarreCommande({
           <button
             type="button"
             className="bouton-ambre"
-            disabled={enCours || (tache ? false : mode === "tache" ? !analyse?.titre : !texte.trim())}
-            onClick={() => (mode === "tache" || tache || projet || personne ? ajouter() : chercher())}
+            disabled={enCours || (tache ? false : reunion ? !analyseReunion?.titre : mode === "tache" ? !analyse?.titre : !texte.trim())}
+            onClick={() => (mode === "tache" || tache || reunion || projet || personne ? ajouter() : chercher())}
           >
-            {enCours ? "…" : tache ? (rienAChanger ? "Ouvrir" : "Mettre à jour") : mode === "tache" || projet || personne ? "Ajouter" : "Chercher"}
+            {enCours ? "…" : tache ? (rienAChanger ? "Ouvrir" : "Mettre à jour") : reunion ? "Noter" : mode === "tache" || projet || personne ? "Ajouter" : "Chercher"}
           </button>
         </div>
         {ouvert ? (
-          <ul id={`${idListe}-liste`} role="listbox" className="commande__liste" aria-label={liste ? (liste.type === "projet" ? "Projets" : liste.type === "tache" ? "Tâches" : "Personnes") : "Résultats"}>
+          <ul id={`${idListe}-liste`} role="listbox" className="commande__liste" aria-label={liste ? (liste.type === "projet" ? "Projets" : liste.type === "tache" ? "Tâches" : reunion ? "Participants" : "Personnes") : "Résultats"}>
             {liste
               ? choix.map((c, i) => (
                   <li
@@ -365,7 +404,7 @@ export function BarreCommande({
         ) : null}
         {liste && !choix.length ? (
           <p className="commande__vide" role="status">
-            {liste.type === "projet" ? "Aucun projet ne correspond." : liste.type === "tache" ? "Aucune tâche ouverte ne correspond (les vôtres, celles de votre équipe, celles que vous avez confiées, celles de vos projets)." : "Personne ne correspond parmi celles à qui vous pouvez confier une tâche."}
+            {liste.type === "projet" ? "Aucun projet ne correspond." : liste.type === "tache" ? "Aucune tâche ouverte ne correspond (les vôtres, celles de votre équipe, celles que vous avez confiées, celles de vos projets)." : reunion ? "Personne ne correspond." : "Personne ne correspond parmi celles à qui vous pouvez confier une tâche."}
           </p>
         ) : null}
       </div>
@@ -380,6 +419,25 @@ export function BarreCommande({
             ))}
             {projet ? puce(`Vers ${projet.code} · ${projet.titre}`, () => setProjet(null), "saisie-rapide__morceau--projet") : null}
             {personne ? puce(`Confier à ${personne.id === moiId ? "moi" : personne.nom}`, () => setPersonne(null), "saisie-rapide__morceau--personne") : null}
+          </>
+        ) : analyseReunion ? (
+          <>
+            <span className="saisie-rapide__titre">{analyseReunion.titre ? `Réunion « ${analyseReunion.titre} »` : "Réunion : écrivez son titre"}</span>
+            {projet
+              ? puce(`${projet.code} · ${projet.titre}`, () => setProjet(null), "saisie-rapide__morceau--projet")
+              : analyseReunion.projet
+                ? puce(`${analyseReunion.projet.code} · ${analyseReunion.projet.titre}`, null, "saisie-rapide__morceau--projet")
+                : puce("Hors projet", null, "saisie-rapide__morceau--discret")}
+            {analyseReunion.morceaux
+              .filter((m) => m.type !== "projet")
+              .map((m) => (
+                <span key={m.type} className={`saisie-rapide__morceau saisie-rapide__morceau--${m.type === "jour" ? "echeance" : "heures"}`}>
+                  {m.texte}
+                </span>
+              ))}
+            {invites.map((p) => (
+              <span key={p.id}>{puce(`Avec ${p.nom}`, () => setInvites(invites.filter((i) => i.id !== p.id)), "saisie-rapide__morceau--personne")}</span>
+            ))}
           </>
         ) : analyse && (mode === "tache" || projet || personne) ? (
           <>
@@ -399,7 +457,11 @@ export function BarreCommande({
         ) : etat.ok && etat.message ? (
           <span className="ton-ok">
             {etat.message}{" "}
-            {etat.ok && etat.id ? (
+            {dernier === "reunion" && etat.semaine ? (
+              <a href={`/reunions?semaine=${etat.semaine}`} className="lien-discret">
+                Voir les réunions
+              </a>
+            ) : etat.ok && etat.id ? (
               <a href={`/taches/${etat.id}?retour=${encodeURIComponent(retour)}`} className="lien-discret">
                 {dernier === "maj" ? "Voir la tâche" : "Préciser"}
               </a>
@@ -407,14 +469,14 @@ export function BarreCommande({
           </span>
         ) : mode === "tache" ? (
           <span className="ton-discret">
-            <kbd>/</kbd> un projet · <kbd>@</kbd> une personne · <kbd>#</kbd> une tâche à mettre à jour (faite, bloquée…, une date, @ quelqu'un) ; une date (demain, vendredi, 12/11) et des heures (2h) sont reconnues.{" "}
+            <kbd>/</kbd> un projet · <kbd>@</kbd> une personne · <kbd>#</kbd> une tâche à mettre à jour (faite, bloquée…, une date, @ quelqu'un) ; une date (demain, vendredi, 12/11) et des heures (2h) sont reconnues ; « Réunion … » note une réunion.{" "}
             <a href={`/taches/nouvelle?retour=${encodeURIComponent(retour)}`} className="lien-discret">
               Formulaire complet
             </a>
           </span>
         ) : null}
       </p>
-      {erreur && (tache || analyse) ? (
+      {erreur && (tache || analyse || analyseReunion) ? (
         <p className="saisie-rapide__erreur ton-retard" role="alert">
           {erreur}
         </p>
@@ -422,6 +484,7 @@ export function BarreCommande({
       <input type="hidden" name="tacheId" value={tache?.id ?? ""} />
       <input type="hidden" name="projetId" value={projet?.id ?? ""} />
       <input type="hidden" name="assigneId" value={personne?.id ?? ""} />
+      {reunion ? invites.map((p) => <input key={p.id} type="hidden" name="participants" value={p.id} />) : null}
     </form>
   );
 }

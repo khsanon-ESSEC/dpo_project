@@ -6,7 +6,8 @@
 import "server-only";
 import { and, asc, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { acces, idsProjetsVisibles, peutModifierTache, type Acces } from "@/lib/acces";
+import { acces, contactsVisibles, idsProjetsVisibles, peutModifierTache, type Acces } from "@/lib/acces";
+import { chargerOrganisation } from "@/lib/organisation";
 import type { Utilisateur } from "@/lib/auth/session";
 import { aujourdhui } from "@/lib/dates";
 import { assignables } from "@/lib/donnees/gestion";
@@ -51,8 +52,21 @@ export async function tachesPourBarre(a: Acces): Promise<TacheBarre[]> {
     .map((t) => ({ id: t.id, titre: t.titre, code: t.code ?? null, echeance: t.echeance ?? null, projetId: t.projetId, statut: t.statut, pour: t.assigneId === a.moi.id ? null : nomComplet(t) }));
 }
 
+/**
+ * « Réunion … » puis « @ » : les personnes qu'on peut inviter (comme sur la page Réunions) : toute personne
+ * active ; hors division (accès limité), seulement celles avec qui l'on travaille déjà.
+ */
+export async function participantsPourBarre(a: Acces) {
+  const org = await chargerOrganisation();
+  const contacts = a.moi.externe ? await contactsVisibles(a) : null;
+  return [...org.personnes.values()]
+    .filter((p) => p.actif && p.id !== a.moi.id && (!contacts || contacts.has(p.id)))
+    .sort((x, y) => Number(x.externe) - Number(y.externe) || x.nom.localeCompare(y.nom, "fr"))
+    .map((p) => ({ id: p.id, nom: nomComplet(p), externe: p.externe, organisation: p.externe ? p.organisation : p.poste }));
+}
+
 export async function donneesBarre(u: Utilisateur) {
   const a = await acces(u);
-  const [projets, pour, taches] = await Promise.all([projetsPourSaisie(u), assignables(a), tachesPourBarre(a)]);
-  return { projets, personnes: pour.personnes, base: pour.base, parProjet: pour.parProjet, taches, moiId: u.id, aujourdhui: aujourdhui() };
+  const [projets, pour, taches, participants] = await Promise.all([projetsPourSaisie(u), assignables(a), tachesPourBarre(a), participantsPourBarre(a)]);
+  return { projets, personnes: pour.personnes, base: pour.base, parProjet: pour.parProjet, taches, participants, moiId: u.id, aujourdhui: aujourdhui() };
 }

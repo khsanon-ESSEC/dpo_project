@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyserMiseAJour, analyserSaisie } from "@/lib/saisie-rapide";
+import { analyserMiseAJour, analyserReunion, analyserSaisie, estReunion } from "@/lib/saisie-rapide";
 
 // Mercredi 28 octobre 2026
 const AUJ = "2026-10-28";
@@ -86,5 +86,38 @@ describe("mettre à jour une tâche choisie avec « # »", () => {
   });
   it("montre ce qui a été compris", () => {
     expect(m("faite 2h").morceaux.map((x) => x.texte)).toEqual(["Faite", "2 h de travail"]);
+  });
+});
+
+const r = (s: string) => analyserReunion(s, AUJ, P);
+
+describe("noter une réunion depuis la barre", () => {
+  it("« réunion » en tête : titre, projet, jour, heure, durée", () => {
+    expect(estReunion("Réunion comité de pilotage")).toBe(true);
+    expect(estReunion("réu : point hebdo")).toBe(true);
+    expect(estReunion("Préparer la réunion")).toBe(false);
+    expect(r("Réunion comité de pilotage UR jeudi 10h 1h30")).toMatchObject({ titre: "Comité de pilotage", projet: { id: "p-ur" }, jour: "2026-10-29", heure: "10:00", dureeMinutes: 90 });
+  });
+  it("par défaut : aujourd'hui, sans heure, une heure", () => {
+    expect(r("Réunion point DTI")).toMatchObject({ titre: "Point DTI", jour: AUJ, heure: null, dureeMinutes: 60 });
+  });
+  it("le jour de la semaine en cours, passé ou à venir ; hier ; prochain, dernier", () => {
+    expect(r("réunion x lundi").jour).toBe("2026-10-26");
+    expect(r("réunion x vendredi").jour).toBe("2026-10-30");
+    expect(r("réunion x hier").jour).toBe("2026-10-27");
+    expect(r("réunion x lundi prochain").jour).toBe("2026-11-02");
+    expect(r("réunion x vendredi dernier").jour).toBe("2026-10-23");
+    expect(r("réunion x 12/10").jour).toBe("2026-10-12");
+  });
+  it("heures et durées sous toutes les formes", () => {
+    expect(r("réunion x de 14h à 15h30")).toMatchObject({ heure: "14:00", dureeMinutes: 90, titre: "X" });
+    expect(r("réunion x à 9h 45 min")).toMatchObject({ heure: "09:00", dureeMinutes: 45 });
+    expect(r("réunion x 2h")).toMatchObject({ heure: null, dureeMinutes: 120 });
+    expect(r("réunion x 14h30")).toMatchObject({ heure: "14:30", dureeMinutes: 60 });
+    expect(r("réunion x pendant 3h")).toMatchObject({ dureeMinutes: 180 });
+    expect(r("réunion x 900 min").dureeMinutes).toBe(60); // hors limites : durée par défaut
+  });
+  it("montre ce qui a été compris", () => {
+    expect(r("Réunion revue UR mardi à 10h 1h").morceaux.map((m) => m.texte)).toEqual(["UR · Nouvelle version UNIBANKOnline Retail", "Mardi 27 octobre", "à 10 h", "1 h"]);
   });
 });
