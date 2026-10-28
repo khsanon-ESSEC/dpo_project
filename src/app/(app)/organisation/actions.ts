@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { exigerUtilisateur } from "@/lib/auth/session";
-import { creerPersonne, definirChefEquipe, modifierPersonne, reinitialiserMotDePasse } from "@/lib/donnees/organisation";
+import { creerPersonne, definirChefEquipe, modifierPersonne, REFUS_SUIVI, reinitialiserMotDePasse } from "@/lib/donnees/organisation";
 import { fermerAccesExterne, fusionnerExternes, modifierExterne, ouvrirAccesExterne } from "@/lib/donnees/externes";
 import { peutAdministrer } from "@/lib/regles";
 import { personneActuelle } from "@/lib/organisation";
@@ -49,8 +49,12 @@ export async function nouveauMotDePasse(_: EtatFiche, form: FormData): Promise<E
   const personneId = String(form.get("personneId") ?? "");
   // L'accès d'une personne hors division s'ouvre et se ferme dans sa fiche « Hors division ».
   if ((await personneActuelle(personneId))?.externe) return { message: "Cette personne est hors division : ouvrez son accès depuis sa fiche." };
-  const provisoire = await reinitialiserMotDePasse(u.id, personneId);
-  return { message: null, ok: true, provisoire };
+  try {
+    const provisoire = await reinitialiserMotDePasse(u.id, personneId);
+    return { message: null, ok: true, provisoire };
+  } catch (e) {
+    return { message: (e as Error).message };
+  }
 }
 
 export async function ajouterPersonne(_: EtatFiche, form: FormData): Promise<EtatFiche> {
@@ -82,7 +86,14 @@ export async function ajouterPersonne(_: EtatFiche, form: FormData): Promise<Eta
 
 export async function changerChefEquipe(equipeId: string, form: FormData) {
   const u = await exigerAdministrateur();
-  await definirChefEquipe(u.id, equipeId, ou(form.get("chefId")));
+  let refus: string | null = null;
+  try {
+    await definirChefEquipe(u.id, equipeId, ou(form.get("chefId")));
+  } catch (e) {
+    // Un code, jamais le texte dans l'adresse : la page affiche son propre message.
+    refus = (e as Error).message === REFUS_SUIVI ? "suivi" : "chef";
+  }
+  if (refus) redirect(`/organisation?erreur=${refus}`);
   revalidatePath("/organisation");
   redirect("/organisation");
 }

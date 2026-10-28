@@ -7,7 +7,10 @@ import { eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { planifierImport, type Existant, type LigneImport, type Plan } from "@/lib/import-organisation";
 import { noter } from "@/lib/journal";
+import { chargerOrganisation } from "@/lib/organisation";
 import { cleNom } from "@/lib/projets";
+import { copieOrganisation, suivisEnPlus, type OrgDonnees } from "@/lib/regles";
+import { avertirChangementsDeSuperieur, REFUS_SUIVI } from "@/lib/donnees/organisation";
 
 export async function existantPourImport(): Promise<Existant> {
   const [personnes, equipes] = await Promise.all([
@@ -33,9 +36,46 @@ export async function planPourLignes(lignes: LigneImport[], source: "fichier" | 
   return planifierImport(lignes, await existantPourImport(), { laisserDeCote: source === "annuaire" });
 }
 
+/** L'organisation telle que l'import la laisserait (mêmes règles que l'écriture ci-dessous). */
+export function simulerImport(o: OrgDonnees, plan: Plan) {
+  const parCourriel = new Map([...o.personnes.values()].filter((p) => p.courriel).map((p) => [p.courriel!.toLowerCase(), p.id]));
+  const equipes = new Map([...o.equipes.values()].map((e) => [cleNom(e.nom), e.id]));
+  for (const nom of plan.equipesNouvelles) {
+    const id = `nouvelle:${cleNom(nom)}`;
+    o.equipes.set(id, { id, nom, chefId: null, equipeParenteId: null });
+    equipes.set(cleNom(nom), id);
+  }
+  const idEquipe = (nom: string) => (nom ? (equipes.get(cleNom(nom)) ?? null) : null);
+  for (const l of plan.creer) {
+    const id = `nouveau:${l.courriel}`;
+    parCourriel.set(l.courriel, id);
+    o.personnes.set(id, { id, prenom: l.prenom, nom: l.nom, poste: l.poste, courriel: l.courriel, equipeId: idEquipe(l.equipe), superieurId: null, actif: true, externe: false, organisation: "", acces: false, directeur: false, executif: false, administrateur: false });
+  }
+  for (const m of plan.modifier) {
+    const p = o.personnes.get(m.id);
+    if (p && m.changements.some((c) => c.champ === "équipe")) p.equipeId = idEquipe(m.donnees.equipe);
+  }
+  for (const l of [...plan.creer, ...plan.modifier.filter((m) => m.changements.some((c) => c.champ === "supérieur")).map((m) => m.donnees)]) {
+    const p = l.superieur ? o.personnes.get(parCourriel.get(l.courriel) ?? "") : undefined;
+    if (p) p.superieurId = parCourriel.get(l.superieur) ?? null;
+  }
+}
+
+/**
+ * Garde-fous d'un administrateur qui n'est pas exécutif (comme pour une fiche) : l'import ne change ni son
+ * équipe ni son supérieur, et ne lui fait pas suivre de nouvelles personnes.
+ */
+function refusImport(parId: string, avant: OrgDonnees, apres: OrgDonnees, plan: Plan): string | null {
+  if (avant.personnes.get(parId)?.executif) return null;
+  if (plan.modifier.some((m) => m.id === parId && m.changements.some((c) => c.champ === "équipe" || c.champ === "supérieur"))) {
+    return "Votre équipe et votre supérieur se changent par un autre administrateur : laissez-les tels quels dans votre ligne.";
+  }
+  return suivisEnPlus(avant, apres, parId).length ? REFUS_SUIVI : null;
+}
+
 /** Applique l'import : équipes, nouvelles personnes (sans mot de passe), modifications, puis supérieurs. */
-export async function appliquerImport(parId: string, lignes: LigneImport[], source: "fichier" | "annuaire"): Promise<{ ok: true; plan: Plan } | { ok: false; plan: Plan }> {
-  return db.transaction(async (tx) => {
+export async function appliquerImport(parId: string, lignes: LigneImport[], source: "fichier" | "annuaire"): Promise<{ ok: true; plan: Plan } | { ok: false; plan: Plan; refus?: string }> {
+  const r = await db.transaction(async (tx) => {
     // Verrou : deux imports en même temps ne se mélangent pas.
     await tx.execute(sql`select pg_advisory_xact_lock(42001)`);
     const existant: Existant = {
@@ -56,6 +96,11 @@ export async function appliquerImport(parId: string, lignes: LigneImport[], sour
     };
     const plan = planifierImport(lignes, existant, { laisserDeCote: source === "annuaire" });
     if (plan.erreurs.length) return { ok: false as const, plan };
+    const avant = await chargerOrganisation();
+    const apres = copieOrganisation(avant);
+    simulerImport(apres, plan);
+    const refus = refusImport(parId, avant, apres, plan);
+    if (refus) return { ok: false as const, plan, refus };
 
     const equipes = new Map(existant.equipes.map((e) => [cleNom(e.nom), e.id]));
     for (const nom of plan.equipesNouvelles) {
@@ -92,8 +137,11 @@ export async function appliquerImport(parId: string, lignes: LigneImport[], sour
       await tx.update(schema.personnes).set({ superieurId: ids.get(l.superieur)! }).where(eq(schema.personnes.id, ids.get(l.courriel)!));
     }
     await noter(parId, "organisation_importee", null, { source, creees: plan.creer.length, modifiees: plan.modifier.length, equipes: plan.equipesNouvelles.length, laissees: plan.ignores.length });
-    return { ok: true as const, plan };
+    return { ok: true as const, plan, avant, apres };
   });
+  if (!r.ok) return r;
+  await avertirChangementsDeSuperieur(parId, r.avant, r.apres);
+  return { ok: true, plan: r.plan };
 }
 
 /** Le tableau de l'organisation actuelle (personnes actives de la division), au format de l'import. */

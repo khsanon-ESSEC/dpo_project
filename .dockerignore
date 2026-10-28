@@ -11,3 +11,5 @@ tests
 .DS_Store
 .local
 scripts/essai
+scripts/semer.mjs
+scripts/semer-historique.mjs

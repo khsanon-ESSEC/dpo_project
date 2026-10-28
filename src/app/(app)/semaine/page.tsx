@@ -125,7 +125,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
             </a>
           </p>
         ) : null}
-        <div className="colonnes">
+        <div className="colonnes colonnes--tablette">
           <section className="carte carte--liste colonne-large" aria-labelledby="t-journee">
             <div className="carte__entete">
               <h2 id="t-journee" className="carte__titre">

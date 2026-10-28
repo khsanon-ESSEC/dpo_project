@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
       httpOnly: true,
       secure: process.env.COOKIE_SECURISE !== "0",
       sameSite: "lax",
-      path: "/api/auth/google",
+      path: "/",
       maxAge: 600,
     });
     rep.headers.set("cache-control", "no-store");

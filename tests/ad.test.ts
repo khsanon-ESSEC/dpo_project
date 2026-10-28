@@ -66,3 +66,12 @@ describe("connexion Windows : compte et groupe", () => {
     expect(Object.keys(MESSAGES_AD).sort()).toEqual(["a_changer", "bloque", "expire", "identifiant", "identifiants", "indisponible", "sans_acces", "trop", "verrouille"]);
   });
 });
+
+describe("connexion Windows : le compte lu est celui de la liaison", () => {
+  it("liée par UPN, cherche aussi cet UPN (deux comptes trouvés = refus)", async () => {
+    const { filtreDuCompte } = await import("@/lib/auth/ad");
+    expect(filtreDuCompte("jdoe", "jdoe@unibank.local").toString()).toBe("(&(objectClass=user)(|(sAMAccountName=jdoe)(userPrincipalName=jdoe@unibank.local)))");
+    expect(filtreDuCompte("jdoe", "UNIBANK\\jdoe").toString()).toBe("(&(objectClass=user)(sAMAccountName=jdoe))");
+    expect(filtreDuCompte("jdoe", "uid=jdoe,ou=personnes,dc=demo,dc=local").toString()).toBe("(&(objectClass=user)(sAMAccountName=jdoe))");
+  });
+});

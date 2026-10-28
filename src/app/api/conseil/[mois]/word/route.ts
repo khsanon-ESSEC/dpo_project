@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { utilisateurActif } from "@/lib/auth/session";
-import { lignesConseil } from "@/lib/donnees/conseil";
+import { lignesConseil, moisValide } from "@/lib/donnees/conseil";
 import { rapportConseilWord } from "@/lib/conseil-word";
 import { noter } from "@/lib/journal";
 
@@ -13,7 +13,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ mois: stri
   const a = await acces(u);
   if (!a.toutVoir && !a.directeur) return new NextResponse("Accès refusé", { status: 403 });
   const { mois } = await params;
-  if (!/^\d{4}-\d{2}-01$/.test(mois)) return new NextResponse("Mois invalide", { status: 400 });
+  if (!moisValide(mois)) return new NextResponse("Mois invalide", { status: 400 });
   const [r] = await db.select().from(schema.rapportsConseil).where(eq(schema.rapportsConseil.mois, mois));
   if (!r) return new NextResponse("Rapport introuvable", { status: 404 });
   const visibles = await idsProjetsVisibles(a);

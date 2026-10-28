@@ -9,7 +9,7 @@ import { db, schema } from "@/db";
 import { ajouterJours, aujourdhui, dateLocale, lundiDe, maintenantLocal, momentLocal } from "@/lib/dates";
 import { noter } from "@/lib/journal";
 import { chargerOrganisation } from "@/lib/organisation";
-import { estSuperieurDe, initiales, membresDeLaDirection, nomComplet, peutVoirRapportComplet, resoudreSuperieur, subordonnesDirects, voitTout } from "@/lib/regles";
+import { estSuperieurDe, initiales, membresDeLaDirection, nomComplet, peutVoirRapportComplet, resoudreSuperieur, subordonnesDirects } from "@/lib/regles";
 import { chargeDesPersonnes } from "@/lib/donnees/charge";
 import { formulairePour, horairesDuRapport, versionDuRapport } from "@/lib/donnees/modeles";
 import { syntheseParRegles, suggestionsDecision, type ElementSynthese } from "@/lib/suggestions";
@@ -296,7 +296,9 @@ const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,
 function elementsDe(recu: typeof schema.rapportsHebdo.$inferSelect, lignes: LigneLue[], reponses: ReponseLue[], reprise: Reprise): Element[] {
   const f = formulaireDe(recu);
   const champs = new Map(f.map((c) => [c.id, c]));
-  const prive = (c: Champ) => ((c.visibilite ?? "tous") === "superieur" ? "auteur" : (c.visibilite ?? "tous") === "direction" ? "direction" : null);
+  // Dans le rapport du chef, ce qui était réservé à lui (le supérieur) lui reste réservé.
+  const privee = (v: string) => (v === "superieur" ? "auteur" : v === "direction" ? "direction" : null);
+  const prive = (c: Champ) => privee(c.visibilite ?? "tous");
   const sortie: Element[] = [];
   for (const l of lignes) {
     const c = champs.get(l.champId);
@@ -306,9 +308,12 @@ function elementsDe(recu: typeof schema.rapportsHebdo.$inferSelect, lignes: Lign
       const r = c.rubrique ?? "autre";
       const pour = reprise === "a_decider" ? RUBRIQUES_A_DECIDER.has(r) : r === reprise;
       if (!pour) continue;
+      // La visibilité de la ligne elle-même (une ligne reconduite garde la sienne), sinon celle du champ.
+      const v = visibiliteDeLigne(c, l);
+      if (v === "auteur") continue;
       // Ce qui est réservé au supérieur ne remonte dans les listes que comme élément à décider.
-      if (reprise !== "a_decider" && (c.visibilite ?? "tous") === "superieur") continue;
-      sortie.push({ origine: `l:${l.id}`, texte: l.texte, projetId: l.projetId, partie: r, visibilite: prive(c), auteurs: [recu.auteurId], depuis: l.depuisSemaine });
+      if (reprise !== "a_decider" && v === "superieur") continue;
+      sortie.push({ origine: `l:${l.id}`, texte: l.texte, projetId: l.projetId, partie: r, visibilite: privee(v), auteurs: [recu.auteurId], depuis: l.depuisSemaine });
     } else if (c.type === "reprise" && c.reprise === reprise && !estPropre(l)) {
       // Rapport de chef reçu : ce qu'il a gardé (et, pour « à décider », seulement ce qu'il fait remonter).
       if (reprise === "a_decider" && !l.remonte) continue;
@@ -370,6 +375,16 @@ export async function synchroniserReprises(rapport: typeof schema.rapportsHebdo.
 export type AvisSante = { projetId: string; code: string; titre: string; propose: string | null; choisi: string | null; avis: { qui: string; valeur: string }[] };
 export type ChargeMembre = { id: string; nom: string; initiales: string; ressenti: string | null; niveau: string; heures: number; capacite: number; envoye: boolean };
 
+/**
+ * Une réponse peut-elle passer d'un champ (visibilité `source`) au champ du rapport du chef (visibilité `cible`) ?
+ * Ce qui est ouvert à tous, oui ; ce qui est réservé à la direction, seulement dans un champ réservé à la
+ * direction ; ce qui est réservé au supérieur (le chef lui-même) ne repart pas plus haut.
+ */
+export function peutRemonter(source: string | undefined, cible: string | undefined): boolean {
+  const s = source ?? "tous";
+  return s === "tous" || (s === "direction" && (cible ?? "tous") === "direction");
+}
+
 /** Ce que le chef voit des feux et de la charge de son équipe, tant que son rapport est un brouillon. */
 export async function vueEquipe(rapport: typeof schema.rapportsHebdo.$inferSelect) {
   const f = formulaireDe(rapport);
@@ -380,16 +395,16 @@ export async function vueEquipe(rapport: typeof schema.rapportsHebdo.$inferSelec
   const ini = (id: string) => (org.personnes.get(id) ? initiales(org.personnes.get(id)!) : "?");
 
   // Santé : les feux de chaque rapport reçu (et les miens), le plus préoccupant est proposé.
-  const parProjet = new Map<string, { code: string; titre: string; avis: { qui: string; valeur: string }[] }>();
-  const noter = (projetId: string | null, code: string | null, titre: string | null, qui: string, valeur: string) => {
+  const parProjet = new Map<string, { code: string; titre: string; avis: { qui: string; valeur: string; source: string | undefined }[] }>();
+  const noter = (projetId: string | null, code: string | null, titre: string | null, qui: string, valeur: string, source: string | undefined) => {
     if (!projetId || !valeur) return;
     const p = parProjet.get(projetId) ?? { code: code ?? "", titre: titre ?? "", avis: [] };
-    p.avis.push({ qui, valeur });
+    p.avis.push({ qui, valeur, source });
     parProjet.set(projetId, p);
   };
   for (const x of miennes) {
     const c = f.find((k) => k.id === x.champId);
-    if (c?.type === "sante" && c.partie !== "equipe") noter(x.projetId, x.projetCode, x.projetTitre, ini(rapport.auteurId), x.valeur);
+    if (c?.type === "sante" && c.partie !== "equipe") noter(x.projetId, x.projetCode, x.projetTitre, ini(rapport.auteurId), x.valeur, c.visibilite);
   }
   for (const { r, reponses } of contenu) {
     const fr = formulaireDe(r);
@@ -397,8 +412,8 @@ export async function vueEquipe(rapport: typeof schema.rapportsHebdo.$inferSelec
     const deChef = fr.some((k) => k.type === "reprise" && k.reprise === "sante");
     for (const x of reponses) {
       const c = fr.find((k) => k.id === x.champId);
-      if (!deChef && c?.type === "sante" && c.partie !== "equipe") noter(x.projetId, x.projetCode, x.projetTitre, ini(r.auteurId), x.valeur);
-      if (c?.type === "reprise" && c.reprise === "sante") noter(x.projetId, x.projetCode, x.projetTitre, `${ini(r.auteurId)} et équipe`, x.valeur);
+      if (!deChef && c?.type === "sante" && c.partie !== "equipe") noter(x.projetId, x.projetCode, x.projetTitre, ini(r.auteurId), x.valeur, c.visibilite);
+      if (c?.type === "reprise" && c.reprise === "sante") noter(x.projetId, x.projetCode, x.projetTitre, `${ini(r.auteurId)} et équipe`, x.valeur, c.visibilite);
     }
   }
   const sante = new Map<string, AvisSante[]>();
@@ -407,12 +422,19 @@ export async function vueEquipe(rapport: typeof schema.rapportsHebdo.$inferSelec
     sante.set(
       c.id,
       [...parProjet.entries()]
-        .map(([projetId, p]) => ({ projetId, code: p.code, titre: p.titre, propose: pireSante(p.avis.map((a) => a.valeur)), choisi: choix.get(projetId) || null, avis: p.avis }))
+        .map(([projetId, p]) => {
+          // Seuls les feux qui peuvent paraître dans ce champ du rapport du chef.
+          const avis = p.avis.filter((a) => peutRemonter(a.source, c.visibilite)).map(({ qui, valeur }) => ({ qui, valeur }));
+          return { projetId, code: p.code, titre: p.titre, propose: pireSante(avis.map((a) => a.valeur)), choisi: choix.get(projetId) || null, avis };
+        })
+        .filter((p) => p.avis.length || p.choisi)
         .sort((a, b) => a.code.localeCompare(b.code, "fr")),
     );
   }
 
   // Charge : chaque personne qui m'envoie son rapport (ressenti déclaré, niveau calculé) ; les équipes en nombres.
+  // Un ressenti déclaré dans un champ réservé ne passe pas dans un champ plus ouvert du rapport du chef.
+  const cibleCharge = f.find((k) => k.type === "reprise" && k.reprise === "charge")?.visibilite;
   const subordonnes = subordonnesDirects(org, rapport.auteurId);
   const calc = await chargeCalculee(subordonnes.map((p) => p.id));
   const membres: ChargeMembre[] = subordonnes.map((p) => {
@@ -420,7 +442,11 @@ export async function vueEquipe(rapport: typeof schema.rapportsHebdo.$inferSelec
     let ressenti: string | null = null;
     if (recu) {
       const fr = formulaireDe(recu.r);
-      ressenti = recu.reponses.find((x) => fr.find((k) => k.id === x.champId)?.type === "charge" && fr.find((k) => k.id === x.champId)?.partie !== "equipe")?.valeur || null;
+      ressenti =
+        recu.reponses.find((x) => {
+          const k = fr.find((c) => c.id === x.champId);
+          return k?.type === "charge" && k.partie !== "equipe" && peutRemonter(k.visibilite, cibleCharge);
+        })?.valeur || null;
     }
     const s = calc.get(p.id);
     return { id: p.id, nom: nomComplet(p), initiales: initiales(p), ressenti, niveau: s?.niveau ?? "libre", heures: s?.heures ?? 0, capacite: s?.capacite ?? 0, envoye: !!recu };
@@ -430,7 +456,7 @@ export async function vueEquipe(rapport: typeof schema.rapportsHebdo.$inferSelec
     const fr = formulaireDe(r);
     for (const x of reponses) {
       const c = fr.find((k) => k.id === x.champId);
-      const comptes = c?.type === "reprise" && c.reprise === "charge" ? lireComptes(x.valeur) : null;
+      const comptes = c?.type === "reprise" && c.reprise === "charge" && peutRemonter(c.visibilite, cibleCharge) ? lireComptes(x.valeur) : null;
       if (comptes) equipes.push({ qui: org.personnes.get(r.auteurId) ? nomComplet(org.personnes.get(r.auteurId)!) : "", comptes });
     }
   }
@@ -549,7 +575,7 @@ function lecteurDe(org: Awaited<ReturnType<typeof chargerOrganisation>>, a: Acce
   if (r.auteurId === a.moi.id) return "auteur";
   if (r.statut !== "envoye") return null;
   if (r.destinataireId === a.moi.id || estSuperieurDe(org, a.moi.id, r.auteurId)) return "superieur";
-  if (voitTout(a.moi) || (a.moi.directeur && membresDeLaDirection(org, a.moi.id).has(r.auteurId))) return "direction";
+  if (a.toutVoir || (a.directeur && membresDeLaDirection(org, a.moi.id).has(r.auteurId))) return "direction";
   return null;
 }
 
@@ -611,6 +637,8 @@ export async function lignesDuProjetCetteSemaine(projetId: string, auteurs: "tou
       ordre: schema.lignesRapport.ordre,
       origines: schema.lignesRapport.origines,
       resolu: schema.lignesRapport.resolu,
+      visibilite: schema.lignesRapport.visibilite,
+      remonte: schema.lignesRapport.remonte,
     })
     .from(schema.lignesRapport)
     .innerJoin(schema.rapportsHebdo, eq(schema.rapportsHebdo.id, schema.lignesRapport.rapportId))
@@ -623,7 +651,7 @@ export async function lignesDuProjetCetteSemaine(projetId: string, auteurs: "tou
     if (l.origines.length) continue; // les reprises d'un rapport de chef répètent les rapports de l'équipe
     if (l.resolu) continue; // un blocage résolu ne bloque plus le projet
     const c = formulaireDe({ formulaire: l.formulaire }).find((x) => x.id === l.champId);
-    if (!c || c.type !== "lignes" || (c.visibilite ?? "tous") !== "tous") continue;
+    if (!c || c.type !== "lignes" || visibiliteDeLigne(c, l) !== "tous") continue;
     const p = org.personnes.get(l.auteurId)!;
     const g = parAuteur.get(l.auteurId) ?? { auteurId: l.auteurId, auteur: nomComplet(p), prenom: p.prenom, nom: p.nom, envoyeLe: l.envoyeLe, lignes: [] };
     g.lignes.push({ partie: l.partie, champ: c.libelle, texte: l.texte });

@@ -86,6 +86,20 @@ describe.skipIf(!URL_TEST)("connexion Windows contre un annuaire en LDAPS", () =
     expect(await AD.verifierAD("naugustin", "Windows-Nadege-1")).toMatchObject({ ok: true });
   });
 
+  it("des essais lancés en même temps ne dépassent pas la limite", async () => {
+    const AD = await charger();
+    const avantN = (await liaisonsRecues()).filter((l) => l.id === "simultane").length;
+    const r = await Promise.all(Array.from({ length: 8 }, () => AD.verifierAD("simultane", "faux")));
+    expect(r.filter((x) => !x.ok && x.refus === "trop")).toHaveLength(5);
+    // Trois mots de passe seulement sont partis vers l'annuaire.
+    expect((await liaisonsRecues()).filter((l) => l.id === "simultane").length - avantN).toBe(3);
+  });
+
+  it("un annuaire injoignable ne compte pas d'essai", async () => {
+    const AD = await charger({ AD_URL: "ldaps://127.0.0.1:6399" });
+    for (let i = 0; i < 5; i++) expect(await AD.verifierAD("naugustin", "Windows-Nadege-1")).toMatchObject({ ok: false, refus: "indisponible" });
+  });
+
   it("passe au serveur suivant quand le premier ne répond pas", async () => {
     const AD = await charger({ AD_URL: `ldaps://127.0.0.1:6399,${URL_TEST}` });
     expect(await AD.verifierAD("naugustin", "Windows-Nadege-1")).toMatchObject({ ok: true });

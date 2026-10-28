@@ -5,7 +5,7 @@ import { db, schema } from "@/db";
 import { hacherMotDePasse } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
 import { chargerOrganisation } from "@/lib/organisation";
-import { initiales, libellesRoles, nomComplet, resoudreSuperieur, subordonnesDirects, type Roles } from "@/lib/regles";
+import { copieOrganisation, initiales, libellesRoles, nomComplet, resoudreSuperieur, subordonnesDirects, suivisEnPlus, superieursChanges, type OrgDonnees, type Roles } from "@/lib/regles";
 
 export async function vueOrganisation() {
   const org = await chargerOrganisation();
@@ -100,12 +100,45 @@ async function verifierInterne(personneId: string | null, superieurId: string | 
   }
 }
 
-/** Le rôle Exécutif ouvre tout : seul un exécutif peut le donner ou le retirer. */
-async function verifierDroitExecutif(parId: string, personneId: string | null, executif: boolean) {
+/**
+ * Les rôles Exécutif (tout voir) et Directeur (voir toute sa direction) ouvrent l'accès au travail des autres :
+ * seul un exécutif peut les donner ou les retirer.
+ */
+async function verifierDroitExecutif(parId: string, personneId: string | null, r: Pick<Roles, "executif" | "directeur">) {
   const org = await chargerOrganisation();
-  const actuel = personneId ? org.personnes.get(personneId)?.executif ?? false : false;
-  if (actuel === executif) return;
-  if (!org.personnes.get(parId)?.executif) throw new Error("Seul un exécutif peut donner ou retirer le rôle Exécutif.");
+  const cible = personneId ? org.personnes.get(personneId) : null;
+  if (org.personnes.get(parId)?.executif) return;
+  if ((cible?.executif ?? false) !== r.executif) throw new Error("Seul un exécutif peut donner ou retirer le rôle Exécutif.");
+  if ((cible?.directeur ?? false) !== r.directeur) throw new Error("Seul un exécutif peut donner ou retirer le rôle Directeur.");
+}
+
+export const REFUS_SUIVI = "Ce changement vous ferait suivre le travail d'autres personnes (tâches, rapports) : demandez-le à un exécutif.";
+
+/**
+ * Garde-fous d'un administrateur qui n'est pas exécutif : le changement ne doit pas lui faire suivre de
+ * nouvelles personnes (se nommer supérieur ou chef d'équipe, se placer au-dessus d'une direction…).
+ * Renvoie l'organisation avant et après, pour avertir les personnes dont le supérieur change.
+ */
+export async function essayerChangement(parId: string, changer: (o: OrgDonnees) => void): Promise<{ avant: OrgDonnees; apres: OrgDonnees }> {
+  const avant = await chargerOrganisation();
+  const apres = copieOrganisation(avant);
+  changer(apres);
+  if (!avant.personnes.get(parId)?.executif && suivisEnPlus(avant, apres, parId).length) throw new Error(REFUS_SUIVI);
+  return { avant, apres };
+}
+
+/** Chaque personne dont le supérieur change en est avertie : c'est lui ou elle qui lira désormais ses rapports. */
+export async function avertirChangementsDeSuperieur(parId: string, avant: OrgDonnees, apres: OrgDonnees) {
+  const par = avant.personnes.get(parId);
+  const alertes = superieursChanges(avant, apres)
+    .filter((c) => c.personneId !== parId)
+    .map((c) => ({
+      personneId: c.personneId,
+      type: "organisation",
+      texte: `${c.superieur ? `Votre supérieur est maintenant ${nomComplet(c.superieur)} : il ou elle lira vos rapports` : "Vous n'avez plus de supérieur désigné"} (changement fait par ${par ? nomComplet(par) : "un administrateur"}).`,
+      lien: "/profil",
+    }));
+  if (alertes.length) await db.insert(schema.notifications).values(alertes);
 }
 
 export async function modifierPersonne(parId: string, personneId: string, m: ModificationPersonne) {
@@ -120,26 +153,42 @@ export async function modifierPersonne(parId: string, personneId: string, m: Mod
     courant = org.personnes.get(courant)?.superieurId ?? null;
   }
   await verifierInterne(personneId, m.superieurId);
-  await verifierDroitExecutif(parId, personneId, m.executif);
+  await verifierDroitExecutif(parId, personneId, m);
   await verifierDernierAdministrateur(personneId, m.administrateur && m.actif);
+  const cible = org.personnes.get(personneId);
+  if (!cible) throw new Error("Personne introuvable.");
+  if (!org.personnes.get(parId)?.executif) {
+    if (cible.executif) throw new Error("La fiche d'un exécutif se modifie par un exécutif.");
+    if (personneId === parId && (m.superieurId !== cible.superieurId || m.equipeId !== cible.equipeId)) throw new Error("Votre supérieur et votre équipe se changent par un autre administrateur.");
+  }
+  const { avant, apres } = await essayerChangement(parId, (o) => {
+    Object.assign(o.personnes.get(personneId)!, { superieurId: m.superieurId, equipeId: m.equipeId, directeur: m.directeur, executif: m.executif, actif: m.actif });
+  });
   await db
     .update(schema.personnes)
     .set({ equipeId: m.equipeId, superieurId: m.superieurId, directeur: m.directeur, executif: m.executif, administrateur: m.administrateur, capaciteHeures: m.capaciteHeures, poste: m.poste.trim(), actif: m.actif, majLe: new Date() })
     .where(eq(schema.personnes.id, personneId));
   if (!m.actif) await db.delete(schema.sessions).where(eq(schema.sessions.personneId, personneId));
   await noter(parId, "personne_modifiee", personneId, m);
+  await avertirChangementsDeSuperieur(parId, avant, apres);
 }
 
 export async function definirChefEquipe(parId: string, equipeId: string, chefId: string | null) {
   if (chefId) await verifierInterne(null, chefId);
+  const { avant, apres } = await essayerChangement(parId, (o) => {
+    const e = o.equipes.get(equipeId);
+    if (!e) throw new Error("Équipe introuvable.");
+    e.chefId = chefId;
+  });
   await db.update(schema.equipes).set({ chefId }).where(eq(schema.equipes.id, equipeId));
   await noter(parId, "chef_equipe", equipeId, { chefId });
+  await avertirChangementsDeSuperieur(parId, avant, apres);
 }
 
 /** Crée une personne avec un mot de passe provisoire, affiché une seule fois. */
 export async function creerPersonne(parId: string, d: Roles & { prenom: string; nom: string; courriel: string; poste: string; equipeId: string | null; superieurId: string | null }) {
   await verifierInterne(null, d.superieurId);
-  await verifierDroitExecutif(parId, null, d.executif);
+  await verifierDroitExecutif(parId, null, d);
   const provisoire = randomBytes(9).toString("base64url");
   const [p] = await db
     .insert(schema.personnes)
@@ -161,7 +210,17 @@ export async function creerPersonne(parId: string, d: Roles & { prenom: string; 
   return { id: p.id, provisoire };
 }
 
+/**
+ * Un mot de passe provisoire permet d'entrer dans le compte : celui d'un exécutif ou d'un directeur (qui
+ * voient le travail des autres) ne se redonne que par un exécutif.
+ */
 export async function reinitialiserMotDePasse(parId: string, personneId: string) {
+  const org = await chargerOrganisation();
+  const cible = org.personnes.get(personneId);
+  if (!cible) throw new Error("Personne introuvable.");
+  if (!org.personnes.get(parId)?.executif && personneId !== parId && (cible.executif || cible.directeur)) {
+    throw new Error("Seul un exécutif peut donner un mot de passe provisoire à un exécutif ou à un directeur.");
+  }
   const provisoire = randomBytes(9).toString("base64url");
   await db
     .update(schema.personnes)

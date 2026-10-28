@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { responsableId } from "@/lib/projets";
+import { peutGererProjet, responsableId } from "@/lib/projets";
 import { suitPersonne } from "@/lib/acces";
 import { dateCourte } from "@/lib/dates";
 import { heuresTexte, LIBELLE_NIVEAU, nombre } from "@/lib/charge";
@@ -13,7 +13,9 @@ export const metadata: Metadata = { title: "Charge de l'équipe du projet" };
 /**
  * Charge de l'équipe d'un projet : les heures que chacun a sur ce projet, semaine par semaine,
  * et son niveau de charge tous projets confondus (pour savoir à qui confier une nouvelle tâche).
- * Le détail des autres projets n'est montré qu'aux personnes qui suivent déjà cette personne.
+ * Le détail des autres projets n'est montré qu'aux personnes qui suivent déjà cette personne ; le niveau
+ * tous projets confondus, à qui gère le projet (pour confier une tâche) : un simple membre ne voit que les
+ * heures prévues sur ce projet.
  */
 export default async function PageChargeProjet({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -22,10 +24,12 @@ export default async function PageChargeProjet({ params }: { params: Promise<{ i
   if (ctx.u.externe) notFound();
   // Le chef d'un projet d'une autre division est hors division : c'est le référent DPO qui figure ici.
   const { semaines, membres } = await chargeDuProjet(id, responsableId(ctx.projet));
-  const voitCharge = ctx.a.toutVoir || ctx.a.directeur || ctx.a.equipeDirecte.length > 0;
   const tri = membres.sort((x, y) => Number(y.chefDeProjet) - Number(x.chefDeProjet) || y.projet.semaines.reduce((s, w) => s + w.heures, 0) - x.projet.semaines.reduce((s, w) => s + w.heures, 0));
-  const surchargesCetteSemaine = membres.filter((m) => m.charge.semaines[0].niveau === "surchargee").length;
-  const surchargesProchaine = membres.filter((m) => m.charge.semaines[1]?.niveau === "surchargee").length;
+  const voitCharge = ctx.a.toutVoir || ctx.a.directeur || ctx.a.equipeDirecte.length > 0;
+  const gere = peutGererProjet({ moiId: ctx.u.id, directeur: ctx.a.directeur, toutVoir: ctx.a.toutVoir, suivis: ctx.a.suivis }, ctx.projet);
+  const niveauVisible = (id: string) => gere || id === ctx.u.id || suitPersonne(ctx.a, id);
+  const surchargesCetteSemaine = membres.filter((m) => niveauVisible(m.id) && m.charge.semaines[0].niveau === "surchargee").length;
+  const surchargesProchaine = membres.filter((m) => niveauVisible(m.id) && m.charge.semaines[1]?.niveau === "surchargee").length;
   const totalProjet = membres.reduce((s, m) => s + m.projet.semaines.reduce((x, w) => x + w.heures, 0), 0);
 
   return (
@@ -76,6 +80,7 @@ export default async function PageChargeProjet({ params }: { params: Promise<{ i
             <tbody>
               {tri.map((m) => {
                 const detail = suitPersonne(ctx.a, m.id);
+                const niveau = niveauVisible(m.id);
                 return (
                   <tr key={m.id}>
                     <th scope="row">
@@ -105,12 +110,14 @@ export default async function PageChargeProjet({ params }: { params: Promise<{ i
                       const total = m.charge.semaines[i];
                       const titre = detail
                         ? `${heuresTexte(w.heures)} sur ce projet ; ${heuresTexte(total.heures)} au total sur ${heuresTexte(total.capacite)} disponibles (${LIBELLE_NIVEAU[total.niveau].toLowerCase()})`
-                        : `${heuresTexte(w.heures)} sur ce projet ; charge totale : ${LIBELLE_NIVEAU[total.niveau].toLowerCase()}`;
+                        : niveau
+                          ? `${heuresTexte(w.heures)} sur ce projet ; charge totale : ${LIBELLE_NIVEAU[total.niveau].toLowerCase()}`
+                          : `${heuresTexte(w.heures)} sur ce projet`;
                       return (
                         <td key={w.semaine} title={titre}>
                           <span style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                             <span className="jauge__chiffre">{w.heures > 0 ? heuresTexte(w.heures) : "—"}</span>
-                            <Niveau niveau={total.niveau} texte={detail ? `${nombre(total.heures)} / ${nombre(total.capacite)} h` : LIBELLE_NIVEAU[total.niveau]} />
+                            {niveau ? <Niveau niveau={total.niveau} texte={detail ? `${nombre(total.heures)} / ${nombre(total.capacite)} h` : LIBELLE_NIVEAU[total.niveau]} /> : null}
                           </span>
                         </td>
                       );

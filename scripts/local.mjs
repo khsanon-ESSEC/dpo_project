@@ -193,6 +193,8 @@ if (n === 0) {
   dire("Données de démonstration…");
   if (lancer("semer.mjs") !== 0) await arreter(1);
 }
+// Un an d'activité passée, pour le bilan sur 6 mois ou sur un exercice (une seule fois, base de démonstration seulement).
+lancer("semer-historique.mjs");
 
 // ---------- 3. Application compilée ----------
 const standalone = path.join(racine, ".next", "standalone");

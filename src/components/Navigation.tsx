@@ -33,7 +33,7 @@ export function Rail({ elements, initiales, nom }: { elements: ElementNav[]; ini
           href="/profil"
           aria-label={`Votre profil : ${nom}`}
           title={nom}
-          style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", background: "#24478e", color: "#fff", fontSize: 13, fontWeight: 500, letterSpacing: "0.04em", textDecoration: "none" }}
+          style={{ width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", background: "#25537e", color: "#fff", fontSize: 13, fontWeight: 500, letterSpacing: "0.04em", textDecoration: "none" }}
         >
           {initiales}
         </a>

@@ -175,7 +175,7 @@ export default async function PageModifierProjet({ params, searchParams }: { par
                   <label className="visuellement-cache" htmlFor={`ind-l-${i.id}`}>
                     Libellé de l&apos;indicateur {i.ordre}
                   </label>
-                  <input id={`ind-l-${i.id}`} name="libelle" defaultValue={i.libelle} maxLength={200} style={{ flex: 1, minWidth: 0, minHeight: 36, padding: "0 10px", border: "1px solid var(--filet-fort)", background: "var(--champ)", color: "inherit" }} />
+                  <input id={`ind-l-${i.id}`} name="libelle" defaultValue={i.libelle} maxLength={200} className="saisie" style={{ flex: 1, minWidth: 0, minHeight: 40, padding: "0 12px", fontSize: 15 }} />
                   <button type="submit" className="bouton-icone" style={{ width: 36, height: 36 }} aria-label="Enregistrer le libellé" title="Enregistrer">
                     <Icone nom="coche" taille={16} />
                   </button>
@@ -208,7 +208,7 @@ export default async function PageModifierProjet({ params, searchParams }: { par
             <label className="visuellement-cache" htmlFor="mp-nouvel-ind">
               Nouvel indicateur
             </label>
-            <input id="mp-nouvel-ind" name="libelle" required maxLength={200} placeholder="Ex. : Recette réalisée avec le métier" style={{ flex: "1 1 260px", minWidth: 0, minHeight: 40, padding: "0 12px", border: "1px solid var(--controle)", background: "var(--champ)", color: "inherit" }} />
+            <input id="mp-nouvel-ind" name="libelle" required maxLength={200} placeholder="Ex. : Recette réalisée avec le métier" className="saisie" style={{ flex: "1 1 260px", minWidth: 0, minHeight: 44, padding: "0 12px", fontSize: 15 }} />
             <button type="submit" className="bouton-contour">
               <Icone nom="ajouter" taille={16} /> Ajouter
             </button>

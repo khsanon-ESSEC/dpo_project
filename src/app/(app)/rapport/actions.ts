@@ -38,7 +38,7 @@ async function monBrouillon(rapportId: string) {
 
 /** Une ligne de rapport ne peut porter que sur un projet que l'auteur voit déjà ; sinon on ne lui met pas de projet. */
 async function projetDeLigne(u: Awaited<ReturnType<typeof exigerUtilisateur>>, projetId: string | null): Promise<string | null> {
-  if (!projetId) return null;
+  if (!projetId || !/^[0-9a-f-]{36}$/.test(projetId)) return null;
   const visibles = await idsProjetsVisibles(await acces(u));
   return visibles === "tous" || visibles.has(projetId) ? projetId : null;
 }
@@ -117,9 +117,11 @@ export async function basculerPartieRelue(rapportId: string, champId: string) {
 
 /** Réponse à un champ autre qu'une liste (feu, charge, texte, choix, nombre, date, synthèse d'un projet). */
 export async function repondre(rapportId: string, champId: string, projetId: string | null, valeur: string) {
-  const { f } = await monBrouillon(rapportId);
+  const { u, f } = await monBrouillon(rapportId);
   const c = f.find((x) => x.id === champId);
   if (!c) return;
+  // Un feu ou une synthèse ne porte que sur un projet que l'auteur voit.
+  if (projetId && !(await projetDeLigne(u, projetId))) return;
   if (c.type === "synthese" && !projetId) return;
   const cible = c.type === "reprise" && c.reprise === "sante" ? { ...c, type: "sante" as const } : c;
   if (c.type === "reprise" && c.reprise !== "sante") return;
@@ -132,9 +134,10 @@ export async function repondre(rapportId: string, champId: string, projetId: str
 
 /** Feu : une phrase pour expliquer ce qui n'est pas « dans les temps ». */
 export async function commenter(rapportId: string, champId: string, projetId: string | null, texte: string) {
-  const { f } = await monBrouillon(rapportId);
+  const { u, f } = await monBrouillon(rapportId);
   const c = f.find((x) => x.id === champId);
   if (!c || c.type !== "sante") return;
+  if (projetId && !(await projetDeLigne(u, projetId))) return;
   await enregistrer(rapportId, champId, projetId, { commentaire: String(texte ?? "").trim().slice(0, 300) });
   revalidatePath("/rapport");
 }

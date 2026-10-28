@@ -14,8 +14,11 @@ import { domainesDe, verifierRevendications, type RefusGoogle } from "@/lib/auth
 
 const EMETTEUR_GOOGLE = "https://accounts.google.com";
 
-/** Cookie temporaire (10 minutes) qui garde l'état, le nonce et le vérificateur PKCE jusqu'au retour de Google. */
-export const COOKIE_GOOGLE = "dpo_google";
+/**
+ * Cookie temporaire (10 minutes) qui garde l'état, le nonce et le vérificateur PKCE jusqu'au retour de Google.
+ * En HTTPS, le préfixe __Host- empêche un site voisin de la banque d'en poser un à sa place.
+ */
+export const COOKIE_GOOGLE = process.env.COOKIE_SECURISE !== "0" ? "__Host-dpo_google" : "dpo_google";
 
 export function googleActive(): boolean {
   return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET && domainesDe(process.env.GOOGLE_DOMAINE).length > 0;

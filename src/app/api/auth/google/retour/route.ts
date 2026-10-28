@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const fin = (chemin: string) => {
     const rep = NextResponse.redirect(new URL(chemin, base()), 303);
     // Le cookie temporaire ne sert qu'une fois.
-    rep.cookies.set(COOKIE_GOOGLE, "", { httpOnly: true, secure: process.env.COOKIE_SECURISE !== "0", sameSite: "lax", path: "/api/auth/google", maxAge: 0 });
+    rep.cookies.set(COOKIE_GOOGLE, "", { httpOnly: true, secure: process.env.COOKIE_SECURISE !== "0", sameSite: "lax", path: "/", maxAge: 0 });
     rep.headers.set("cache-control", "no-store");
     return rep;
   };

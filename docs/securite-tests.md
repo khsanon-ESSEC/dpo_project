@@ -187,6 +187,39 @@ Une relecture faite sans voir ce travail n'a trouvé **aucune faille d'accès** 
 
 Restent à décider **[à confirmer]** : « Répondre » est fermé à la direction ; à ouvrir si la banque le souhaite (avec le risque dit plus haut). « Lu par » est visible de l'auteur : à confirmer avec la DRH si un accusé de lecture pose question.
 
+## Test complet du 28 octobre 2026 (quatrième passe)
+
+Demandé avant la mise en service : tout faire tourner, chercher les bogues et les failles. Méthode : exploration automatique de l'application, relecture indépendante du code (sécurité web et autorisations), tests et parcours ; pas de requêtes forgées.
+
+- **Exploration** **[vérifié]** : 614 pages ouvertes avec sept profils (exécutif, directrice de la division, directeur, cheffe d'équipe, employée, administrateur non exécutif, consultante hors division), sur ordinateur et téléphone : aucune erreur serveur, aucune erreur dans la page, aucun débordement. Chaque adresse trouvée par un profil a été rouverte avec les six autres : aucun accès inattendu (chaque page ouverte s'explique par la règle : son propre rapport, sa propre fiche, un projet dont on est membre, une tâche qu'on porte).
+- **Dépendances** **[vérifié]** : `npm audit --omit=dev` ne signale aucune vulnérabilité.
+- **En-têtes** **[vérifié]** : CSP, `nosniff`, `Referrer-Policy`, `X-Frame-Options`, `Permissions-Policy` présents ; HSTS ajouté (voir plus bas).
+- **Tests et parcours** **[vérifié]** : 297 tests (dont 15 nouveaux : limite d'essais simultanés, annuaire, garde-fous de l'administrateur, fiche hors division, origine des requêtes), vérification des types, compilation de production ; parcours dans le navigateur (rapport, formulaires, réunions, liens, gestion, barre, personnes hors division, recherche, modèles, import, tableau, tri, pièces jointes, rappels par courriel, connexions Windows et Google, refus d'un administrateur dans *Organisation*) : tous passent, après mise à jour de trois parcours écrits pour l'ancienne mise en page.
+
+### Corrigé **[vérifié par tests]** sauf mention
+
+- **[Élevé] Un administrateur pouvait s'ouvrir le travail des autres.** Le rôle ne doit donner aucun accès aux rapports ni aux tâches, mais un administrateur pouvait se nommer supérieur ou responsable d'équipe de quelqu'un (et lire ses rapports, passés compris), se donner le rôle Directeur, ou donner un mot de passe provisoire à un exécutif et entrer dans son compte. Désormais, pour un administrateur qui n'est pas exécutif : tout changement qui lui ferait suivre une personne de plus est refusé (fiche, responsable d'équipe, import) ; il ne change ni son propre supérieur ni son équipe ; le rôle Directeur se donne et se retire par un exécutif, comme le rôle Exécutif ; la fiche d'un exécutif se modifie par un exécutif ; un mot de passe provisoire pour un exécutif ou un directeur se donne par un exécutif. Toute personne dont le supérieur change en reçoit une alerte (qui peut lire ses rapports n'a plus de raison de changer à son insu).
+- **[Moyen] Essais de mot de passe en parallèle.** Le compteur d'échecs était lu puis écrit : des essais envoyés en même temps passaient tous. Chaque essai est maintenant réservé avant la vérification, en une seule écriture en base : huit essais simultanés donnent cinq vérifications et trois refus d'office. Même limite pour le mot de passe actuel demandé au changement de mot de passe (une session volée ne sert plus à le deviner). Un échec n'efface jamais un blocage en cours.
+- **[Moyen] Même défaut pour le compte Windows.** L'essai est réservé avant d'interroger l'annuaire (trois mots de passe au plus partent vers AD, même envoyés en même temps), rendu si aucun contrôleur n'a répondu ; fenêtre réglable (`AD_FENETRE_MINUTES`, 15 par défaut). Lié par UPN, le compte lu après la liaison est cherché aussi par cet UPN : si un autre compte porte le même identifiant Windows, deux comptes sont trouvés et l'accès est refusé.
+- **[Moyen] Fiche hors division réactivée avec son ancien accès.** Taper le nom d'une personne hors division désactivée la réactivait, mot de passe compris. Désactiver une fiche ferme maintenant son accès, et une fiche réactivée revient sans accès (un administrateur le rouvre).
+- **[Moyen] Rapport mensuel au conseil** : un directeur pouvait rédiger la ligne d'un projet d'une autre direction (qu'il voit parce que les siens y travaillent). Seul qui gère le projet la rédige ; les autres lignes s'affichent en lecture. Le mois demandé dans l'adresse est vérifié (un vrai mois, de 2020 au mois prochain) : on ne crée plus de rapport pour un mois inventé.
+- **[Faible] Feu d'un projet qu'on ne voit pas** : une réponse « santé » ou son commentaire ne s'enregistrent que sur un projet que l'auteur voit. **[déduction]**
+- **[Faible] Visibilité d'une ligne reconduite** : une ligne qui garde sa propre visibilité (« supérieur seulement ») dans un champ ouvert n'apparaît plus sur la fiche du projet, et ne remonte plus dans les listes du rapport du chef. Les feux et la charge d'un champ réservé au supérieur ne passent plus dans un champ plus ouvert du rapport du chef. **[déduction]**
+- **[Faible] Charge d'un projet** : le niveau de charge tous projets confondus de chaque membre n'est plus montré qu'à qui gère le projet ou suit la personne ; un simple membre voit les heures prévues sur ce projet. **[déduction]**
+- **[Faible] Tâche annulée** : on ne la coche plus et on ne la déplace plus sur le tableau sans la rétablir. **[déduction]**
+- **[Faible] Requêtes venues d'un autre site** : les deux routes POST écrites à la main (assistant, modèle Excel de l'import) refusent une requête qui ne vient pas d'une page de l'application (les actions serveur de Next.js le faisaient déjà). Le lien « Retour » de la fiche d'une personne n'accepte que l'adresse de l'application (un chemin `//autre-site` en faisait un lien externe).
+- **[Faible] Cookies et HTTPS** : en HTTPS, cookies de session et de connexion Google préfixés `__Host-` (un autre site de la banque ne peut pas en poser un à leur place) ; en-tête HSTS (un an). L'adresse IP gardée avec la session est celle ajoutée par le proxy (la dernière de `X-Forwarded-For`).
+- **[Faible] Assistant** : les données de la personne (titres de tâches, lignes de rapport) passent dans le message, plus dans les consignes, qui gardent seules l'autorité.
+- **Image Docker** : le script de données de démonstration (`semer.mjs`, avec son mot de passe commun) n'y est plus copié.
+
+### Restent à décider **[à confirmer]**
+
+- Le rôle Directeur réservé aux exécutifs : à confirmer avec la direction (un administrateur non exécutif ne peut plus le donner).
+- Alerte « votre supérieur a changé » : envoyée aussi lors d'un import ; un premier import en enverra beaucoup.
+- L'adresse IP gardée suppose un proxy devant l'application ; sans proxy, elle est celle que le navigateur annonce. Ne pas exposer le port 3000 directement en production (le lanceur du Mac l'ouvre sur le réseau local pour l'essai sur téléphone : à réserver à un réseau de confiance).
+- Image de base Docker (`node:22-bookworm-slim`) : la figer par son empreinte (`@sha256:…`) et la mettre à jour à date fixe.
+- Mot de passe provisoire : il n'expire pas tant qu'il n'a pas servi (il doit être changé à la première connexion). Lui donner une durée de vie (par exemple sept jours) demande une colonne de plus : à décider avec la banque.
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.

@@ -98,6 +98,39 @@ export function resoudreSuperieur(org: OrgDonnees, personneId: string): Personne
   return null;
 }
 
+/** Copie de l'organisation, pour essayer un changement avant de l'écrire. */
+export function copieOrganisation(org: OrgDonnees): OrgDonnees {
+  return { personnes: new Map([...org.personnes].map(([k, p]) => [k, { ...p }])), equipes: new Map([...org.equipes].map(([k, e]) => [k, { ...e }])) };
+}
+
+/**
+ * Personnes existantes qu'un changement de l'organisation ferait suivre en plus à `moiId` (leurs tâches et
+ * leurs rapports complets, passés compris). Garde-fou : l'administrateur gère l'organisation, il ne s'ouvre
+ * pas ainsi le travail des autres (seul un exécutif le peut, et il voit déjà tout).
+ */
+export function suivisEnPlus(avant: OrgDonnees, apres: OrgDonnees, moiId: string): string[] {
+  const m2 = apres.personnes.get(moiId);
+  if (!m2) return [];
+  const m1 = avant.personnes.get(moiId);
+  const a = m1 ? personnesSuivies(avant, m1) : new Set<string>();
+  const b = personnesSuivies(apres, m2);
+  if (b === "toutes") return a === "toutes" ? [] : ["toutes"];
+  if (a === "toutes") return [];
+  return [...b].filter((id) => id !== moiId && !a.has(id) && avant.personnes.has(id));
+}
+
+/** Personnes dont le supérieur (désigné, ou chef d'équipe à défaut) change : elles en sont averties. */
+export function superieursChanges(avant: OrgDonnees, apres: OrgDonnees): { personneId: string; superieur: PersonneOrg | null }[] {
+  const out: { personneId: string; superieur: PersonneOrg | null }[] = [];
+  for (const p of avant.personnes.values()) {
+    if (!p.actif || p.externe) continue;
+    const s1 = resoudreSuperieur(avant, p.id)?.id ?? null;
+    const s2 = resoudreSuperieur(apres, p.id);
+    if (s1 !== (s2?.id ?? null)) out.push({ personneId: p.id, superieur: s2 });
+  }
+  return out;
+}
+
 /** Personnes dont le rapport du vendredi arrive chez cette personne. */
 export function subordonnesDirects(org: OrgDonnees, chefId: string): PersonneOrg[] {
   const liste: PersonneOrg[] = [];

@@ -2,9 +2,9 @@ import type { ReactNode } from "react";
 
 /** Barres verticales des rapports annuels : seul ornement de l'application. */
 const BARRES: [number, number, string][] = [
-  [10, 34, "#1b316a"], [22, 58, "#1b316a"], [8, 46, "#233c7d"], [30, 82, "#233c7d"], [12, 64, "#1b316a"],
-  [40, 100, "#24478e"], [10, 72, "#233c7d"], [26, 90, "#284283"], [14, 54, "#1b316a"], [34, 78, "#24478e"],
-  [8, 40, "#233c7d"], [20, 62, "#1b316a"],
+  [10, 34, "rgba(255, 255, 255, 0.05)"], [22, 58, "rgba(255, 255, 255, 0.05)"], [8, 46, "rgba(255, 255, 255, 0.08)"], [30, 82, "rgba(255, 255, 255, 0.08)"], [12, 64, "rgba(255, 255, 255, 0.05)"],
+  [40, 100, "rgba(255, 255, 255, 0.11)"], [10, 72, "rgba(255, 255, 255, 0.08)"], [26, 90, "rgba(255, 255, 255, 0.14)"], [14, 54, "rgba(255, 255, 255, 0.05)"], [34, 78, "rgba(255, 255, 255, 0.11)"],
+  [8, 40, "rgba(255, 255, 255, 0.08)"], [20, 62, "rgba(255, 255, 255, 0.05)"],
 ];
 
 export function Bandeau({ surtitre, titre, retour, children }: { surtitre: ReactNode; titre: ReactNode; retour?: ReactNode; children?: ReactNode }) {

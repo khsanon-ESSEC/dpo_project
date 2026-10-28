@@ -51,14 +51,14 @@ Application multipage (chaque écran est une page rendue par le serveur), en fra
 | Chacun | — | Ses tâches, son rapport de la semaine, ses réunions, son bilan, les projets sur lesquels il travaille (dont ceux de son équipe projet) ; la fiche de chacun (poste, équipe, supérieur, projets visibles) |
 | Supérieur (chef d'équipe) | Automatique : des personnes lui envoient leur rapport | Les tâches et les rapports de ses subordonnés directs |
 | Chef de projet | Automatique : désigné sur la fiche projet | Tout son projet, qu'il gère (fiche, indicateurs, équipe projet, archivage) ; dans les rapports de la semaine, **seulement** les lignes et les feux de son projet, dans les champs ouverts à tous |
-| Directeur | Interrupteur dans *Organisation* | Les projets, tâches et rapports des membres de **sa direction** (toutes les personnes placées sous lui, à tous les niveaux) ; décide des demandes de projet qu'il voit ; **gère** (fiche, équipe, archivage) les projets dont le chef ou le référent est dans sa direction, pas ceux d'une autre direction où travaillent les siens ; les projets stratégiques de sa direction dans le rapport au conseil |
+| Directeur | Interrupteur dans *Organisation* (seul un exécutif peut le donner) | Les projets, tâches et rapports des membres de **sa direction** (toutes les personnes placées sous lui, à tous les niveaux) ; décide des demandes de projet qu'il voit ; **gère** (fiche, équipe, archivage) les projets dont le chef ou le référent est dans sa direction, pas ceux d'une autre direction où travaillent les siens ; les projets stratégiques de sa direction dans le rapport au conseil |
 | Exécutif | Interrupteur dans *Organisation* (seul un exécutif peut le donner) | **Tout** ; approuve les rapports au conseil. Ne rédige pas de rapport de la semaine |
-| Administrateur | Interrupteur dans *Organisation* | Gère les personnes, les équipes, les supérieurs, les accès et les **modèles de rapport**. Ne donne **aucun** accès supplémentaire aux rapports ni aux tâches |
+| Administrateur | Interrupteur dans *Organisation* | Gère les personnes, les équipes, les supérieurs, les accès et les **modèles de rapport**. Ne donne **aucun** accès supplémentaire aux rapports ni aux tâches : un administrateur qui n'est pas exécutif ne peut pas se nommer supérieur ou chef d'équipe de quelqu'un (ni rien qui lui ferait suivre de nouvelles personnes, import compris), ne change ni son propre supérieur ni son équipe, ne touche pas à la fiche d'un exécutif et ne donne pas de mot de passe provisoire à un exécutif ou à un directeur |
 
 | Référent DPO | Désigné sur la fiche d'un projet d'une autre division | Les droits du chef de projet sur ce projet ; reçoit les lignes et les feux du projet dans les rapports de la semaine |
 | Personne hors division | Ajoutée par n'importe qui, au besoin | Par défaut, **aucun accès** : une simple fiche. Un administrateur peut lui ouvrir un **accès limité** (adresse et mot de passe provisoire) : ses tâches (elle ne s'en confie qu'à elle-même), ses réunions, les projets où elle intervient, les fiches des personnes avec qui elle travaille ; ni rapport, ni équipe, ni charge, ni annuaire de la division. Chef d'un projet d'une autre division, elle ne le gère pas ici : c'est le référent DPO |
 
-Les rôles se cumulent. Chaque personne a **un seul** supérieur. Si le poste de responsable d'une équipe est vacant, les rapports remontent au niveau suivant. Un brouillon de rapport n'est visible que par son auteur. Il reste toujours au moins un administrateur.
+Les rôles se cumulent. Chaque personne a **un seul** supérieur. Si le poste de responsable d'une équipe est vacant, les rapports remontent au niveau suivant. Une personne dont le supérieur change (fiche, responsable d'équipe ou import) en reçoit une alerte. Un brouillon de rapport n'est visible que par son auteur. Il reste toujours au moins un administrateur.
 
 Dans un rapport, chaque champ a sa règle de lecture, choisie dans le modèle : « tous ses lecteurs » (supérieur, direction, chefs de projet pour leurs lignes), « supérieur et direction » (pas les chefs de projet), ou « son supérieur seulement » (ni la direction, ni les exécutifs, ni les chefs de projet). Un élément reçu à titre privé reste au chef ; il ne remonte que s'il le décide, et la charge ressentie ne remonte qu'en nombres.
 
@@ -99,8 +99,13 @@ Ces règles sont écrites dans `src/lib/charge.ts` et vérifiées par les tests.
 - **Tâches terminées** et **heures livrées** : les tâches marquées faites dans la période, avec leur temps estimé (4 heures pour une tâche sans estimation).
 - **Terminées à temps** : parmi les tâches terminées qui avaient une échéance, la part terminée au plus tard ce jour-là.
 - **En réunion** et **part du temps** : les réunions notées, rapportées aux heures disponibles de la période (jusqu'à aujourd'hui pour la période en cours).
-- **Rapports** : les rapports du vendredi envoyés, sur ceux attendus (une semaine compte à partir de son vendredi ; rien n'est attendu d'un exécutif).
-- L'employé compare **semaine contre semaine** (*Semaine → Mon bilan*) ; le chef d'équipe, le directeur et l'exécutif comparent leur équipe **mois contre mois** (*Équipe → Bilan*), et ouvrent le détail par semaine de chaque personne.
+- **Rapports** : les rapports du vendredi envoyés, sur ceux attendus (une semaine compte à partir de son vendredi ; rien n'est attendu d'un exécutif, ni avant le premier rapport envoyé dans l'application).
+- L'employé compare **semaine contre semaine** (*Semaine → Mon bilan*). Le chef d'équipe, le directeur et l'exécutif comparent leur équipe dans *Équipe → Bilan*, sur la période choisie :
+  - **Mois** : le mois comparé au mois d'avant, avec la courbe des six mois qui y mènent ;
+  - **3 mois**, **6 mois** : la fenêtre comparée à celle d'avant, mois par mois (la période d'avant en pointillé) ;
+  - **Exercice** : l'exercice comparé au précédent, sur ses douze mois. L'exercice commence en octobre par défaut (`EXERCICE_DEBUT_MOIS`).
+  - Une période en cours se compare **à la même date** (du 1er au 30 octobre contre du 1er au 30 septembre ; un exercice entamé contre les mêmes mois de l'exercice d'avant). Avant les premières données de l'application, rien n'est comparé.
+  - Chiffres clés, une courbe par mesure, la jauge des rapports, le tableau mois par mois ; pour chaque personne, ses chiffres et sa propre courbe : chacun n'est comparé qu'à lui-même, jamais rangé parmi les autres.
 
 Ces chiffres décrivent ce qui est enregistré dans l'application ; ils ne mesurent ni la qualité du travail ni ce qui n'est pas noté. L'écran le rappelle. Règles : `src/lib/bilan.ts`, testées.
 
@@ -167,12 +172,13 @@ Lancer le serveur par un gestionnaire de services (systemd, par exemple) pour qu
 | `SESSION_HEURES` | Durée d'une session avant déconnexion (12 par défaut) |
 | `COOKIE_SECURISE` | `1` en production (cookies réservés à HTTPS) ; `0` seulement pour un essai local |
 | `APP_TZ` | Fuseau horaire de la division (`America/Port-au-Prince`) |
+| `EXERCICE_DEBUT_MOIS` | Mois où commence l'exercice, de 1 à 12 (10 : octobre, par défaut) |
 | `DATE_DEMO` | Démonstration seulement : fige « aujourd'hui ». **Vide en production** |
 | `HEURE_DEMO` | Démonstration seulement : fige l'heure (« HH:MM ») pour les heures du rapport. **Vide en production** |
 | `IA_FOURNISSEUR` | `aucun`, `openai-compatible` ou `anthropic` |
 | `IA_URL`, `IA_CLE`, `IA_MODELE`, `IA_DELAI` | Connexion au fournisseur d'IA (voir plus bas) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_DOMAINE` | Connexion avec le compte Google de la banque (voir plus bas). Sans elles, connexion par mot de passe seulement |
-| `AD_URL`, `AD_DOMAINE`, `AD_BASE_DN`, `AD_CA`, `AD_GROUPE`, `AD_LIAISON`, `AD_ESSAIS_MAX` | Connexion avec le compte Windows de la banque (Active Directory, voir plus bas) |
+| `AD_URL`, `AD_DOMAINE`, `AD_BASE_DN`, `AD_CA`, `AD_GROUPE`, `AD_LIAISON`, `AD_ESSAIS_MAX`, `AD_FENETRE_MINUTES` | Connexion avec le compte Windows de la banque (Active Directory, voir plus bas) |
 | `SMTP_HOTE`, `SMTP_PORT`, `SMTP_TLS`, `SMTP_UTILISATEUR`, `SMTP_MOT_DE_PASSE`, `SMTP_EXPEDITEUR`, `SMTP_CA` | Rappels du vendredi par courriel (voir plus bas). Sans eux, aucun courriel |
 | `RAPPELS_INTERVALLE_MINUTES` | Fréquence de la tournée des rappels (5 minutes par défaut) |
 
@@ -258,7 +264,7 @@ Quand `AD_URL`, `AD_DOMAINE` et `AD_BASE_DN` sont renseignés, la page de connex
 2. **Certificat** : si l'autorité qui signe les certificats des contrôleurs de domaine est interne à la banque, fournir son certificat (PEM) et l'indiquer dans `AD_CA`. Avec Docker, monter le fichier en lecture seule (exemple commenté dans `docker-compose.yml`). Le certificat est toujours vérifié.
 3. **Domaine et base** : `AD_DOMAINE=unibank.local` (suffixe des noms d'utilisateur), `AD_BASE_DN=DC=unibank,DC=local`. Si la banque préfère `UNIBANK\identifiant`, mettre `AD_LIAISON=UNIBANK\{identifiant}`.
 4. **Groupe** (recommandé) : créer un groupe AD, par exemple `App-Pilotage-DPO`, et l'indiquer en DN complet dans `AD_GROUPE` ; seuls ses membres (même par des groupes imbriqués) peuvent se connecter.
-5. **Verrouillage** : `AD_ESSAIS_MAX` (3 par défaut) met un identifiant en attente 15 minutes après trois échecs ; le garder sous le seuil de verrouillage d'AD, pour que l'application ne verrouille jamais un compte Windows.
+5. **Verrouillage** : `AD_ESSAIS_MAX` (3 par défaut) met un identifiant en attente `AD_FENETRE_MINUTES` (15 par défaut) après trois échecs ; le garder sous le seuil de verrouillage d'AD, et la fenêtre au moins aussi longue que la sienne, pour que l'application ne verrouille jamais un compte Windows. Chaque essai est compté avant d'interroger l'annuaire : des essais lancés en même temps ne dépassent pas la limite.
 
 Ce que fait l'application : la personne se lie à l'annuaire avec **son propre** identifiant et mot de passe (aucun compte de service n'est stocké) ; le mot de passe n'est ni gardé ni écrit au journal ; un mot de passe vide n'est jamais envoyé (AD accepterait une liaison anonyme) ; l'identifiant est filtré et la recherche construite par la bibliothèque (pas d'injection LDAP) ; un compte désactivé, verrouillé ou au mot de passe expiré est refusé avec un message clair ; un identifiant inconnu et un mauvais mot de passe ont la même réponse.
 
@@ -300,7 +306,10 @@ Sur une base **vide** et jamais en production :
 
 ```bash
 DATE_DEMO=2026-10-30 node scripts/semer.mjs
+node scripts/semer-historique.mjs   # facultatif : un an d'activité passée, pour le bilan sur 6 mois ou un exercice
 ```
+
+Le lanceur du Mac ajoute cet historique tout seul, une fois. Le script ne touche qu'une base de démonstration (adresses `@demo.dpo.local`) et n'est pas copié dans l'image Docker.
 
 Personnes fictives (mot de passe commun `Demo-DPO-2026`) :
 
@@ -350,7 +359,7 @@ src/lib/donnees/    lectures et écritures par domaine
 src/lib/ia.ts       connecteur d'IA interchangeable
 src/lib/auth/       session, mots de passe, connexion Google et Windows (google-regles.ts, ad-regles.ts : sans base, testés)
 scripts/essai/      fournisseur Google et annuaire AD factices, pour les essais seulement (exclus de l'image Docker)
-scripts/            migration, création d'utilisateur, données de démonstration
+scripts/            migration, création d'utilisateur, données de démonstration (semer.mjs, exclu de l'image Docker)
 drizzle/            migrations SQL
 ```
 

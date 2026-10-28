@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { additionner, ecart, mesurer, mois, moisPrecedent, moisSuivant, semainesDeRapport, semainesJusqua } from "@/lib/bilan";
+import { additionner, decalerMois, ecart, exerciceDe, mesurer, mois, moisDebutExercice, moisEntre, moisPrecedent, moisSuivant, nomExercice, planBilan, semainesDeRapport, semainesJusqua } from "@/lib/bilan";
 import { chargeDUnePersonne } from "@/lib/charge";
 import { lireReunions, nouveauChamp, validerChamps } from "@/lib/modeles";
 
@@ -94,5 +94,57 @@ describe("réunions et charge", () => {
     expect(lireReunions('{"minutes":90,"reunions":[{"titre":"Comité","jour":"2026-10-28","heure":"14:00","minutes":90,"projet":"UR","avec":3}]}')?.minutes).toBe(90);
     expect(lireReunions("pas du json")).toBeNull();
     expect(lireReunions("")).toBeNull();
+  });
+});
+
+describe("périodes du bilan d'équipe", () => {
+  it("décale une date d'un nombre de mois, borné au dernier jour", () => {
+    expect(decalerMois("2026-10-30", -1)).toBe("2026-09-30");
+    expect(decalerMois("2026-03-31", -1)).toBe("2026-02-28");
+    expect(decalerMois("2026-10-30", -12)).toBe("2025-10-30");
+    expect(moisEntre("2026-08-15", "2026-10-01")).toEqual(["2026-08", "2026-09", "2026-10"]);
+  });
+
+  it("mois en cours : comparé au mois d'avant à la même date ; six mois de courbe", () => {
+    const p = planBilan(undefined, undefined, "2026-10-30", 10);
+    expect(p.actuel).toEqual({ cle: "2026-10", debut: "2026-10-01", fin: "2026-10-30" });
+    expect(p.precedent).toMatchObject({ debut: "2026-09-01", fin: "2026-09-30" });
+    expect(p.axe).toEqual(["2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10"]);
+    expect(p.enCours).toBe(true);
+    expect(p.apres).toBeNull();
+    // Un mois fini se compare au mois d'avant entier (août : 31 jours, après septembre : 30).
+    const s = planBilan("mois", "2026-09", "2026-10-30", 10);
+    expect(s.precedent).toMatchObject({ debut: "2026-08-01", fin: "2026-08-31" });
+    expect(s.apres).toBe("2026-10");
+  });
+
+  it("3 et 6 mois : la fenêtre d'avant, à la même date, mois par mois", () => {
+    const p = planBilan("3m", undefined, "2026-10-30", 10);
+    expect(p.actuel).toMatchObject({ debut: "2026-08-01", fin: "2026-10-30" });
+    expect(p.precedent).toMatchObject({ debut: "2026-05-01", fin: "2026-07-30" });
+    expect(p.serieAvant!.map((x) => x.cle)).toEqual(["2026-05", "2026-06", "2026-07"]);
+    const s = planBilan("6m", "2026-06", "2026-10-30", 10);
+    expect(s.actuel).toMatchObject({ debut: "2026-01-01", fin: "2026-06-30" });
+    expect(s.precedent).toMatchObject({ debut: "2025-07-01", fin: "2025-12-31" });
+    expect(s.apres).toBe("2026-10");
+  });
+
+  it("exercice d'octobre à septembre : en cours, comparé au précédent à la même date", () => {
+    const p = planBilan("exercice", undefined, "2027-03-15", 10);
+    expect(p.actuel).toEqual({ cle: "2026", debut: "2026-10-01", fin: "2027-03-15" });
+    expect(p.precedent).toEqual({ cle: "2025", debut: "2025-10-01", fin: "2026-03-15" });
+    expect(p.axe).toHaveLength(12);
+    expect(p.serie).toHaveLength(6);
+    expect(p.serieAvant![0].cle).toBe("2025-10");
+    expect(nomExercice(2026, 10)).toBe("2026-2027");
+    // Un exercice fini : entier contre entier ; on ne va pas au-delà de l'exercice en cours.
+    const f = planBilan("exercice", "2025", "2027-03-15", 10);
+    expect(f.actuel.fin).toBe("2026-09-30");
+    expect(f.precedent.fin).toBe("2025-09-30");
+    expect(f.apres).toBe("2026");
+    expect(planBilan("exercice", "2031", "2027-03-15", 10).actuel.cle).toBe("2026");
+    expect(exerciceDe("2026-09-30", 10)).toBe(2025);
+    expect(moisDebutExercice("13")).toBe(10);
+    expect(moisDebutExercice("1")).toBe(1);
   });
 });

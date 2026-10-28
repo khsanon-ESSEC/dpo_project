@@ -279,7 +279,7 @@ export default async function PageModele({ params, searchParams }: { params: Pro
                 <label className="visuellement-cache" htmlFor="m-personne">
                   Personne à affecter
                 </label>
-                <select id="m-personne" name="personneId" defaultValue="" style={{ flex: "1 1 200px", minWidth: 0, maxWidth: "100%", minHeight: 40, border: "1px solid var(--controle)", background: "var(--champ)" }}>
+                <select id="m-personne" name="personneId" defaultValue="" className="saisie" style={{ flex: "1 1 200px", minWidth: 0, maxWidth: "100%", minHeight: 44, fontSize: 15 }}>
                   <option value="" disabled>
                     Choisir une personne
                   </option>

@@ -116,3 +116,146 @@ export function semainesDeRapport(p: Periode, jour: string): string[] {
   }
   return lundis;
 }
+
+// ---------------------------------------------------------------------------
+// Périodes du bilan d'équipe : un mois, les 3 ou 6 derniers mois, un exercice
+// ---------------------------------------------------------------------------
+
+export type VueBilan = "mois" | "3m" | "6m" | "exercice";
+export const VUES_BILAN: { id: VueBilan; libelle: string }[] = [
+  { id: "mois", libelle: "Mois" },
+  { id: "3m", libelle: "3 mois" },
+  { id: "6m", libelle: "6 mois" },
+  { id: "exercice", libelle: "Exercice" },
+];
+
+const dernierDuMois = (iso: string) => ajouterJours(premierDuMois(iso, 1), -1);
+
+/** Décale une date de n mois en gardant le jour (borné au dernier jour du mois d'arrivée). */
+export function decalerMois(jour: string, n: number): string {
+  const premier = premierDuMois(jour, n);
+  const j = `${premier.slice(0, 8)}${jour.slice(8, 10)}`;
+  const dernier = dernierDuMois(premier);
+  return j > dernier ? dernier : j;
+}
+
+/** Fin de période décalée de n mois : un dernier jour de mois reste un dernier jour de mois. */
+function decalerFin(fin: string, n: number): string {
+  return fin === dernierDuMois(fin) ? dernierDuMois(premierDuMois(fin, n)) : decalerMois(fin, n);
+}
+
+/** Les mois « AAAA-MM » de debut à fin compris. */
+export function moisEntre(debut: string, fin: string): string[] {
+  const out: string[] = [];
+  for (let m = premierDuMois(debut); m <= fin; m = premierDuMois(m, 1)) out.push(m.slice(0, 7));
+  return out;
+}
+
+/** Mois de début de l'exercice : 1 à 12 (10, octobre, par défaut ; EXERCICE_DEBUT_MOIS). */
+export function moisDebutExercice(v: string | undefined): number {
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 1 && n <= 12 ? n : 10;
+}
+
+/** L'exercice qui contient ce jour, désigné par l'année où il commence. */
+export function exerciceDe(jour: string, debutMois: number): number {
+  const annee = Number(jour.slice(0, 4));
+  return Number(jour.slice(5, 7)) >= debutMois ? annee : annee - 1;
+}
+
+/** « 2025-2026 », ou « 2026 » pour un exercice calé sur l'année civile. */
+export function nomExercice(annee: number, debutMois: number): string {
+  return debutMois === 1 ? String(annee) : `${annee}-${annee + 1}`;
+}
+
+export type PlanBilan = {
+  vue: VueBilan;
+  /** La période étudiée, arrêtée à aujourd'hui si elle est en cours. */
+  actuel: Periode;
+  /** La période comparée, de même durée : juste avant, ou l'an dernier pour un exercice ; arrêtée à la même date. */
+  precedent: Periode;
+  /** Les mois de la période (jusqu'au mois en cours), pour les courbes. */
+  serie: Periode[];
+  /** Les mois correspondants de la période comparée, alignés sur `axe` ; null : pas de comparaison mois par mois. */
+  serieAvant: Periode[] | null;
+  /** Les mois portés par l'axe des courbes (un exercice en a douze, même en cours). */
+  axe: string[];
+  enCours: boolean;
+  /** Paramètres pour aller à la période d'avant ou d'après (null : rien après). */
+  avant: string;
+  apres: string | null;
+  /** Clé de la période (mois, fin de fenêtre ou année d'exercice), pour la navigation. */
+  cle: string;
+};
+
+/**
+ * Ce que montre le bilan pour une vue et un paramètre lus dans l'adresse (vérifiés ici).
+ * - mois : le mois choisi, comparé au mois d'avant à la même date ; courbe des six mois qui y mènent ;
+ * - 3m / 6m : la fenêtre qui finit au mois choisi, comparée à la fenêtre d'avant, mois par mois ;
+ * - exercice : l'exercice choisi, comparé au précédent à la même date ; courbes sur les douze mois.
+ */
+export function planBilan(vue: string | undefined, param: string | undefined, jour: string, debutExercice: number): PlanBilan {
+  const moisCourant = jour.slice(0, 7);
+  const borne = (fin: string) => (fin < jour ? fin : jour);
+  const v: VueBilan = vue === "3m" || vue === "6m" || vue === "exercice" ? vue : "mois";
+
+  if (v === "exercice") {
+    const courant = exerciceDe(jour, debutExercice);
+    const n = Number(param);
+    const annee = Number.isInteger(n) && n >= 2000 && n <= courant ? n : courant;
+    const debut = `${annee}-${String(debutExercice).padStart(2, "0")}-01`;
+    const finEx = ajouterJours(premierDuMois(debut, 12), -1);
+    const fin = borne(finEx);
+    const axe = moisEntre(debut, finEx);
+    return {
+      vue: v,
+      actuel: { cle: String(annee), debut, fin },
+      precedent: { cle: String(annee - 1), debut: premierDuMois(debut, -12), fin: decalerFin(fin, -12) },
+      serie: moisEntre(debut, fin).map(mois),
+      serieAvant: axe.map((m) => mois(premierDuMois(`${m}-01`, -12).slice(0, 7))),
+      axe,
+      enCours: finEx >= jour,
+      avant: String(annee - 1),
+      apres: annee < courant ? String(annee + 1) : null,
+      cle: String(annee),
+    };
+  }
+
+  const valide = (p: string | undefined) => (p && /^\d{4}-(0[1-9]|1[0-2])$/.test(p) && p <= moisCourant ? p : moisCourant);
+  const cle = valide(param);
+  if (v === "mois") {
+    const debut = `${cle}-01`;
+    const fin = borne(dernierDuMois(debut));
+    const axe = moisEntre(premierDuMois(debut, -5), debut);
+    return {
+      vue: v,
+      actuel: { cle, debut, fin },
+      precedent: { cle: moisPrecedent(cle), debut: premierDuMois(debut, -1), fin: decalerFin(fin, -1) },
+      serie: axe.map(mois),
+      serieAvant: null,
+      axe,
+      enCours: cle === moisCourant,
+      avant: moisPrecedent(cle),
+      apres: cle < moisCourant ? moisSuivant(cle) : null,
+      cle,
+    };
+  }
+
+  const n = v === "3m" ? 3 : 6;
+  const debut = premierDuMois(`${cle}-01`, -(n - 1));
+  const fin = borne(dernierDuMois(`${cle}-01`));
+  const axe = moisEntre(debut, `${cle}-01`);
+  const suivant = premierDuMois(`${cle}-01`, n).slice(0, 7);
+  return {
+    vue: v,
+    actuel: { cle, debut, fin },
+    precedent: { cle: premierDuMois(`${cle}-01`, -n).slice(0, 7), debut: premierDuMois(debut, -n), fin: decalerFin(fin, -n) },
+    serie: axe.map(mois),
+    serieAvant: axe.map((m) => mois(premierDuMois(`${m}-01`, -n).slice(0, 7))),
+    axe,
+    enCours: cle === moisCourant,
+    avant: premierDuMois(`${cle}-01`, -n).slice(0, 7),
+    apres: cle < moisCourant ? (suivant < moisCourant ? suivant : moisCourant) : null,
+    cle,
+  };
+}

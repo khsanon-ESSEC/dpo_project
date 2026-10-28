@@ -468,12 +468,13 @@ export function TexteReponse({
   const enregistrer = (v: string) => {
     if (v.trim() !== valeur) demarrer(() => repondre(rapportId, champId, projetId, v));
   };
-  const style = { width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", border: "1px solid var(--controle)", background: "var(--champ)", color: "var(--encre)", fontSize: 15, lineHeight: "22px" };
+  const style = { width: "100%", boxSizing: "border-box" as const, padding: "10px 12px", fontSize: 15, lineHeight: "22px" };
   if (long) {
-    return <textarea id={id} aria-labelledby={etiquette} aria-describedby={decritPar} rows={lignes} value={texte} maxLength={max ?? 2000} onChange={(e) => setTexte(e.target.value)} onBlur={() => enregistrer(texte)} style={{ ...style, resize: "vertical" }} />;
+    return <textarea className="saisie" id={id} aria-labelledby={etiquette} aria-describedby={decritPar} rows={lignes} value={texte} maxLength={max ?? 2000} onChange={(e) => setTexte(e.target.value)} onBlur={() => enregistrer(texte)} style={{ ...style, resize: "vertical" }} />;
   }
   return (
     <input
+      className="saisie"
       id={id}
       aria-labelledby={etiquette}
       aria-describedby={decritPar}
@@ -504,7 +505,8 @@ export function CommentaireFeu({ rapportId, champId, projetId, valeur, id }: { r
       onBlur={() => {
         if (texte.trim() !== valeur) demarrer(() => commenter(rapportId, champId, projetId, texte));
       }}
-      style={{ width: "100%", boxSizing: "border-box", minHeight: 44, padding: "0 12px", border: "1px solid var(--controle)", background: "var(--champ)", color: "var(--encre)", fontSize: 14 }}
+      className="saisie"
+      style={{ width: "100%", boxSizing: "border-box", minHeight: 44, padding: "0 12px", fontSize: 14 }}
     />
   );
 }

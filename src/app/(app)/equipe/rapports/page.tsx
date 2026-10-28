@@ -179,7 +179,7 @@ function ChoixPersonne({ options, choisie }: { options: { id: string; prenom: st
       <label htmlFor="personne" className="note">
         Historique de
       </label>
-      <select id="personne" name="personne" defaultValue={choisie ?? ""} style={{ minHeight: 40, border: "1px solid var(--controle)", background: "var(--champ)", color: "var(--encre)", fontSize: 14, padding: "0 10px" }}>
+      <select id="personne" name="personne" defaultValue={choisie ?? ""} className="saisie" style={{ minHeight: 44, fontSize: 14, padding: "0 12px" }}>
         {choisie ? null : (
           <option value="" disabled>
             Choisir une personne

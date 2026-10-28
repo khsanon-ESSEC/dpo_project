@@ -11,10 +11,10 @@ export function BoutonTheme() {
   useEffect(() => {
     const lire = () => {
       const fond = getComputedStyle(document.documentElement).getPropertyValue("--fond").trim().toLowerCase();
-      setSombre(fond === "#142458");
+      setSombre(fond === "#073c73");
     };
     lire();
-    const mq = window.matchMedia("(max-width: 899px), (prefers-color-scheme: dark)");
+    const mq = window.matchMedia("(max-width: 899px), (pointer: coarse), (prefers-color-scheme: dark)");
     mq.addEventListener("change", lire);
     return () => mq.removeEventListener("change", lire);
   }, []);

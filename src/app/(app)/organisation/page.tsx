@@ -14,8 +14,13 @@ export const metadata: Metadata = { title: "Organisation" };
 
 const COURT: Record<string, string> = { "Chef d'équipe": "ÉQ", "Chef de projet": "CP", Directeur: "DIR", Exécutif: "EXE", Administrateur: "ADM" };
 
-export default async function PageOrganisation({ searchParams }: { searchParams: Promise<{ p?: string; nouvelle?: string }> }) {
-  const { p: selId, nouvelle } = await searchParams;
+const ERREURS: Record<string, string> = {
+  suivi: "Responsable non changé : ce choix vous ferait suivre le travail d'autres personnes. Demandez-le à un exécutif.",
+  chef: "Responsable non changé : choisissez une personne active de la division.",
+};
+
+export default async function PageOrganisation({ searchParams }: { searchParams: Promise<{ p?: string; nouvelle?: string; erreur?: string }> }) {
+  const { p: selId, nouvelle, erreur } = await searchParams;
   const u = await exigerUtilisateur();
   const a = await acces(u);
   const admin = peutAdministrer(u);
@@ -77,6 +82,11 @@ export default async function PageOrganisation({ searchParams }: { searchParams:
       </Bandeau>
       <div className="page">
         {admin ? <SousOnglets onglets={ONGLETS_ORGANISATION} courant="/organisation" label="Organisation" /> : null}
+        {admin && erreur && ERREURS[erreur] ? (
+          <p className="erreur" role="alert">
+            {ERREURS[erreur]}
+          </p>
+        ) : null}
         {admin ? (
           <div className="ligne-actions">
             <p className="note">
@@ -123,7 +133,7 @@ export default async function PageOrganisation({ searchParams }: { searchParams:
                         <label className="visuellement-cache" htmlFor={`chef-${e.id}`}>
                           Responsable de {e.nom}
                         </label>
-                        <select id={`chef-${e.id}`} name="chefId" defaultValue={e.chefId ?? ""} style={{ flex: 1, minHeight: 40, border: "1px solid var(--controle)", background: "var(--champ)" }}>
+                        <select id={`chef-${e.id}`} name="chefId" defaultValue={e.chefId ?? ""} className="saisie" style={{ flex: 1, minHeight: 44, fontSize: 15 }}>
                           <option value="">Poste vacant</option>
                           {personnesOptions.map((p) => (
                             <option key={p.id} value={p.id}>

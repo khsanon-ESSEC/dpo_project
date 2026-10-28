@@ -30,7 +30,9 @@ export async function trouverOuCreerExterne(saisieNom: string, saisieOrganisatio
     .find((p) => !organisation || !p.organisation || cleNom(p.organisation) === cleNom(organisation));
   if (meme) {
     if (!meme.organisation && organisation) await db.update(schema.personnes).set({ organisation, majLe: new Date() }).where(eq(schema.personnes.id, meme.id));
-    if (!meme.actif) await db.update(schema.personnes).set({ actif: true, majLe: new Date() }).where(eq(schema.personnes.id, meme.id));
+    // Une fiche désactivée revient pour recevoir des tâches, jamais avec son ancien accès : un administrateur
+    // le rouvre s'il le faut (mot de passe provisoire).
+    if (!meme.actif) await db.update(schema.personnes).set({ actif: true, motDePasseHash: null, doitChangerMotDePasse: true, majLe: new Date() }).where(eq(schema.personnes.id, meme.id));
     return meme.id;
   }
   const [p] = await db
@@ -66,7 +68,17 @@ export async function modifierExterne(parId: string, id: string, m: Modification
   try {
     await db
       .update(schema.personnes)
-      .set({ prenom, nom: court(m.nom, 120), organisation: court(m.organisation, 120), poste: court(m.poste, 120), courriel: courriel || null, actif: m.actif, majLe: new Date() })
+      .set({
+        prenom,
+        nom: court(m.nom, 120),
+        organisation: court(m.organisation, 120),
+        poste: court(m.poste, 120),
+        courriel: courriel || null,
+        actif: m.actif,
+        // Désactiver ferme aussi l'accès : réactiver la fiche ne le rouvre pas.
+        ...(m.actif ? {} : { motDePasseHash: null, doitChangerMotDePasse: true }),
+        majLe: new Date(),
+      })
       .where(eq(schema.personnes.id, id));
   } catch (e) {
     const t = (e as Error).message;

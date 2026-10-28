@@ -97,7 +97,7 @@ export async function importer(_: EtatImport, form: FormData): Promise<EtatImpor
   const source = form.get("source") === "annuaire" ? "annuaire" : "fichier";
   if (!lignes) return { message: "Rien à importer : prévisualisez d'abord un fichier ou l'annuaire." };
   const r = await appliquerImport(u.id, lignes, source);
-  if (!r.ok) return { message: "L'organisation a changé entre-temps : voici la nouvelle comparaison, corrigez puis recommencez.", plan: r.plan, lignes, source };
+  if (!r.ok) return { message: r.refus ?? "L'organisation a changé entre-temps : voici la nouvelle comparaison, corrigez puis recommencez.", plan: r.plan, lignes, source };
   revalidatePath("/", "layout");
   const p = r.plan;
   const morceaux = [

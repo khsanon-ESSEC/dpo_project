@@ -16,6 +16,7 @@ export function TableauConseil({
   entete,
   rapportRetirable,
   visibles,
+  redigeables,
 }: {
   lignes: Lignes;
   brouillon: boolean;
@@ -26,6 +27,8 @@ export function TableauConseil({
   rapportRetirable?: string | null;
   /** Projets que le lecteur peut ouvrir (leurs titres deviennent des liens). */
   visibles?: "tous" | Set<string>;
+  /** Rapport mensuel : projets dont le lecteur rédige la ligne (ceux qu'il gère) ; les autres se lisent. */
+  redigeables?: Set<string>;
 }) {
   return (
     <div className="papier">
@@ -73,7 +76,7 @@ export function TableauConseil({
                   </td>
                   <td>{projet.programme}</td>
                   <td className="ia">
-                    {brouillon ? (
+                    {brouillon && (!redigeables || redigeables.has(projet.id)) ? (
                       <form key={`${ligne.id}-${ligne.redigeParIa}-${ligne.etatAvancement.length}`} action={enregistrerEtat.bind(null, ligne.id)} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                         <label className="visuellement-cache" htmlFor={`etat-${ligne.id}`}>
                           État d'avancement de {projet.titre}
@@ -107,7 +110,7 @@ export function TableauConseil({
         </table>
         <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: "8px 28px", fontSize: 12, color: "#5f5e5e" }}>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 14, height: 10, background: "#f5f7fb", boxShadow: "inset 2px 0 0 #8ea3cf" }} />
+            <span style={{ width: 14, height: 10, background: "#f5f7fb", boxShadow: "inset 2px 0 0 #8cb3d9" }} />
             Préparé automatiquement, à relire
           </span>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
@@ -135,7 +138,7 @@ export function EtapesConseil({ statut }: { statut: string }) {
                 height: 12,
                 flex: "none",
                 borderRadius: "50%",
-                ...(i < courante ? { background: "var(--anneau-arc)" } : i === courante ? { background: "#f4b22d" } : { border: "1.5px solid #a9b6d6" }),
+                ...(i < courante ? { background: "var(--anneau-arc)" } : i === courante ? { background: "#f4b22d" } : { border: "1.5px solid #c0d7ed" }),
               }}
             />
             {i < 3 ? <span style={{ flex: 1, height: 1, margin: "0 8px", background: i < courante ? "var(--anneau-arc)" : "var(--anneau-piste)" }} /> : null}

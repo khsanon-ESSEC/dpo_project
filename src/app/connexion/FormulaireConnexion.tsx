@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { seConnecter, seConnecterAD, type EtatConnexion, type EtatConnexionAD } from "./actions";
+import { Icone } from "@/components/Icone";
 
 /** Champ de mot de passe avec « Afficher ». */
 function ChampMotDePasse({ id, libelle, aide }: { id: string; libelle: string; aide: string }) {
@@ -9,9 +10,10 @@ function ChampMotDePasse({ id, libelle, aide }: { id: string; libelle: string; a
   return (
     <div className="champ">
       <label htmlFor={id}>{libelle}</label>
-      <div style={{ display: "flex", alignItems: "stretch", border: "1px solid var(--controle)", background: "var(--champ)" }}>
-        <input id={id} name="motDePasse" type={visible ? "text" : "password"} autoComplete="current-password" required style={{ flex: 1, minWidth: 0, border: 0, minHeight: 46 }} />
-        <button type="button" className="bouton-icone" style={{ width: "auto", padding: "0 14px", fontSize: 13, fontWeight: 500 }} aria-pressed={visible} onClick={() => setVisible(!visible)}>
+      <div className="saisie saisie--groupe saisie-icone">
+        <Icone nom="cadenas" taille={18} trait={1.75} />
+        <input id={id} name="motDePasse" type={visible ? "text" : "password"} autoComplete="current-password" required style={{ minHeight: 46 }} />
+        <button type="button" className="saisie__bouton" aria-pressed={visible} onClick={() => setVisible(!visible)}>
           {visible ? "Masquer" : "Afficher"}
         </button>
       </div>
@@ -53,7 +55,10 @@ export function FormulaireConnexion({ google, ad, erreurGoogle, suite = null }: 
         <>
           <div className="champ">
             <label htmlFor="identifiant">Identifiant Windows</label>
-            <input id="identifiant" name="identifiant" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} required placeholder="ex. : jdupont" defaultValue={etatAD.identifiant ?? ""} key={etatAD.identifiant ?? ""} />
+            <div className="saisie-icone">
+              <Icone nom="utilisateur" taille={18} trait={1.75} />
+              <input id="identifiant" name="identifiant" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} required placeholder="ex. : jdupont" defaultValue={etatAD.identifiant ?? ""} key={etatAD.identifiant ?? ""} />
+            </div>
           </div>
           <ChampMotDePasse id="motDePasseAD" libelle="Mot de passe Windows" aide="Le même que pour ouvrir votre session sur votre poste." />
         </>
@@ -61,7 +66,10 @@ export function FormulaireConnexion({ google, ad, erreurGoogle, suite = null }: 
         <>
           <div className="champ">
             <label htmlFor="courriel">Adresse courriel</label>
-            <input id="courriel" name="courriel" type="email" autoComplete="username" required placeholder="prenom.nom@unibankhaiti.com" defaultValue={etat.courriel ?? ""} key={etat.courriel ?? ""} />
+            <div className="saisie-icone">
+              <Icone nom="courriel" taille={18} trait={1.75} />
+              <input id="courriel" name="courriel" type="email" autoComplete="username" required placeholder="prenom.nom@unibankhaiti.com" defaultValue={etat.courriel ?? ""} key={etat.courriel ?? ""} />
+            </div>
           </div>
           <ChampMotDePasse
             id="motDePasse"

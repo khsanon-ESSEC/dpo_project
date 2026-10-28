@@ -55,13 +55,13 @@ export function messageRappel(
   const salutation = `Bonjour ${o.prenom.trim() || ""}`.trim() + ",";
   const pied = "Pilotage des projets, Division des Projets Organisationnels. Courriel envoyé automatiquement : inutile d'y répondre.";
   const texte = [salutation, "", ...corps, "", `Ouvrir mon rapport : ${o.lien}`, "", "—", pied].join("\n");
-  const html = `<!doctype html><html lang="fr"><body style="margin:0;padding:24px;background:#f7f6f2;font-family:Arial,Helvetica,sans-serif;color:#142458">
+  const html = `<!doctype html><html lang="fr"><body style="margin:0;padding:24px;background:#f7f6f2;font-family:Arial,Helvetica,sans-serif;color:#0b3156">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e6e2d8">
-<tr><td style="padding:20px 24px;background:#142458;color:#ffffff;font-size:13px;letter-spacing:2px;text-transform:uppercase">Pilotage des projets</td></tr>
+<tr><td style="padding:20px 24px;background:#0b3156;color:#ffffff;font-size:13px;letter-spacing:2px;text-transform:uppercase">Pilotage des projets</td></tr>
 <tr><td style="padding:24px;font-size:15px;line-height:22px">
 <p style="margin:0 0 16px">${echapper(salutation)}</p>
 ${corps.map((p) => `<p style="margin:0 0 12px">${echapper(p)}</p>`).join("\n")}
-<p style="margin:24px 0"><a href="${echapper(o.lien)}" style="display:inline-block;padding:12px 20px;background:#f4b22d;color:#142458;font-weight:bold;text-decoration:none">Ouvrir mon rapport</a></p>
+<p style="margin:24px 0"><a href="${echapper(o.lien)}" style="display:inline-block;padding:12px 20px;background:#f4b22d;color:#0b3156;font-weight:bold;text-decoration:none">Ouvrir mon rapport</a></p>
 <p style="margin:0;font-size:12px;line-height:18px;color:#6b6862">${echapper(pied)}</p>
 </td></tr></table></body></html>`;
   return { sujet, texte, html };

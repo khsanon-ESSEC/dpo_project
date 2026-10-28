@@ -17,7 +17,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#142458",
+  // Couleur de la barre du navigateur sur téléphone : le bleu profond du thème sombre.
+  themeColor: "#073c73",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

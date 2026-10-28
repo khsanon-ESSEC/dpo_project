@@ -20,6 +20,7 @@ import {
 import { demanderIA } from "@/lib/ia";
 import { noter } from "@/lib/journal";
 import { peutModifierRapportConseil } from "@/lib/regles";
+import { peutGererProjet } from "@/lib/projets";
 
 async function exigerConseil() {
   const u = await exigerUtilisateur();
@@ -42,6 +43,12 @@ async function ligneModifiable(ligneId: string, a: Acces) {
   if (!peutModifierRapportConseil({ moiId: a.moi.id, toutVoir: a.toutVoir }, l.rapport)) throw new Error("Seul son auteur ou un exécutif modifie ce rapport.");
   const visibles = await idsProjetsVisibles(a);
   if (visibles !== "tous" && !visibles.has(l.ligne.projetId)) throw new Error("Ce projet n'est pas dans votre direction.");
+  // Rapport mensuel (commun à tous) : la ligne d'un projet se rédige par qui gère ce projet. Voir un projet
+  // d'une autre direction, parce que les siens y travaillent, ne suffit pas.
+  if (l.rapport.genre !== "ponctuel") {
+    const [p] = await db.select().from(schema.projets).where(eq(schema.projets.id, l.ligne.projetId));
+    if (!p || !peutGererProjet({ moiId: a.moi.id, directeur: a.directeur, toutVoir: a.toutVoir, suivis: a.suivis }, p)) throw new Error("Seul qui gère ce projet rédige sa ligne du rapport mensuel.");
+  }
   return l;
 }
 

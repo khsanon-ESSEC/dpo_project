@@ -3,6 +3,7 @@ import { utilisateurActif } from "@/lib/auth/session";
 import { contexteAssistant } from "@/lib/contexte-assistant";
 import { CONSIGNES_ASSISTANT, demanderIA, iaDisponible, IaIndisponible } from "@/lib/ia";
 import { noter } from "@/lib/journal";
+import { memeOrigine } from "@/lib/origine";
 
 const ECRANS = new Set(["semaine", "rapport", "equipe", "projet", "portefeuille", "conseil", "organisation"]);
 const fenetre = new Map<string, number[]>();
@@ -16,6 +17,7 @@ function tropDeQuestions(id: string) {
 }
 
 export async function POST(req: Request) {
+  if (!memeOrigine(req.headers)) return NextResponse.json({ erreur: "Requête refusée." }, { status: 403 });
   const u = await utilisateurActif();
   if (!u) return NextResponse.json({ erreur: "Session expirée. Reconnectez-vous." }, { status: 401 });
   if (!iaDisponible()) {
@@ -31,7 +33,8 @@ export async function POST(req: Request) {
 
   try {
     const contexte = await contexteAssistant(u, ecran, chemin);
-    const reponse = await demanderIA(`${CONSIGNES_ASSISTANT}\n\n<donnees>\n${contexte}\n</donnees>`, [{ role: "user", contenu: question }]);
+    // Les données (écrites par des personnes : tâches, rapports) vont dans le message, jamais dans les consignes.
+    const reponse = await demanderIA(CONSIGNES_ASSISTANT, [{ role: "user", contenu: `<donnees>\n${contexte}\n</donnees>\n\n<question>\n${question}\n</question>` }]);
     await noter(u.id, "assistant", ecran, { longueurQuestion: question.length });
     return NextResponse.json({ reponse: reponse || "Je n'ai pas de réponse à proposer." });
   } catch (e) {

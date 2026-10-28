@@ -3,14 +3,15 @@ import { createHash, randomBytes } from "node:crypto";
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import { and, eq, gt, ne } from "drizzle-orm";
+import { and, eq, gt, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { hash, verify } from "@node-rs/argon2";
 import { db, schema } from "@/db";
 import { noter } from "@/lib/journal";
 
-const COOKIE = "dpo_session";
 const HEURES = Number(process.env.SESSION_HEURES || 12);
 const SECURISE = process.env.COOKIE_SECURISE !== "0";
+/** En HTTPS, le préfixe __Host- interdit à un autre site de la banque (sous-domaine voisin) de poser ce cookie. */
+const COOKIE = SECURISE ? "__Host-dpo_session" : "dpo_session";
 const ESSAIS_MAX = 5;
 const BLOCAGE_MINUTES = 15;
 
@@ -57,7 +58,8 @@ export async function ouvrirSession(personneId: string, methode: MethodeConnexio
     id: empreinteJeton(jeton),
     personneId,
     expireLe: expire,
-    ip: (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || null,
+    // L'adresse ajoutée par le proxy de la banque (la dernière) : les précédentes viennent du navigateur.
+    ip: (h.get("x-forwarded-for") ?? "").split(",").at(-1)?.trim() || null,
     agent: h.get("user-agent")?.slice(0, 300) ?? null,
     methode,
   });
@@ -158,6 +160,41 @@ export async function connecterIdentiteVerifiee(courriel: string, methode: "goog
 
 export type ResultatConnexion = { ok: true } | { ok: false; message: string };
 
+/**
+ * Réserve un essai AVANT de vérifier le mot de passe, en une seule écriture : des essais lancés en même temps
+ * comptent chacun, et le compte se bloque au cinquième (15 minutes). Renvoie false si le compte est bloqué.
+ * Un essai réussi remet le compteur à zéro (oublierEssais).
+ */
+async function reserverEssai(personneId: string): Promise<boolean> {
+  const p = schema.personnes;
+  const [r] = await db
+    .update(p)
+    .set({
+      echecsConnexion: sql`case when ${p.echecsConnexion} + 1 >= ${ESSAIS_MAX} then 0 else ${p.echecsConnexion} + 1 end`,
+      bloqueJusqua: sql`case when ${p.echecsConnexion} + 1 >= ${ESSAIS_MAX} then now() + (${BLOCAGE_MINUTES} * interval '1 minute') else ${p.bloqueJusqua} end`,
+    })
+    .where(and(eq(p.id, personneId), or(isNull(p.bloqueJusqua), lte(p.bloqueJusqua, sql`now()`))))
+    .returning({ id: p.id });
+  return !!r;
+}
+
+async function oublierEssais(personneId: string) {
+  await db.update(schema.personnes).set({ echecsConnexion: 0, bloqueJusqua: null }).where(eq(schema.personnes.id, personneId));
+}
+
+/**
+ * Vérifie le mot de passe d'une personne, avec la même limite d'essais que la connexion (changement de mot de
+ * passe : une session volée ne permet pas de deviner le vrai mot de passe).
+ */
+export async function verifierMotDePasseDe(personneId: string, motDePasse: string): Promise<"ok" | "faux" | "bloque"> {
+  const [p] = await db.select({ hash: schema.personnes.motDePasseHash }).from(schema.personnes).where(eq(schema.personnes.id, personneId));
+  if (!p?.hash || !motDePasse) return "faux";
+  if (!(await reserverEssai(personneId))) return "bloque";
+  if (!(await verify(p.hash, motDePasse).catch(() => false))) return "faux";
+  await oublierEssais(personneId);
+  return "ok";
+}
+
 export async function verifierIdentifiants(courrielSaisi: string, motDePasse: string): Promise<ResultatConnexion> {
   const courriel = courrielSaisi.trim().toLowerCase();
   const refus: ResultatConnexion = { ok: false, message: "Adresse ou mot de passe incorrect." };
@@ -169,23 +206,16 @@ export async function verifierIdentifiants(courrielSaisi: string, motDePasse: st
     await noter(null, "connexion_refusee", courriel);
     return refus;
   }
-  if (p.bloqueJusqua && p.bloqueJusqua > new Date()) {
+  if (!(await reserverEssai(p.id))) {
+    await noter(p.id, "connexion_refusee", courriel, { bloque: true });
     return { ok: false, message: `Trop d'essais. Réessayez dans ${BLOCAGE_MINUTES} minutes.` };
   }
   const bon = await verify(p.motDePasseHash, motDePasse).catch(() => false);
   if (!bon) {
-    const echecs = p.echecsConnexion + 1;
-    await db
-      .update(schema.personnes)
-      .set({
-        echecsConnexion: echecs >= ESSAIS_MAX ? 0 : echecs,
-        bloqueJusqua: echecs >= ESSAIS_MAX ? new Date(Date.now() + BLOCAGE_MINUTES * 60_000) : null,
-      })
-      .where(eq(schema.personnes.id, p.id));
-    await noter(p.id, "connexion_refusee", courriel, { echecs });
+    await noter(p.id, "connexion_refusee", courriel);
     return refus;
   }
-  await db.update(schema.personnes).set({ echecsConnexion: 0, bloqueJusqua: null }).where(eq(schema.personnes.id, p.id));
+  await oublierEssais(p.id);
   await ouvrirSession(p.id);
   await noter(p.id, "connexion", courriel);
   return { ok: true };

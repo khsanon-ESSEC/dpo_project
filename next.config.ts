@@ -25,6 +25,8 @@ const enTetesSecurite = [
   { key: "Referrer-Policy", value: "same-origin" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  // Lu seulement en HTTPS (ignoré en HTTP) : le navigateur refuse ensuite le HTTP pour ce nom pendant un an.
+  { key: "Strict-Transport-Security", value: "max-age=31536000" },
 ];
 
 const config: NextConfig = {

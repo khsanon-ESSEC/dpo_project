@@ -56,6 +56,8 @@ export async function basculerTache(tacheId: string) {
   const u = await exigerUtilisateur();
   const a = await acces(u);
   const t = await exigerTacheVisible(a, tacheId);
+  // Une tâche annulée ne se coche plus : on la rétablit d'abord depuis sa fiche.
+  if (t.annuleeLe) return;
   if (t.statut === "faite") {
     const [dernier] = await db
       .select({ avant: schema.evenementsTache.avant })
@@ -289,6 +291,7 @@ export async function deplacerTache(tacheId: string, statut: string): Promise<{ 
   const u = await exigerUtilisateur();
   const a = await acces(u);
   const t = await exigerTacheVisible(a, tacheId);
+  if (t.annuleeLe) return { ok: false, message: "Cette tâche est annulée : rétablissez-la d'abord depuis sa fiche." };
   if (statut !== "a_faire" && statut !== "en_cours" && statut !== "faite") return { ok: false, message: "Pour une tâche bloquée, dites ce qui bloque sur sa fiche." };
   await changerStatut(tacheId, statut, u.id);
   await noter(u.id, "tache_deplacee", tacheId, { statut });

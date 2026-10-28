@@ -1,3 +1,4 @@
+import { cheminInterne } from "@/lib/origine";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
@@ -50,14 +51,9 @@ export default async function PageFichePersonne({ params }: { params: Promise<{ 
   const suivi = id === u.id || suitPersonne(a, id);
   const roles = [p.executif ? "Exécutif" : null, p.directeur ? "Directeur" : null, subordonnes.length ? "Chef d'équipe" : null, diriges.some((d) => d.statut !== "requete") ? "Chef de projet" : null, p.administrateur ? "Administrateur" : null].filter(Boolean);
   // Retour : la page d'où l'on vient, si elle est de l'application.
-  const ref = (await headers()).get("referer");
-  let retour = "/semaine";
-  try {
-    const r = ref ? new URL(ref) : null;
-    if (r && r.pathname.startsWith("/") && !r.pathname.startsWith("/personnes/" + id)) retour = r.pathname + r.search;
-  } catch {
-    /* adresse illisible : retour à la semaine */
-  }
+  const h = await headers();
+  const venu = cheminInterne(h.get("referer"), h);
+  const retour = venu && !venu.startsWith("/personnes/" + id) ? venu : "/semaine";
 
   return (
     <>
@@ -77,7 +73,7 @@ export default async function PageFichePersonne({ params }: { params: Promise<{ 
         ) : null}
       </Bandeau>
       <div className="page">
-        <div className="colonnes">
+        <div className="colonnes colonnes--tablette">
           <div className="colonne-large">
             <section className="carte" aria-labelledby="pf-ident">
               <h2 id="pf-ident" className="carte__titre">

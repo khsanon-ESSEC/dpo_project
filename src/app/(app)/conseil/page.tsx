@@ -1,8 +1,9 @@
+import { peutGererProjet } from "@/lib/projets";
 import type { Metadata } from "next";
 import { acces, exigerAccesConseil, idsProjetsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { moisAnnee } from "@/lib/dates";
-import { lignesConseil, moisCourant, obtenirOuCreerRapportConseil } from "@/lib/donnees/conseil";
+import { lignesConseil, moisCourant, moisValide, obtenirOuCreerRapportConseil } from "@/lib/donnees/conseil";
 import { iaDisponible } from "@/lib/ia";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
@@ -17,12 +18,14 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
   const u = await exigerUtilisateur();
   const a = await acces(u);
   exigerAccesConseil(a);
-  const mois = moisDemande && /^\d{4}-\d{2}-01$/.test(moisDemande) ? moisDemande : moisCourant();
+  const mois = moisValide(moisDemande) ? moisDemande : moisCourant();
   const r = await obtenirOuCreerRapportConseil(mois);
   const visibles = await idsProjetsVisibles(a);
   // Un directeur ne voit que les projets stratégiques de sa direction ; un exécutif voit tout.
   const lignes = (await lignesConseil(r.id, r.statut)).filter((l) => visibles === "tous" || visibles.has(l.projet.id));
   const brouillon = r.statut === "brouillon";
+  const acteur = { moiId: a.moi.id, directeur: a.directeur, toutVoir: a.toutVoir, suivis: a.suivis };
+  const redigeables = new Set(lignes.filter((l) => peutGererProjet(acteur, l.projet)).map((l) => l.projet.id));
   const changees = lignes.filter((l) => l.ligne.dateFinDernierRapport && l.ligne.nouvelleDateFin !== l.ligne.dateFinDernierRapport).length;
 
   return (
@@ -69,6 +72,7 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
         <TableauConseil
           lignes={lignes}
           visibles={visibles}
+          redigeables={redigeables}
           brouillon={brouillon}
           ia={iaDisponible()}
           entete={

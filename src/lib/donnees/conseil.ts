@@ -18,6 +18,12 @@ export function moisCourant() {
   return premierDuMois(aujourdhui());
 }
 
+/** Un mois de rapport possible : un vrai mois, depuis 2020, jusqu'au mois prochain (pas de rapport créé au hasard). */
+export function moisValide(m: string | undefined | null): m is string {
+  if (!m || !/^\d{4}-(0[1-9]|1[0-2])-01$/.test(m)) return false;
+  return m >= "2020-01-01" && m <= premierDuMois(aujourdhui(), 1);
+}
+
 async function finAuDernierRapport(projetId: string, mois: string) {
   const [h] = await db
     .select()

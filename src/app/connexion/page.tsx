@@ -9,11 +9,10 @@ import { FormulaireConnexion } from "./FormulaireConnexion";
 
 export const metadata: Metadata = { title: "Connexion" };
 
-const BARRES: [number, number, string][] = [
-  [10, 30, "#1b316a"], [22, 52, "#1b316a"], [8, 40, "#233c7d"], [30, 74, "#233c7d"], [12, 58, "#1b316a"], [40, 100, "#24478e"],
-  [10, 66, "#233c7d"], [26, 84, "#284283"], [14, 50, "#1b316a"], [34, 72, "#24478e"], [8, 36, "#233c7d"], [20, 58, "#1b316a"],
-  [16, 44, "#233c7d"], [28, 64, "#284283"], [10, 34, "#1b316a"], [18, 48, "#233c7d"],
-];
+// Un graphique en traits fins, comme dans un rapport annuel : l'avancement monte, une seule barre est dorée
+// (« un seul détail ambré par écran : ce qui compte »).
+const BARRES = [22, 30, 26, 38, 34, 44, 40, 52, 47, 58, 54, 63, 60, 70, 66, 76, 72, 84, 79, 90, 86, 96, 92, 100];
+const BARRE_DOREE = 17;
 
 export default async function PageConnexion({ searchParams }: { searchParams: Promise<{ google?: string; suite?: string }> }) {
   const { google, suite: brute } = await searchParams;
@@ -26,16 +25,14 @@ export default async function PageConnexion({ searchParams }: { searchParams: Pr
     <div className="connexion">
       <section aria-label="Pilotage des projets" className="connexion__heros">
         <div aria-hidden="true" className="connexion__barres">
-          {BARRES.map(([l, h, c], i) => (
-            <span key={i} style={{ flex: `${l} 1 0`, height: `${h}%`, background: c }} />
+          {BARRES.map((h, i) => (
+            <span key={i} className={i === BARRE_DOREE ? "connexion__barre connexion__barre--or" : "connexion__barre"} style={{ height: `${h}%` }} />
           ))}
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo-blanc.svg" alt="UNIBANK" className="connexion__logo" />
         <div className="connexion__accroche">
-          <p className="surtitre" style={{ color: "#f4b22d" }}>
-            Division Projets Organisationnels
-          </p>
+          <p className="connexion__division">Division des projets organisationnels</p>
           <h1 className="connexion__titre">
             Pilotage
             <br className="connexion__coupure" /> des projets

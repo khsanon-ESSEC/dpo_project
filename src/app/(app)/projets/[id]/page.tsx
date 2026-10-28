@@ -285,7 +285,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
             ) : null}
           </div>
         </div>
-        <div className="colonnes">
+        <div className="colonnes colonnes--tablette">
           <div className="colonne-large">
             <section className="carte carte--liste" aria-labelledby="p-ind">
               <h2 id="p-ind" className="carte__titre">
@@ -323,7 +323,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                         <label className="visuellement-cache" htmlFor={`ind-${i.id}`}>
                           État de « {i.libelle} »
                         </label>
-                        <select id={`ind-${i.id}`} name="etat" defaultValue={i.etat} style={{ minHeight: 32, border: "1px solid var(--filet-fort)", background: "transparent", fontSize: 12 }}>
+                        <select id={`ind-${i.id}`} name="etat" defaultValue={i.etat} className="saisie saisie--compacte">
                           <option value="a_venir">À venir</option>
                           <option value="en_cours">En cours</option>
                           <option value="atteint">Atteint</option>

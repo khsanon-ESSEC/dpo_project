@@ -8,13 +8,14 @@
  *   n'est stocké. Le mot de passe n'est ni gardé ni écrit dans le journal.
  * - Garde-fous : mot de passe vide refusé (liaison anonyme), identifiant filtré, filtre de recherche
  *   construit par la bibliothèque (échappement), compte désactivé refusé, groupe AD facultatif (AD_GROUPE),
- *   nombre d'essais par identifiant limité (AD_ESSAIS_MAX, 3 par défaut, sous le seuil de verrouillage d'AD).
+ *   nombre d'essais par identifiant limité (AD_ESSAIS_MAX, 3 par défaut, sous le seuil de verrouillage d'AD,
+ *   sur AD_FENETRE_MINUTES, 15 par défaut), compte lu après la liaison = celui de la liaison.
  * - Aucun compte n'est créé : l'adresse (mail, sinon userPrincipalName) doit être celle d'une personne
  *   existante et active de l'application.
  */
 import "server-only";
 import { readFileSync } from "node:fs";
-import { AndFilter, Client, EqualityFilter, ExtensibleFilter, InvalidCredentialsError, NotFilter, type Filter } from "ldapts";
+import { AndFilter, Client, EqualityFilter, ExtensibleFilter, InvalidCredentialsError, NotFilter, OrFilter, type Filter } from "ldapts";
 import { compteDesactive, dnDans, estDansGroupe, ligneDepuisAnnuaire, motDePasseADAcceptable, nomDeLiaison, normaliserIdentifiant, refusDeLiaison, type RefusAD } from "@/lib/auth/ad-regles";
 import type { LigneImport } from "@/lib/import-organisation";
 
@@ -35,12 +36,39 @@ function autorite(): Buffer | undefined {
 }
 
 // ---------- Essais par identifiant (en mémoire : un seul serveur d'application) ----------
-const FENETRE = 15 * 60_000;
-const echecs = new Map<string, number[]>();
+// Un essai est réservé AVANT d'interroger l'annuaire : dix essais envoyés en même temps n'en font pas passer
+// dix. Il est rendu si aucun serveur n'a répondu, gardé si le mot de passe est faux, tout est effacé s'il est bon.
+// La fenêtre (AD_FENETRE_MINUTES) doit rester au moins aussi longue que celle du verrouillage d'AD.
+const fenetre = () => Math.max(1, Number(process.env.AD_FENETRE_MINUTES) || 15) * 60_000;
+const essais = new Map<string, number[]>();
 const essaisMax = () => Math.max(1, Number(process.env.AD_ESSAIS_MAX) || 3);
-const recents = (cle: string) => (echecs.get(cle) ?? []).filter((t) => Date.now() - t < FENETRE);
-function noterEchec(cle: string) {
-  echecs.set(cle, [...recents(cle), Date.now()]);
+const recents = (cle: string) => (essais.get(cle) ?? []).filter((t) => Date.now() - t < fenetre());
+let suivant = 0;
+/** Réserve un essai ; null si l'identifiant a atteint sa limite. Le jeton sert à rendre l'essai. */
+function reserverEssai(cle: string): number | null {
+  const r = recents(cle);
+  if (r.length >= essaisMax()) return null;
+  // Un jeton unique (l'heure, décalée si deux essais tombent sur la même milliseconde).
+  const t = (suivant = Math.max(Date.now(), suivant + 1));
+  essais.set(cle, [...r, t]);
+  return t;
+}
+function rendreEssai(cle: string, jeton: number) {
+  const r = (essais.get(cle) ?? []).filter((t) => t !== jeton);
+  if (r.length) essais.set(cle, r);
+  else essais.delete(cle);
+}
+
+/**
+ * Le compte à lire après la liaison : celui de la liaison elle-même. Liée par UPN (« id@domaine »), on cherche
+ * aussi cet UPN ; si un autre compte porte le même identifiant Windows, on trouve deux comptes et on refuse.
+ */
+export function filtreDuCompte(identifiant: string, liaison: string): Filter {
+  const sam = new EqualityFilter({ attribute: "sAMAccountName", value: identifiant });
+  const parUPN = liaison.includes("@") && !liaison.includes("=");
+  return new AndFilter({
+    filters: [new EqualityFilter({ attribute: "objectClass", value: "user" }), parUPN ? new OrFilter({ filters: [sam, new EqualityFilter({ attribute: "userPrincipalName", value: liaison })] }) : sam],
+  });
 }
 
 /** Valeur d'un attribut, quel que soit la casse de son nom (les noms d'attributs LDAP ne la distinguent pas). */
@@ -54,7 +82,9 @@ export async function verifierAD(saisie: string, motDePasse: unknown): Promise<{
   if (!identifiant) return { ok: false, refus: "identifiant", identifiant: null };
   if (!motDePasseADAcceptable(motDePasse)) return { ok: false, refus: "identifiants", identifiant };
   const cle = identifiant.toLowerCase();
-  if (recents(cle).length >= essaisMax()) return { ok: false, refus: "trop", identifiant };
+  const jeton = reserverEssai(cle);
+  if (jeton === null) return { ok: false, refus: "trop", identifiant };
+  const liaison = nomDeLiaison(identifiant, domaine, process.env.AD_LIAISON);
 
   for (const url of urls()) {
     const client = new Client({
@@ -66,17 +96,16 @@ export async function verifierAD(saisie: string, motDePasse: unknown): Promise<{
     });
     try {
       try {
-        await client.bind(nomDeLiaison(identifiant, domaine, process.env.AD_LIAISON), motDePasse);
+        await client.bind(liaison, motDePasse);
       } catch (e) {
-        if (e instanceof InvalidCredentialsError) {
-          noterEchec(cle);
-          return { ok: false, refus: refusDeLiaison(e.message), identifiant };
-        }
+        // Mot de passe faux : l'essai reste compté.
+        if (e instanceof InvalidCredentialsError) return { ok: false, refus: refusDeLiaison(e.message), identifiant };
         throw e; // serveur injoignable ou autre : on essaie le suivant
       }
+      essais.delete(cle);
       const { searchEntries } = await client.search(process.env.AD_BASE_DN!, {
         scope: "sub",
-        filter: new AndFilter({ filters: [new EqualityFilter({ attribute: "objectClass", value: "user" }), new EqualityFilter({ attribute: "sAMAccountName", value: identifiant })] }),
+        filter: filtreDuCompte(identifiant, liaison),
         attributes: ["mail", "userPrincipalName", "memberOf", "userAccountControl"],
         sizeLimit: 2,
       });
@@ -87,7 +116,6 @@ export async function verifierAD(saisie: string, motDePasse: unknown): Promise<{
       if (groupe && !estDansGroupe(attribut(e, "memberOf"), groupe) && !(await dansGroupeImbrique(client, e.dn, groupe))) return { ok: false, refus: "sans_acces", identifiant };
       const courriel = (texte(attribut(e, "mail")) || texte(attribut(e, "userPrincipalName"))).trim().toLowerCase();
       if (!courriel) return { ok: false, refus: "sans_acces", identifiant };
-      echecs.delete(cle);
       return { ok: true, courriel, identifiant };
     } catch (e) {
       console.error(`annuaire ${url} :`, (e as Error).message);
@@ -95,6 +123,8 @@ export async function verifierAD(saisie: string, motDePasse: unknown): Promise<{
       await client.unbind().catch(() => {});
     }
   }
+  // Aucun serveur n'a répondu : l'essai ne compte pas.
+  rendreEssai(cle, jeton);
   return { ok: false, refus: "indisponible", identifiant };
 }
 
@@ -139,7 +169,8 @@ export async function lireAnnuaire(
   if (!identifiant) return { ok: false, refus: "identifiant" };
   if (!motDePasseADAcceptable(motDePasse)) return { ok: false, refus: "identifiants" };
   const cle = identifiant.toLowerCase();
-  if (recents(cle).length >= essaisMax()) return { ok: false, refus: "trop" };
+  const jeton = reserverEssai(cle);
+  if (jeton === null) return { ok: false, refus: "trop" };
 
   const filtres: Filter[] = [
     new EqualityFilter({ attribute: "objectClass", value: "user" }),
@@ -155,13 +186,10 @@ export async function lireAnnuaire(
       try {
         await client.bind(nomDeLiaison(identifiant, domaine, process.env.AD_LIAISON), motDePasse);
       } catch (e) {
-        if (e instanceof InvalidCredentialsError) {
-          noterEchec(cle);
-          return { ok: false, refus: refusDeLiaison(e.message) };
-        }
+        if (e instanceof InvalidCredentialsError) return { ok: false, refus: refusDeLiaison(e.message) };
         throw e;
       }
-      echecs.delete(cle);
+      essais.delete(cle);
       const ATTRIBUTS = ["givenName", "sn", "displayName", "mail", "userPrincipalName", "title", "department", "manager", "userAccountControl"];
       const { searchEntries } = await client.search(ou || base, { scope: "sub", filter: new AndFilter({ filters: filtres }), attributes: ATTRIBUTS, paged: { pageSize: 500 }, sizeLimit: 3000 });
       const entrees = searchEntries.filter((e) => !compteDesactive(attribut(e, "userAccountControl")));
@@ -191,5 +219,6 @@ export async function lireAnnuaire(
       await client.unbind().catch(() => {});
     }
   }
+  rendreEssai(cle, jeton);
   return { ok: false, refus: "indisponible" };
 }

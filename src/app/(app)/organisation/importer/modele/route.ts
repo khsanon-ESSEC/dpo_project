@@ -1,3 +1,4 @@
+import { memeOrigine } from "@/lib/origine";
 import { NextResponse, type NextRequest } from "next/server";
 import { utilisateurActif } from "@/lib/auth/session";
 import { tableauOrganisation } from "@/lib/donnees/import-organisation";
@@ -30,6 +31,7 @@ export async function GET() {
 
 /** Ce qu'on a lu dans l'annuaire, en Excel, pour le retoucher avant de l'importer. */
 export async function POST(req: NextRequest) {
+  if (!memeOrigine(req.headers)) return new NextResponse("Requête refusée", { status: 403 });
   if (!(await administrateur())) return new NextResponse("Introuvable", { status: 404 });
   const form = await req.formData();
   let v: unknown;
