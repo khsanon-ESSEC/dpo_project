@@ -229,6 +229,7 @@ Nouvelles lectures de données, vérifiées à la lecture du code et par des tes
 - **Réunions en chiffres** : pour soi, ses propres réunions ; pour l'équipe, seulement les personnes que l'on suit déjà (mêmes règles que Équipe et Bilan), en heures totales, sans intitulé ni participants. Un projet que la personne ne voit pas est compté dans « Autres projets », sans son nom ni son code. **[déduction]**
 - **Suivi du pilote** : nombres agrégés par semaine, réservé aux administrateurs et aux exécutifs, comme avant. **[déduction]**
 - **Charge en carte** : mêmes personnes et mêmes chiffres que le tableau de la charge, présentés autrement. **[déduction]**
+- **Fiche d'une personne** (même jour) : la charge, les tâches, les réunions et l'évolution n'y paraissent que pour soi-même ou pour qui suit la personne (même règle que l'ancienne page, qui y renvoie désormais) ; jamais pour une personne hors division, ni pour un visiteur hors division. Vérifié par un parcours avec cinq profils (directrice, chargée de projets, directeur d'une autre direction, exécutif, consultante hors division), paramètres d'adresse compris. **[vérifié par parcours]**
 
 ## Recommandations restantes
 

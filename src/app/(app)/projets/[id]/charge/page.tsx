@@ -85,7 +85,7 @@ export default async function PageChargeProjet({ params }: { params: Promise<{ i
                   <tr key={m.id}>
                     <th scope="row">
                       {detail && voitCharge ? (
-                        <a className="personne-charge" href={`/equipe/${m.id}`}>
+                        <a className="personne-charge" href={`/personnes/${m.id}`}>
                           <span className="mono" aria-hidden="true">
                             {m.initiales}
                           </span>

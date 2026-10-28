@@ -3,7 +3,8 @@ import { redirect } from "next/navigation";
 import { acces } from "@/lib/acces";
 import { exigerInterne } from "@/lib/auth/session";
 import { aujourdhui, dateCourte, moisAnnee } from "@/lib/dates";
-import { additionner, ecart, moisDebutExercice, nomExercice, planBilan, VUES_BILAN, type Mesures, type Periode, type PlanBilan } from "@/lib/bilan";
+import { additionner, ecart, moisDebutExercice, planBilan, VUES_BILAN, type Mesures, type Periode } from "@/lib/bilan";
+import { majuscule, nomsDesPeriodes } from "@/lib/bilan-libelles";
 import { nombre } from "@/lib/charge";
 import { bilans, debutDesDonnees } from "@/lib/donnees/bilan";
 import { monEquipe } from "@/lib/donnees/equipe";
@@ -18,16 +19,7 @@ export const metadata: Metadata = { title: "Bilan de l'équipe" };
 
 const h = (m: number) => (m ? dureeTexte(m) : "0 h");
 const moisCourt = new Intl.DateTimeFormat("fr-FR", { month: "short", timeZone: "UTC" });
-const moisSeul = new Intl.DateTimeFormat("fr-FR", { month: "long", timeZone: "UTC" });
 const versDate = (iso: string) => new Date(`${iso}T12:00:00Z`);
-const majuscule = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
-
-/** « octobre 2026 », « août à octobre 2026 », « novembre 2025 à avril 2026 ». */
-function plage(p: Periode): string {
-  if (p.debut.slice(0, 7) === p.fin.slice(0, 7)) return moisAnnee(p.debut);
-  const memeAnnee = p.debut.slice(0, 4) === p.fin.slice(0, 4);
-  return `${memeAnnee ? moisSeul.format(versDate(p.debut)) : moisAnnee(p.debut)} à ${moisAnnee(p.fin)}`;
-}
 
 /** Les mesures montrées en courbe, avec leur unité. */
 const MESURES: { id: string; titre: string; unite: Unite; valeur: (m: Mesures) => number | null; ecart: (a: Mesures, b: Mesures) => string | null }[] = [
@@ -71,17 +63,6 @@ function lien(vue: string, param?: string) {
   return `/equipe/bilan?vue=${vue}${param ? `&p=${param}` : ""}`;
 }
 
-/** Les noms des deux périodes, pour la légende, le bandeau et la navigation. */
-function noms(plan: PlanBilan, debutExercice: number) {
-  if (plan.vue === "exercice") {
-    const a = Number(plan.cle);
-    return { actuel: `Exercice ${nomExercice(a, debutExercice)}`, avant: `Exercice ${nomExercice(a - 1, debutExercice)}`, avantCourt: `l'exercice ${nomExercice(a - 1, debutExercice)}` };
-  }
-  if (plan.vue === "mois") return { actuel: majuscule(plage(plan.actuel)), avant: majuscule(plage(plan.precedent)), avantCourt: moisSeul.format(versDate(plan.precedent.debut)) };
-  const n = plan.vue === "3m" ? 3 : 6;
-  return { actuel: majuscule(plage({ ...plan.actuel, fin: `${plan.cle}-01` })), avant: `Les ${n} mois d'avant`, avantCourt: plage({ ...plan.precedent, fin: `${plan.precedent.cle}-01` }) };
-}
-
 export default async function PageBilanEquipe({ searchParams }: { searchParams: Promise<{ vue?: string; p?: string; mois?: string }> }) {
   const { vue, p, mois: ancien } = await searchParams;
   const u = await exigerInterne();
@@ -109,7 +90,7 @@ export default async function PageBilanEquipe({ searchParams }: { searchParams: 
   const comparer = moisAvant && !comparaisonPartielle;
   const t = total(0);
   const tAvant = total(1);
-  const n = noms(plan, debutExercice);
+  const n = nomsDesPeriodes(plan, debutExercice);
   const ec = (v: string | null) => (comparer ? (v ?? "—") : "—");
 
   const points = (valeur: (m: Mesures) => number | null): PointCourbe[] =>

@@ -182,7 +182,7 @@ async function raccourcis(
       const p = nomMots.length ? personneNommee(nomMots.join(" "), gens) : null;
       if (p) {
         if ((motCle === "semaine" || motCle === "charge" || motCle === "taches") && suitPersonne(a, p.id)) {
-          sortie.push({ texte: `${p.nom} · sa semaine, ses tâches et sa charge`, sous: "Équipe", lien: `/equipe/${p.id}`, code: null, r: -1 });
+          sortie.push({ texte: `${p.nom} · sa semaine, ses tâches et sa charge`, sous: "Équipe", lien: `/personnes/${p.id}`, code: null, r: -1 });
         }
         if (motCle === "rapport" || motCle === "rapports") {
           const lus = await auteursDontJeLisLesRapports(a);

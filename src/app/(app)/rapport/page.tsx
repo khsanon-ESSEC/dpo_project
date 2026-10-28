@@ -443,7 +443,7 @@ export default async function PageRapport({ searchParams }: { searchParams: Prom
                     const r = equipe.recus.find((x) => x.auteurId === p.id);
                     return (
                       <li key={p.id}>
-                        <a href={r ? `/rapports/${r.id}` : `/equipe/${p.id}`} className="rangee" style={{ minHeight: 52 }}>
+                        <a href={r ? `/rapports/${r.id}` : `/personnes/${p.id}`} className="rangee" style={{ minHeight: 52 }}>
                           <span className="mono mono--petit" aria-hidden="true">
                             {p.initiales}
                           </span>

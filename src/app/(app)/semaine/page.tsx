@@ -230,7 +230,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
                   <h2 id="t-charge" className="carte__titre">
                     Ma charge
                   </h2>
-                  <a href={`/equipe/${u.id}`} className="lien-discret">
+                  <a href={`/personnes/${u.id}#charge`} className="lien-discret">
                     Détail →
                   </a>
                 </div>
@@ -238,7 +238,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
                   {charge.semaines.map((w, i) => (
                     <div key={w.semaine} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       <span className="rangee__sous">{i === 0 ? "Reste de la semaine" : "Semaine prochaine"}</span>
-                      <Jauge heures={w.heures} capacite={w.capacite} niveau={w.niveau} lien={`/equipe/${u.id}?semaine=${w.semaine}`} delai={i * 80} />
+                      <Jauge heures={w.heures} capacite={w.capacite} niveau={w.niveau} lien={`/personnes/${u.id}?semaine=${w.semaine}#charge`} delai={i * 80} />
                     </div>
                   ))}
                 </div>

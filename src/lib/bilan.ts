@@ -169,16 +169,16 @@ export function nomExercice(annee: number, debutMois: number): string {
 }
 
 export type PlanBilan = {
-  vue: VueBilan;
+  vue: VueBilan | "semaines";
   /** La période étudiée, arrêtée à aujourd'hui si elle est en cours. */
   actuel: Periode;
   /** La période comparée, de même durée : juste avant, ou l'an dernier pour un exercice ; arrêtée à la même date. */
   precedent: Periode;
   /** Les mois de la période (jusqu'au mois en cours), pour les courbes. */
   serie: Periode[];
-  /** Les mois correspondants de la période comparée, alignés sur `axe` ; null : pas de comparaison mois par mois. */
+  /** Les mois (ou semaines) correspondants de la période comparée, alignés sur `axe` ; null : pas de comparaison pas à pas. */
   serieAvant: Periode[] | null;
-  /** Les mois portés par l'axe des courbes (un exercice en a douze, même en cours). */
+  /** Les mois portés par l'axe des courbes (un exercice en a douze, même en cours) ; les lundis pour « semaines ». */
   axe: string[];
   enCours: boolean;
   /** Paramètres pour aller à la période d'avant ou d'après (null : rien après). */
@@ -256,6 +256,33 @@ export function planBilan(vue: string | undefined, param: string | undefined, jo
     enCours: cle === moisCourant,
     avant: premierDuMois(`${cle}-01`, -n).slice(0, 7),
     apres: cle < moisCourant ? (suivant < moisCourant ? suivant : moisCourant) : null,
+    cle,
+  };
+}
+
+/**
+ * Les n semaines qui finissent par la semaine choisie (un lundi, pas après la semaine en cours), comparées aux
+ * n semaines d'avant, arrêtées à la même date ; une courbe semaine par semaine. Pour la fiche d'une personne.
+ */
+export function planSemaines(param: string | undefined, jour: string, n = 8): PlanBilan {
+  const courante = lundiDe(jour);
+  const valide = param && /^\d{4}-\d{2}-\d{2}$/.test(param) && !Number.isNaN(Date.parse(param)) ? lundiDe(param) : courante;
+  const cle = valide <= courante ? valide : courante;
+  const serie = semainesJusqua(cle, n);
+  const decale = (iso: string) => ajouterJours(iso, -7 * n);
+  const finSerie = serie[n - 1].fin;
+  const fin = finSerie < jour ? finSerie : jour;
+  const apres = ajouterJours(cle, 7 * n);
+  return {
+    vue: "semaines",
+    actuel: { cle, debut: serie[0].debut, fin },
+    precedent: { cle: decale(cle), debut: decale(serie[0].debut), fin: decale(fin) },
+    serie,
+    serieAvant: serie.map((p) => ({ cle: decale(p.cle), debut: decale(p.debut), fin: decale(p.fin) })),
+    axe: serie.map((p) => p.cle),
+    enCours: finSerie >= jour,
+    avant: decale(cle),
+    apres: cle < courante ? (apres < courante ? apres : courante) : null,
     cle,
   };
 }

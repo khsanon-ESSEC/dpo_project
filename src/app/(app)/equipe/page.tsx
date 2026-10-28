@@ -200,7 +200,7 @@ function LignePersonne({ p, semaines, jour, voit }: { p: Personne; semaines: Sem
         </span>
         <span className="rangee__texte ligne-equipe__nom">
           <span className="rangee__titre">
-            <a href={`/equipe/${p.id}`} className="lien-nom" title={`Tâches, charge et rapports de ${p.nom}`}>
+            <a href={`/personnes/${p.id}`} className="lien-nom" title={`Tâches, charge et rapports de ${p.nom}`}>
               {p.nom}
             </a>
           </span>

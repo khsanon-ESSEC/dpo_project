@@ -102,7 +102,7 @@ export async function repondre(u: Utilisateur, saisie: string): Promise<Reponse>
         .map((l) => ({ l, s: l.charge.semaines[semaine] }))
         .filter(({ s }) => s && (seul || s.niveau === "surchargee" || s.niveau === "chargee"))
         .sort((x, y) => y.s.heures / Math.max(1, y.s.capacite) - x.s.heures / Math.max(1, x.s.capacite))
-        .map(({ l, s }) => ({ texte: l.nom, sous: `${LIBELLE_NIVEAU[s.niveau]} · ${Math.round(s.heures)} h sur ${s.capacite} h`, lien: l.id === u.id ? "/semaine" : `/equipe/${l.id}` }));
+        .map(({ l, s }) => ({ texte: l.nom, sous: `${LIBELLE_NIVEAU[s.niveau]} · ${Math.round(s.heures)} h sur ${s.capacite} h`, lien: l.id === u.id ? "/semaine" : `/personnes/${l.id}` }));
       return {
         titre: seul ? `Votre charge ${semaine ? "la semaine prochaine" : "cette semaine"}` : `Chargés ou surchargés ${semaine ? "la semaine prochaine" : "cette semaine"}`,
         lignes,

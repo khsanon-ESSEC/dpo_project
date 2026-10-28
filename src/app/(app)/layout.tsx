@@ -46,7 +46,8 @@ export default async function LayoutApplication({ children }: { children: React.
     PROJETS,
     ...(conseil ? [{ href: "/conseil", libelle: "Conseil", icone: "banque" }] : []),
     ...(organisation ? [{ href: "/organisation", libelle: "Organisation", icone: "agence", actifs: ["/pilote"] }] : []),
-    { href: "/recherche", libelle: "Rechercher", icone: "loupe" },
+    // Pas d'entrée « Rechercher » : la barre du haut est sur chaque page (touche « / ») ; /recherche reste la
+    // page des résultats complets, quand on appuie sur Entrée.
     { href: "/alertes", libelle: "Alertes", icone: "notification", compte: alertes },
   ];
   // Téléphone : quatre entrées. La dernière, « Plus », mène à tout le reste (avec le nombre d'alertes non lues).

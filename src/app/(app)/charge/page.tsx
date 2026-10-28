@@ -113,10 +113,10 @@ export default async function PageCharge({ searchParams }: { searchParams: Promi
                   nom: l.id === u.id ? `${l.nom} (vous)` : l.nom,
                   initiales: l.initiales,
                   sous: l.capacite !== 40 ? `${l.capacite} h/sem.` : undefined,
-                  lien: `/equipe/${l.id}`,
+                  lien: `/personnes/${l.id}`,
                   cases: l.charge.semaines.map((w) => ({
                     ...w,
-                    lien: `/equipe/${l.id}?semaine=${w.semaine}`,
+                    lien: `/personnes/${l.id}?semaine=${w.semaine}#charge`,
                   })),
                 })),
               }))}
@@ -157,7 +157,7 @@ export default async function PageCharge({ searchParams }: { searchParams: Promi
                     return (
                       <tr key={l.id}>
                         <th scope="row">
-                          <a className="personne-charge" href={`/equipe/${l.id}`}>
+                          <a className="personne-charge" href={`/personnes/${l.id}`}>
                             <span className="mono" aria-hidden="true">
                               {l.initiales}
                             </span>
@@ -172,7 +172,7 @@ export default async function PageCharge({ searchParams }: { searchParams: Promi
                         </th>
                         {l.charge.semaines.map((w, i) => (
                           <td key={w.semaine}>
-                            <Jauge heures={w.heures} capacite={w.capacite} niveau={w.niveau} lien={`/equipe/${l.id}?semaine=${w.semaine}`} delai={Math.min(n * 40 + i * 30, 500)} />
+                            <Jauge heures={w.heures} capacite={w.capacite} niveau={w.niveau} lien={`/personnes/${l.id}?semaine=${w.semaine}#charge`} delai={Math.min(n * 40 + i * 30, 500)} />
                           </td>
                         ))}
                         <td className="note" style={{ whiteSpace: "nowrap" }}>

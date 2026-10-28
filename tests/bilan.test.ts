@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { additionner, decalerMois, ecart, exerciceDe, mesurer, mois, moisDebutExercice, moisEntre, moisPrecedent, moisSuivant, nomExercice, planBilan, semainesDeRapport, semainesJusqua } from "@/lib/bilan";
+import { additionner, decalerMois, ecart, exerciceDe, mesurer, mois, moisDebutExercice, moisEntre, moisPrecedent, moisSuivant, nomExercice, planBilan, planSemaines, semainesDeRapport, semainesJusqua } from "@/lib/bilan";
 import { chargeDUnePersonne } from "@/lib/charge";
 import { lireReunions, nouveauChamp, validerChamps } from "@/lib/modeles";
 
@@ -146,5 +146,47 @@ describe("périodes du bilan d'équipe", () => {
     expect(exerciceDe("2026-09-30", 10)).toBe(2025);
     expect(moisDebutExercice("13")).toBe(10);
     expect(moisDebutExercice("1")).toBe(1);
+  });
+});
+
+describe("huit semaines (fiche d'une personne)", () => {
+  it("les huit semaines jusqu'à celle en cours, comparées aux huit d'avant à la même date", () => {
+    const p = planSemaines(undefined, "2026-10-28");
+    expect(p.vue).toBe("semaines");
+    expect(p.axe).toHaveLength(8);
+    expect(p.axe[0]).toBe("2026-09-07");
+    expect(p.axe[7]).toBe("2026-10-26");
+    expect(p.actuel).toEqual({ cle: "2026-10-26", debut: "2026-09-07", fin: "2026-10-28" });
+    expect(p.precedent).toEqual({ cle: "2026-08-31", debut: "2026-07-13", fin: "2026-09-02" });
+    expect(p.serieAvant![0]).toEqual({ cle: "2026-07-13", debut: "2026-07-13", fin: "2026-07-19" });
+    expect(p.enCours).toBe(true);
+    expect(p.avant).toBe("2026-08-31");
+    expect(p.apres).toBeNull();
+  });
+  it("une semaine passée : la fenêtre entière, et la suivante sans dépasser la semaine en cours", () => {
+    const p = planSemaines("2026-09-16", "2026-10-28");
+    expect(p.cle).toBe("2026-09-14");
+    expect(p.actuel.fin).toBe("2026-09-20");
+    expect(p.enCours).toBe(false);
+    expect(p.apres).toBe("2026-10-26");
+    expect(planSemaines("2026-08-10", "2026-10-28").apres).toBe("2026-10-05");
+  });
+  it("un paramètre invalide ou futur revient à la semaine en cours", () => {
+    expect(planSemaines("n'importe quoi", "2026-10-28").cle).toBe("2026-10-26");
+    expect(planSemaines("2027-01-04", "2026-10-28").cle).toBe("2026-10-26");
+    expect(planSemaines("2026-13-45", "2026-10-28").cle).toBe("2026-10-26");
+  });
+});
+
+describe("noms des périodes", () => {
+  it("accorde la préposition", async () => {
+    const { aLa, nomsDesPeriodes } = await import("@/lib/bilan-libelles");
+    expect(aLa("les 8 semaines d'avant")).toBe("aux 8 semaines d'avant");
+    expect(aLa("septembre")).toBe("à septembre");
+    expect(aLa("l'exercice 2024-2025")).toBe("à l'exercice 2024-2025");
+    const n = nomsDesPeriodes(planSemaines(undefined, "2026-10-28"), 10);
+    expect(n).toEqual({ actuel: "Ces 8 semaines", avant: "Les 8 semaines d'avant", avantCourt: "les 8 semaines d'avant" });
+    expect(nomsDesPeriodes(planSemaines("2026-09-14", "2026-10-28"), 10).actuel).toBe("8 semaines jusqu'au 20 sept.");
+    expect(nomsDesPeriodes(planBilan("mois", "2026-09", "2026-10-30", 10), 10).avantCourt).toBe("août");
   });
 });
