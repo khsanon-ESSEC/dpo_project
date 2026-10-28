@@ -129,13 +129,20 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
                   <span className="mono mono--fort" style={{ width: 36, height: 36, fontSize: 12 }} aria-hidden="true">
                     {p.code}
                   </span>
-                  <span style={{ flex: 1, minWidth: 0, fontSize: 16, lineHeight: "22px", fontWeight: 500 }}>{p.titre}</span>
-                  {p.strategique ? <span className="etiquette-strategique">Stratégique</span> : null}
-                  {p.division ? (
-                    <span className="etiquette-hors" title={`Projet de la ${p.division}`}>
-                      Autre division
-                    </span>
-                  ) : null}
+                  {/* Le titre garde toute la largeur ; les étiquettes passent dessous (un titre long ne passe plus sous elles). */}
+                  <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <span style={{ fontSize: 16, lineHeight: "22px", fontWeight: 500, overflowWrap: "anywhere" }}>{p.titre}</span>
+                    {p.strategique || p.division ? (
+                      <span style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                        {p.strategique ? <span className="etiquette-strategique">Stratégique</span> : null}
+                        {p.division ? (
+                          <span className="etiquette-hors" title={`Projet de la ${p.division}`}>
+                            Autre division
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : null}
+                  </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
                   <Anneau fait={p.atteints} total={p.totalIndicateurs} taille={84} label={`${p.atteints} indicateurs vérifiables atteints sur ${p.totalIndicateurs}`} />
@@ -156,9 +163,12 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
                       ) : null}
                       <span style={{ top: 3, left: `calc(${courant}% - 4px)`, width: 8, height: 8, borderRadius: "50%", background: s.point }} />
                     </div>
-                    <span className={glisse ? s.classe : "ton-discret"} style={{ fontSize: 12, lineHeight: "16px" }}>
-                      {glisse ? `Repoussée de ${p.glissementSemaines} semaine${p.glissementSemaines > 1 ? "s" : ""}` : p.ancienneFin ? "Inchangée depuis le dernier rapport" : "Pas encore de rapport au conseil"}
-                    </span>
+                    {/* Un projet qui n'est pas stratégique ne passe pas au conseil : rien à dire tant qu'il n'a pas de rapport. */}
+                    {glisse || p.ancienneFin || p.strategique ? (
+                      <span className={glisse ? s.classe : "ton-discret"} style={{ fontSize: 12, lineHeight: "16px" }}>
+                        {glisse ? `Repoussée de ${p.glissementSemaines} semaine${p.glissementSemaines > 1 ? "s" : ""}` : p.ancienneFin ? "Inchangée depuis le dernier rapport" : "Pas encore de rapport au conseil"}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, paddingTop: 16, borderTop: "1px solid var(--filet)" }}>

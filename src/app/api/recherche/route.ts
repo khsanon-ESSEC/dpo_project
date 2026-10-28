@@ -8,5 +8,5 @@ export async function GET(req: NextRequest) {
   if (!u) return NextResponse.json({ erreur: "Session expirée." }, { status: 401 });
   const r = await rechercher(u, String(req.nextUrl.searchParams.get("q") ?? ""));
   const cinq = <T,>(g: { liste: T[]; total: number }) => ({ liste: g.liste.slice(0, 5), total: g.total });
-  return NextResponse.json(r ? { projets: cinq(r.projets), taches: cinq(r.taches), personnes: cinq(r.personnes) } : null, { headers: { "cache-control": "no-store" } });
+  return NextResponse.json(r ? { ecrans: cinq(r.ecrans), projets: cinq(r.projets), taches: cinq(r.taches), personnes: cinq(r.personnes) } : null, { headers: { "cache-control": "no-store" } });
 }

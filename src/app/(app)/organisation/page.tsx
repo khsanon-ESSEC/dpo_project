@@ -119,7 +119,7 @@ export default async function PageOrganisation({ searchParams }: { searchParams:
                       <summary className="lien-discret" style={{ cursor: "pointer", minHeight: 32, display: "flex", alignItems: "center" }}>
                         Changer le responsable
                       </summary>
-                      <form action={changerChefEquipe.bind(null, e.id)} style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <form key={`${e.id}-${e.chefId ?? ""}`} action={changerChefEquipe.bind(null, e.id)} style={{ display: "flex", gap: 8, marginTop: 8 }}>
                         <label className="visuellement-cache" htmlFor={`chef-${e.id}`}>
                           Responsable de {e.nom}
                         </label>

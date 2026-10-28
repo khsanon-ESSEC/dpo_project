@@ -2,12 +2,15 @@
 
 import { peutGererProjet } from "@/lib/projets";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { acces, exigerProjetVisible } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { mettreAJourIndicateur } from "@/lib/donnees/projets";
 import { noter } from "@/lib/journal";
+import { deposerDocuments, peutDeposerDocument, retirerDocument } from "@/lib/donnees/documents";
+import { estCategorie } from "@/lib/documents";
 
 /** Le chef du projet, le directeur de la direction concernée et les exécutifs peuvent modifier un projet. */
 async function exigerDroitProjet(projetId: string) {
@@ -37,8 +40,12 @@ export async function changerIndicateur(projetId: string, indicateurId: string, 
 export async function mettreAJourProjet(projetId: string, form: FormData) {
   const { u, p } = await exigerDroitProjet(projetId);
   const sante = String(form.get("sante") ?? "");
+  const nouvelle = (["dans_les_temps", "a_surveiller", "en_retard"].includes(sante) ? sante : p.sante) as typeof p.sante;
+  const motif = nouvelle === "dans_les_temps" ? "" : String(form.get("santeMotif") ?? p.santeMotif).trim().slice(0, 500);
   const valeurs = {
-    sante: (["dans_les_temps", "a_surveiller", "en_retard"].includes(sante) ? sante : p.sante) as typeof p.sante,
+    sante: nouvelle,
+    santeMotif: motif,
+    santeLe: nouvelle !== p.sante || motif !== p.santeMotif ? new Date() : p.santeLe,
     dateFinPrevue: date(form.get("dateFinPrevue")) ?? p.dateFinPrevue,
     dateLancementPrevue: date(form.get("dateLancementPrevue")),
     majLe: new Date(),
@@ -46,4 +53,31 @@ export async function mettreAJourProjet(projetId: string, form: FormData) {
   await db.update(schema.projets).set(valeurs).where(eq(schema.projets.id, projetId));
   await noter(u.id, "projet_modifie", projetId, { ...valeurs, majLe: undefined });
   revalidatePath(`/projets/${projetId}`);
+}
+
+/** Joindre des documents au projet (cahier des charges, spécification, compte rendu…). */
+export async function deposerDocumentsProjet(projetId: string, form: FormData) {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const p = await exigerProjetVisible(a, projetId);
+  const retour = (q: string): never => redirect(`/projets/${projetId}?${q}#documents`);
+  if (!(await peutDeposerDocument(a, p))) retour(`doc=${encodeURIComponent("Seuls l'équipe du projet et ceux qui le gèrent y ajoutent des documents.")}`);
+  const brut = form.get("categorie");
+  const categorie = estCategorie(brut) ? brut : "autre";
+  const fichiers = form.getAll("fichiers").filter((x): x is File => typeof x === "object" && x !== null && "arrayBuffer" in x && (x as File).size > 0);
+  if (!fichiers.length) retour(`doc=${encodeURIComponent("Choisissez au moins un fichier.")}`);
+  const r = await deposerDocuments(a, p.id, categorie, fichiers.slice(0, 10));
+  revalidatePath(`/projets/${projetId}`);
+  retour(r.erreurs.length ? `doc=${encodeURIComponent(r.erreurs.join(" "))}${r.deposes ? `&docOk=${r.deposes}` : ""}` : `docOk=${r.deposes}`);
+}
+
+/** Retirer un document : qui l'a déposé, ou qui gère le projet. */
+export async function retirerDocumentProjet(projetId: string, documentId: string) {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const p = await exigerProjetVisible(a, projetId);
+  if (!/^[0-9a-f-]{36}$/.test(documentId)) return;
+  const erreur = await retirerDocument(a, p, documentId);
+  revalidatePath(`/projets/${projetId}`);
+  redirect(`/projets/${projetId}?${erreur ? `doc=${encodeURIComponent(erreur)}` : "docRetire=1"}#documents`);
 }

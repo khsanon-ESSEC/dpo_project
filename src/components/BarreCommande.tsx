@@ -1,39 +1,43 @@
 "use client";
 
 import { useActionState, useEffect, useId, useRef, useState } from "react";
-import { ajouterTacheRapide, mettreAJourTacheRapide, type EtatSaisieRapide } from "@/app/(app)/taches/actions";
-import { noterReunionRapide, type EtatReunionRapide } from "@/app/(app)/reunions/actions";
-import { analyserMiseAJour, analyserReunion, analyserSaisie, estReunion, LIBELLES_STATUT, type ProjetSaisie, type StatutTache } from "@/lib/saisie-rapide";
+import { annulerDepuisBarre, executerBarre, type EtatBarre } from "@/app/(app)/barre/actions";
+import { analyserMajProjet, analyserNote, genreDe, LIBELLES_NOTE, projetEnTete, reconnaitreMots, texteMajProjet, type Genre } from "@/lib/barre";
+import { phraseOccupe, type Disponibilite } from "@/lib/creneaux";
+import { analyserMiseAJour, analyserReunion, analyserSaisie, LIBELLES_STATUT, type ProjetSaisie, type StatutTache } from "@/lib/saisie-rapide";
 import { dateCourte } from "@/lib/dates";
 import { cleNom } from "@/lib/projets";
 import { Icone } from "@/components/Icone";
+import { CLE_PROJETS_RECENTS } from "@/components/Consultation";
 
 export type PersonneBarre = { id: string; nom: string; externe?: boolean; organisation?: string };
+export type TacheBarre = { id: string; titre: string; code: string | null; echeance: string | null; projetId: string | null; statut: StatutTache; pour: string | null };
+export type ReunionBarre = { id: string; titre: string; heure: string | null; semaine: string; mienne: boolean };
 
 type Choix = { id: string; libelle: string; sous?: string; code?: string | null };
 type Liste = { type: "projet" | "personne" | "tache"; debut: number; requete: string };
-export type TacheBarre = { id: string; titre: string; code: string | null; echeance: string | null; projetId: string | null; statut: StatutTache; pour: string | null };
+type Groupe<T> = { liste: T[]; total: number };
 type Resultats = {
-  projets: { liste: { id: string; code: string; texte: string; sous: string }[]; total: number };
-  taches: { liste: { id: string; texte: string; code: string | null; sous: string }[]; total: number };
-  personnes: { liste: { id: string; texte: string; sous: string }[]; total: number };
+  ecrans: Groupe<{ lien: string; texte: string; code: string | null; sous: string }>;
+  projets: Groupe<{ id: string; code: string; texte: string; sous: string }>;
+  taches: Groupe<{ id: string; texte: string; code: string | null; sous: string }>;
+  personnes: Groupe<{ id: string; texte: string; sous: string }>;
 } | null;
-type Ligne = { cle: string; libelle: string; sous?: string; code?: string | null; action: () => void };
+type Reponse = { titre: string; lignes: { texte: string; sous?: string; code?: string | null; lien: string }[]; total: number; vide?: string; incomprise?: boolean } | null;
+type Ligne = { cle: string; libelle: string; sous?: string; code?: string | null; action?: () => void; titre?: boolean };
+
+const aller = (lien: string) => (window.location.href = lien);
 
 /**
- * Une seule barre pour chercher, ajouter une tâche et mettre une tâche à jour, comme dans Notion :
- * - « / » ouvre la liste des projets, « @ » celle des personnes à qui l'on peut confier la tâche,
- *   « # » celle des tâches qu'on peut mettre à jour (les siennes, celles de son équipe, celles qu'on a
- *   confiées, celles des projets qu'on dirige) ;
- * - une date (demain, vendredi, 12/11) et des heures (2h) écrites dans le texte sont reconnues ;
- * - mode « tâche » (À faire, Ma semaine) : Entrée ajoute la tâche ;
- * - mode « recherche » : Entrée cherche, la première ligne propose d'ajouter la tâche ; dès qu'un projet
- *   ou une personne est choisi, Entrée ajoute la tâche ;
- * - une tâche choisie avec « # » : ce qu'on écrit la met à jour (« faite », « bloquée attente DTI »,
- *   « en cours », une date, une durée, une note ; « @ » la confie, « / » la change de projet). Sans rien
- *   écrire, Entrée l'ouvre ;
- * - une ligne qui commence par « Réunion » note une réunion : « / » le projet, « @ » les participants
- *   (plusieurs), le jour, l'heure (10h) et la durée (1h30) écrits dans le texte.
+ * Une seule barre, comme dans Notion. On écrit, l'application comprend :
+ * - une tâche (« Relire maquettes /unib @fab vendredi 2h », ou « … pour Fabienne projet Unibank … ») ;
+ * - « # » une tâche, puis ce qui change (« faite », « bloquée … », une date, « relancer », « @ » pour la confier) ;
+ * - « Réunion … » (participants avec « @ » ou « avec Fabienne et Daphnée »), en vérifiant qui est déjà pris ;
+ * - « Décision : … », « Risque : … », « Fait marquant : … » vont dans le rapport du vendredi ;
+ * - « /UR à surveiller : … », « /UR jalon recette 15/11 » mettent le projet à jour (chef de projet) ;
+ * - une question (« en retard sur UR ? ») répond tout de suite ;
+ * - en mode recherche : projets, tâches, personnes et écrans (« Gantt UR », « charge de Myriam ») ;
+ * - la barre vide propose ce qui compte aujourd'hui ; « Annuler » suit chaque action.
  */
 export function BarreCommande({
   mode,
@@ -43,11 +47,13 @@ export function BarreCommande({
   parProjet,
   taches,
   participants = [],
+  reunionsDuJour = [],
   moiId,
   aujourdhui,
   retour,
   initial = "",
   focus = mode === "recherche",
+  idChamp,
 }: {
   mode: "tache" | "recherche";
   projets: ProjetSaisie[];
@@ -57,45 +63,44 @@ export function BarreCommande({
   taches: TacheBarre[];
   /** « Réunion … » puis « @ » : les personnes qu'on peut inviter. */
   participants?: PersonneBarre[];
+  reunionsDuJour?: ReunionBarre[];
   moiId: string;
   aujourdhui: string;
   retour: string;
   initial?: string;
   /** Curseur dans la barre à l'ouverture de la page (pas sur le menu du téléphone : le clavier s'ouvrirait). */
   focus?: boolean;
+  /** Identifiant stable du champ (la touche « / » y met le curseur depuis n'importe quelle page). */
+  idChamp?: string;
 }) {
-  const [etatAjout, actionAjout, ajoutEnCours] = useActionState<EtatSaisieRapide, FormData>(ajouterTacheRapide, { message: null, n: 0 });
-  const [etatMaj, actionMaj, majEnCours] = useActionState<EtatSaisieRapide, FormData>(mettreAJourTacheRapide, { message: null, n: 0 });
-  const [etatReunion, actionReunion, reunionEnCours] = useActionState<EtatReunionRapide, FormData>(noterReunionRapide, { message: null, n: 0 });
-  const [dernier, setDernier] = useState<"ajout" | "maj" | "reunion">("ajout");
-  const etat: EtatSaisieRapide & EtatReunionRapide = dernier === "maj" ? etatMaj : dernier === "reunion" ? etatReunion : etatAjout;
-  const enCours = ajoutEnCours || majEnCours || reunionEnCours;
-  const [invites, setInvites] = useState<PersonneBarre[]>([]);
+  const [etat, action, enCours] = useActionState<EtatBarre, FormData>(executerBarre, { message: null, n: 0 });
   const [texte, setTexte] = useState(initial);
   const [tache, setTache] = useState<TacheBarre | null>(null);
   const [projet, setProjet] = useState<ProjetSaisie | null>(null);
   const [personne, setPersonne] = useState<PersonneBarre | null>(null);
+  const [invites, setInvites] = useState<PersonneBarre[]>([]);
   const [liste, setListe] = useState<Liste | null>(null);
   const [surligne, setSurligne] = useState(-1);
   const [resultats, setResultats] = useState<Resultats>(null);
-  const [vu, setVu] = useState({ ajout: 0, maj: 0, reunion: 0 });
-  // Refus du serveur (règle d'assignation, date impossible…) : affiché jusqu'à la prochaine frappe.
+  const [reponse, setReponse] = useState<Reponse>(null);
+  const [occupes, setOccupes] = useState<Disponibilite[]>([]);
+  const [vide, setVide] = useState(false);
+  const [recents, setRecents] = useState<string[]>([]);
+  const [vu, setVu] = useState(0);
   const [erreur, setErreur] = useState<string | null>(null);
-  useEffect(() => {
-    if (etatAjout.message && !etatAjout.ok) setErreur(etatAjout.message);
-  }, [etatAjout]);
-  useEffect(() => {
-    if (etatMaj.message && !etatMaj.ok) setErreur(etatMaj.message);
-  }, [etatMaj]);
-  useEffect(() => {
-    if (etatReunion.message && !etatReunion.ok) setErreur(etatReunion.message);
-  }, [etatReunion]);
+  const [annule, setAnnule] = useState<{ pour: string; ok: boolean; message: string } | null>(null);
+  const [annulable, setAnnulable] = useState(false);
   const champ = useRef<HTMLInputElement>(null);
   const formulaire = useRef<HTMLFormElement>(null);
   const idListe = useId();
 
-  // Après un ajout ou une mise à jour réussis : tout se vide.
-  const vider = () => {
+  // Refus du serveur : affiché jusqu'à la prochaine frappe.
+  useEffect(() => {
+    if (etat.message && !etat.ok) setErreur(etat.message);
+  }, [etat]);
+  // Après une action réussie : tout se vide, et « Annuler » reste proposé vingt secondes.
+  if (etat.ok && etat.n !== vu) {
+    setVu(etat.n ?? 0);
     setTexte("");
     setProjet(null);
     setPersonne(null);
@@ -103,39 +108,74 @@ export function BarreCommande({
     setInvites([]);
     setListe(null);
     setResultats(null);
-  };
-  if (etatAjout.ok && etatAjout.n !== vu.ajout) {
-    setVu({ ...vu, ajout: etatAjout.n ?? 0 });
-    vider();
+    setReponse(null);
+    setOccupes([]);
+    setAnnule(null);
+    setAnnulable(!!etat.annulation);
   }
-  if (etatMaj.ok && etatMaj.n !== vu.maj) {
-    setVu({ ...vu, maj: etatMaj.n ?? 0 });
-    vider();
-  }
-  if (etatReunion.ok && etatReunion.n !== vu.reunion) {
-    setVu({ ...vu, reunion: etatReunion.n ?? 0 });
-    vider();
-  }
+  useEffect(() => {
+    if (!annulable) return;
+    const t = setTimeout(() => setAnnulable(false), 20_000);
+    return () => clearTimeout(t);
+  }, [annulable, etat.n]);
 
-  const reunion = !tache && estReunion(texte);
-  const analyseReunion = reunion ? analyserReunion(texte, aujourdhui, projets) : null;
-  const analyse = !tache && !reunion && texte.trim() ? analyserSaisie(texte, aujourdhui, projets) : null;
-  const maj = tache ? analyserMiseAJour(texte, aujourdhui) : null;
-  const rienAChanger = !!maj && !maj.morceaux.length && !projet && !personne;
-  const projetEffectifId = projet?.id ?? (tache ? tache.projetId : (analyse?.projet?.id ?? analyseReunion?.projet?.id ?? null));
+  // ---------- De quoi parle la ligne ----------
+  let genre: Genre | "maj" = tache ? "maj" : texte.trim() ? genreDe(texte, { projetChoisi: !!projet, projets, aujourdhui }) : "tache";
+  const motsProjet = !tache && genre === "tache" && !projet ? reconnaitreMots(texte, { personnes: [], projets }) : null;
+  if (motsProjet?.projet && analyserMajProjet(motsProjet.texte, aujourdhui)) genre = "projet";
+  const reunion = genre === "reunion";
+  // Des mots à la place des touches : « pour Fabienne », « projet Unibank », « avec Fabienne et Daphnée ».
+  const mots =
+    genre === "tache" || genre === "maj" || genre === "reunion" || genre === "note"
+      ? reconnaitreMots(texte, { personnes: reunion ? participants : genre === "note" ? [] : personnes, projets, reunion, moiId })
+      : null;
+  const net = mots ? mots.texte : texte;
+  const analyse = genre === "tache" && net.trim() ? analyserSaisie(net, aujourdhui, projets) : null;
+  const maj = genre === "maj" ? analyserMiseAJour(net, aujourdhui) : null;
+  const analyseReunion = reunion ? analyserReunion(net, aujourdhui, projets) : null;
+  const note = genre === "note" ? analyserNote(net, projets) : null;
+  const enTete = genre === "projet" && !projet ? projetEnTete(texte, projets, aujourdhui) : null;
+  const projetMaj = genre === "projet" ? (projet ?? enTete?.projet ?? motsProjet?.projet ?? null) : null;
+  const majProjet = genre === "projet" ? analyserMajProjet(enTete ? enTete.reste : motsProjet?.projet && !projet ? motsProjet.texte : texte, aujourdhui) : null;
+  const question = genre === "question";
 
-  // Personnes qu'on peut choisir : soi, celles qu'on suit, l'équipe des projets qu'on dirige ; hors division
-  // seulement sur un projet qu'on dirige (mêmes règles que le formulaire complet).
+  const personneEff = personne ?? mots?.personne ?? null;
+  const invitesEff = [...invites, ...(mots?.invites ?? []).filter((p) => !invites.some((i) => i.id === p.id))];
+  const projetEff = projet ?? mots?.projet ?? analyse?.projet ?? analyseReunion?.projet ?? note?.projet ?? projetMaj ?? null;
+  const rienAChanger = !!maj && !maj.morceaux.length && !projet && !personneEff;
+  const projetEffectifId = projetEff?.id ?? (tache ? tache.projetId : null);
+
+  // Personnes qu'on peut choisir pour une tâche : soi, celles qu'on suit, l'équipe des projets qu'on dirige ;
+  // hors division seulement sur un projet qu'on dirige (mêmes règles que le formulaire complet).
   const permis = new Set([...base, ...(projetEffectifId ? (parProjet[projetEffectifId] ?? []) : [])]);
   const externesPermis = !!projetEffectifId && projetEffectifId in parProjet;
   const personnesPermises = personnes.filter((p) => (p.externe ? externesPermis : permis.has(p.id)));
-  // Une personne choisie qui n'est plus permise (projet changé) est retirée.
   useEffect(() => {
     if (personne && !personnesPermises.some((p) => p.id === personne.id)) setPersonne(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projetEffectifId]);
 
-  // Choix proposés par « / » ou « @ ».
+  // Peut-on envoyer ?
+  const pret =
+    genre === "maj"
+      ? true
+      : genre === "reunion"
+        ? !!analyseReunion?.titre
+        : genre === "note"
+          ? !!note?.texte
+          : genre === "projet"
+            ? !!projetMaj && !!majProjet
+            : genre === "question"
+              ? false
+              : !!analyse?.titre;
+
+  // Une phrase qui est clairement une action (réunion, note, question, mise à jour, ou une tâche avec un projet,
+  // une personne, une date ou une durée) s'exécute avec Entrée ; sinon, Entrée cherche, et la liste propose
+  // « Ajouter la tâche » en première ligne.
+  const agir =
+    mode === "tache" || !!tache || genre !== "tache" || !!projet || !!personneEff || (!!analyse?.titre && (analyse.morceaux.length > 0 || !!mots?.projet));
+
+  // ---------- Listes « / », « @ », « # » ----------
   const choix: Choix[] = !liste
     ? []
     : liste.type === "tache"
@@ -144,23 +184,23 @@ export function BarreCommande({
           .slice(0, 8)
           .map((t) => ({ id: t.id, libelle: t.titre, sous: [t.pour ? `Pour ${t.pour}` : null, LIBELLES_STATUT[t.statut], t.echeance ? dateCourte(t.echeance) : null].filter(Boolean).join(" · "), code: t.code }))
       : liste.type === "projet"
-      ? projets
-          .filter((p) => !liste.requete || cleNom(`${p.code} ${p.titre}`).includes(cleNom(liste.requete)))
-          .slice(0, 8)
-          .map((p) => ({ id: p.id, libelle: p.titre, sous: p.code }))
-      : reunion
-        ? participants
-            .filter((p) => !invites.some((i) => i.id === p.id) && (!liste.requete || cleNom(`${p.nom} ${p.organisation ?? ""}`).includes(cleNom(liste.requete))))
+        ? projets
+            .filter((p) => !liste.requete || cleNom(`${p.code} ${p.titre}`).includes(cleNom(liste.requete)))
             .slice(0, 8)
-            .map((p) => ({ id: p.id, libelle: p.nom, sous: p.externe ? ["Hors division", p.organisation].filter(Boolean).join(" · ") : p.organisation || undefined }))
-        : personnesPermises
-          .filter((p) => !liste.requete || cleNom(`${p.nom} ${p.organisation ?? ""}`).includes(cleNom(liste.requete)))
-          .slice(0, 8)
-          .map((p) => ({ id: p.id, libelle: p.id === moiId ? "Moi" : p.nom, sous: p.externe ? ["Hors division", p.organisation].filter(Boolean).join(" · ") : undefined }));
+            .map((p) => ({ id: p.id, libelle: p.titre, sous: p.code }))
+        : reunion
+          ? participants
+              .filter((p) => !invitesEff.some((i) => i.id === p.id) && (!liste.requete || cleNom(`${p.nom} ${p.organisation ?? ""}`).includes(cleNom(liste.requete))))
+              .slice(0, 8)
+              .map((p) => ({ id: p.id, libelle: p.nom, sous: p.externe ? ["Hors division", p.organisation].filter(Boolean).join(" · ") : p.organisation || undefined }))
+          : personnesPermises
+              .filter((p) => !liste.requete || cleNom(`${p.nom} ${p.organisation ?? ""}`).includes(cleNom(liste.requete)))
+              .slice(0, 8)
+              .map((p) => ({ id: p.id, libelle: p.id === moiId ? "Moi" : p.nom, sous: p.externe ? ["Hors division", p.organisation].filter(Boolean).join(" · ") : undefined }));
 
-  // Résultats de recherche en direct (mode recherche, sans liste ouverte).
+  // ---------- Recherche en direct (mode recherche) ----------
   useEffect(() => {
-    if (mode !== "recherche" || liste || cleNom(texte).length < 2) {
+    if (mode !== "recherche" || liste || tache || genre !== "tache" || cleNom(texte).length < 2) {
       setResultats(null);
       return;
     }
@@ -175,15 +215,56 @@ export function BarreCommande({
       clearTimeout(t);
       ctrl.abort();
     };
-  }, [texte, mode, liste]);
+  }, [texte, mode, liste, tache, genre]);
 
-  /** Repère « /… » ou « @… » juste avant le curseur (au début ou après une espace). */
+  // ---------- Question : la réponse s'affiche pendant qu'on écrit ----------
+  useEffect(() => {
+    if (!question) {
+      setReponse(null);
+      return;
+    }
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      fetch(`/api/question?q=${encodeURIComponent(texte)}`, { signal: ctrl.signal })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => setReponse(j))
+        .catch(() => {});
+    }, 300);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [texte, question]);
+
+  // ---------- Réunion : qui est déjà pris à ce créneau ? ----------
+  const cleCreneau = analyseReunion?.heure ? `${analyseReunion.jour}|${analyseReunion.heure}|${analyseReunion.dureeMinutes}|${invitesEff.map((p) => p.id).join(",")}` : "";
+  useEffect(() => {
+    if (!cleCreneau) {
+      setOccupes([]);
+      return;
+    }
+    const [jour, heure, duree, ids] = cleCreneau.split("|");
+    const ctrl = new AbortController();
+    const t = setTimeout(() => {
+      fetch(`/api/disponibilites?jour=${jour}&heure=${heure}&duree=${duree}&ids=${ids}`, { signal: ctrl.signal })
+        .then((r) => (r.ok ? r.json() : []))
+        .then((d) => setOccupes(Array.isArray(d) ? d : []))
+        .catch(() => {});
+    }, 250);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [cleCreneau]);
+
+  /** Repère « /… », « @… » ou « #… » juste avant le curseur (au début ou après une espace). */
   const reperer = (valeur: string, curseur: number) => {
     const avant = valeur.slice(0, curseur);
     const m = /(^|\s)([/@#])([^/@#]{0,40})$/.exec(avant);
     if (!m) return setListe(null);
-    // Dans une réunion, « # » (une tâche) n'a pas de sens.
-    if (m[2] === "#" && estReunion(valeur)) return setListe(null);
+    const g = genreDe(valeur, { projetChoisi: !!projet, projets, aujourdhui });
+    // Dans une réunion ou une note, « # » (une tâche) n'a pas de sens ; dans une question, aucune liste.
+    if ((m[2] === "#" && (g === "reunion" || g === "note")) || g === "question") return setListe(null);
     const requete = m[3];
     const type = m[2] === "/" ? "projet" : m[2] === "#" ? "tache" : "personne";
     setListe({ type, debut: avant.length - requete.length - 1, requete });
@@ -194,7 +275,6 @@ export function BarreCommande({
     if (!liste) return;
     const curseur = champ.current?.selectionStart ?? texte.length;
     let nouveau = `${texte.slice(0, liste.debut)}${texte.slice(curseur)}`.replace(/\s{2,}/g, " ");
-    // « # » : la tâche choisie devient une étiquette ; ce qu'on écrit ensuite la met à jour.
     if (liste.type === "tache") {
       setTache(taches.find((t) => t.id === c.id) ?? null);
       setProjet(null);
@@ -214,53 +294,108 @@ export function BarreCommande({
     });
   };
 
-  const ouvrirTache = (id: string) => (window.location.href = `/taches/${id}?retour=${encodeURIComponent(retour)}`);
-  const ajouter = () => {
-    if (tache) {
-      if (rienAChanger) return ouvrirTache(tache.id);
-      setDernier("maj");
-      return formulaire.current?.requestSubmit();
-    }
-    if (reunion) {
-      if (analyseReunion?.titre) {
-        setDernier("reunion");
-        formulaire.current?.requestSubmit();
-      }
-      return;
-    }
-    if (analyse?.titre) {
-      setDernier("ajout");
-      formulaire.current?.requestSubmit();
-    }
-  };
-  const chercher = () => {
-    if (texte.trim()) window.location.href = `/recherche?q=${encodeURIComponent(texte.trim())}`;
+  const choisirTache = (t: TacheBarre) => {
+    setTache(t);
+    setProjet(null);
+    setPersonne(null);
+    setTexte("");
+    setVide(false);
+    requestAnimationFrame(() => champ.current?.focus());
   };
 
-  // Lignes de la liste déroulante du mode recherche.
-  const lignes: Ligne[] =
-    mode === "recherche" && !liste && !tache && texte.trim()
-      ? [
-          ...(analyseReunion?.titre
-            ? [{ cle: "ajouter", libelle: `Noter la réunion « ${analyseReunion.titre} »`, sous: analyseReunion.morceaux.filter((m) => m.type !== "projet").map((m) => m.texte).join(" · "), code: "+", action: ajouter }]
-            : []),
-          ...(analyse?.titre ? [{ cle: "ajouter", libelle: `Ajouter la tâche « ${analyse.titre} »`, sous: "pour vous ; / pour un projet, @ pour une personne ; « Réunion … » pour noter une réunion", code: "+", action: ajouter }] : []),
-          ...(resultats?.projets.liste ?? []).map((p) => ({ cle: `p-${p.id}`, libelle: p.texte, sous: p.sous || "Projet", code: p.code, action: () => (window.location.href = `/projets/${p.id}`) })),
-          ...(resultats?.taches.liste ?? []).map((t) => ({ cle: `t-${t.id}`, libelle: t.texte, sous: t.sous || "Tâche", code: t.code, action: () => (window.location.href = `/taches/${t.id}`) })),
-          ...(resultats?.personnes.liste ?? []).map((p) => ({ cle: `n-${p.id}`, libelle: p.texte, sous: p.sous || "Personne", code: null, action: () => (window.location.href = `/personnes/${p.id}`) })),
-          { cle: "tout", libelle: `Tous les résultats pour « ${texte.trim()} »`, sous: undefined, code: null, action: chercher },
-        ]
+  const envoyer = () => {
+    if (tache && rienAChanger) return aller(`/taches/${tache.id}?retour=${encodeURIComponent(retour)}`);
+    if (pret) formulaire.current?.requestSubmit();
+  };
+  const chercher = () => {
+    if (texte.trim()) aller(`/recherche?q=${encodeURIComponent(texte.trim())}`);
+  };
+  const annuler = async () => {
+    if (!etat.annulation) return;
+    const r = await annulerDepuisBarre(etat.annulation);
+    setAnnule({ pour: etat.annulation, ok: r.ok, message: r.message });
+    setAnnulable(false);
+  };
+
+  // ---------- Barre vide : ce qui compte aujourd'hui ----------
+  useEffect(() => {
+    try {
+      setRecents(JSON.parse(localStorage.getItem(CLE_PROJETS_RECENTS) ?? "[]"));
+    } catch {
+      setRecents([]);
+    }
+  }, [vide]);
+  const suggestions: Ligne[] =
+    vide && !texte && !tache && !projet && !personne && !invites.length
+      ? (() => {
+          const miennes = taches.filter((t) => !t.pour && t.echeance);
+          const retard = miennes.filter((t) => t.echeance! < aujourdhui && t.statut !== "bloquee");
+          const jour = miennes.filter((t) => t.echeance === aujourdhui);
+          const l: Ligne[] = [
+            ...retard.slice(0, 4).map((t) => ({ cle: `r-${t.id}`, libelle: t.titre, sous: `En retard · ${dateCourte(t.echeance)} · à mettre à jour`, code: t.code, action: () => choisirTache(t) })),
+            ...jour.slice(0, 4).map((t) => ({ cle: `j-${t.id}`, libelle: t.titre, sous: "Pour aujourd'hui · à mettre à jour", code: t.code, action: () => choisirTache(t) })),
+            ...reunionsDuJour.slice(0, 3).map((r) => ({
+              cle: `m-${r.id}`,
+              libelle: r.titre,
+              sous: `Réunion d'aujourd'hui${r.heure ? ` à ${r.heure.slice(0, 5).replace(":", " h ")}` : ""} · ${r.mienne ? "compléter (notes, actions)" : "voir"}`,
+              code: "RÉU",
+              action: () => aller(`/reunions?semaine=${r.semaine}${r.mienne ? `&modifier=${r.id}#noter` : ""}`),
+            })),
+            ...recents
+              .map((id) => projets.find((p) => p.id === id))
+              .filter((p): p is ProjetSaisie => !!p)
+              .slice(0, 3)
+              .map((p) => ({ cle: `p-${p.id}`, libelle: p.titre, sous: "Projet ouvert récemment", code: p.code, action: () => aller(`/projets/${p.id}`) })),
+          ];
+          return [
+            ...(l.length ? l : [{ cle: "rien", libelle: "Rien d'urgent aujourd'hui", titre: true }]),
+            { cle: "aide", libelle: "Écrivez une tâche, « Réunion … », « Décision : … » ou une question ?", sous: "/ un projet · @ une personne · # une tâche à mettre à jour · sinon, Entrée cherche", titre: true },
+            { cle: "formulaire", libelle: "Nouvelle tâche (formulaire complet)", code: "+", action: () => aller(`/taches/nouvelle?retour=${encodeURIComponent(retour)}`) },
+          ];
+        })()
       : [];
-  const nb = liste ? choix.length : lignes.length;
-  const ouvert = nb > 0 && (!!liste || mode === "recherche");
+
+  // ---------- Lignes de la liste déroulante (hors « / », « @ », « # ») ----------
+  const lignes: Ligne[] = suggestions.length
+    ? suggestions
+    : question && reponse
+      ? [
+          { cle: "titre", libelle: `${reponse.titre}${reponse.total ? ` · ${reponse.total}` : ""}`, titre: true },
+          ...(reponse.lignes.length ? reponse.lignes.slice(0, 12).map((x, i) => ({ cle: `q-${i}`, libelle: x.texte, sous: x.sous, code: x.code, action: () => aller(x.lien) })) : [{ cle: "vide", libelle: reponse.vide ?? "Rien.", titre: true }]),
+          ...(reponse.total > 12 ? [{ cle: "plus", libelle: `… et ${reponse.total - 12} autres : précisez la question (un projet, une personne)`, titre: true }] : []),
+        ]
+      : mode === "recherche" && !liste && !tache && texte.trim() && genre !== "question"
+        ? [
+            ...(pret && genre !== "tache"
+              ? [
+                  {
+                    cle: "ajouter",
+                    libelle: genre === "reunion" ? `Noter la réunion « ${analyseReunion!.titre} »` : genre === "note" ? `Ajouter au rapport : « ${note!.texte} »` : `${projetMaj!.code} · ${texteMajProjet(majProjet!)}`,
+                    sous: genre === "reunion" ? analyseReunion!.morceaux.filter((m) => m.type !== "projet").map((m) => m.texte).join(" · ") : genre === "note" ? LIBELLES_NOTE[note!.rubrique] : "Mettre le projet à jour",
+                    code: "+",
+                    action: envoyer,
+                  },
+                ]
+              : []),
+            ...(analyse?.titre ? [{ cle: "ajouter", libelle: `Ajouter la tâche « ${analyse.titre} »`, sous: "pour vous ; « pour Fabienne », « projet … » ou @ et /", code: "+", action: envoyer }] : []),
+            ...(resultats?.ecrans.liste ?? []).map((e) => ({ cle: `e-${e.lien}`, libelle: e.texte, sous: e.sous, code: e.code ?? "→", action: () => aller(e.lien) })),
+            ...(resultats?.projets.liste ?? []).map((p) => ({ cle: `p-${p.id}`, libelle: p.texte, sous: p.sous || "Projet", code: p.code, action: () => aller(`/projets/${p.id}`) })),
+            ...(resultats?.taches.liste ?? []).map((t) => ({ cle: `t-${t.id}`, libelle: t.texte, sous: t.sous || "Tâche", code: t.code, action: () => aller(`/taches/${t.id}`) })),
+            ...(resultats?.personnes.liste ?? []).map((p) => ({ cle: `n-${p.id}`, libelle: p.texte, sous: p.sous || "Personne", code: null, action: () => aller(`/personnes/${p.id}`) })),
+            ...(genre === "tache" ? [{ cle: "tout", libelle: `Tous les résultats pour « ${texte.trim()} »`, code: null, action: chercher }] : []),
+          ]
+        : [];
+  const actives = liste ? choix.map((_, i) => i) : lignes.map((l, i) => (l.action ? i : -1)).filter((i) => i >= 0);
+  const ouvert = liste ? choix.length > 0 : lignes.length > 0;
 
   const clavier = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
       if (liste) setListe(null);
+      else if (vide) setVide(false);
       else setSurligne(-1);
       return;
     }
-    // Retour arrière dans une barre vide : la dernière étiquette s'en va (tâche, personne, projet).
+    // Retour arrière dans une barre vide : la dernière étiquette s'en va.
     if (e.key === "Backspace" && !texte && (tache || personne || projet || invites.length)) {
       e.preventDefault();
       if (invites.length) setInvites(invites.slice(0, -1));
@@ -269,9 +404,11 @@ export function BarreCommande({
       else setTache(null);
       return;
     }
-    if (ouvert && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    if (ouvert && (e.key === "ArrowDown" || e.key === "ArrowUp") && actives.length) {
       e.preventDefault();
-      setSurligne((i) => (e.key === "ArrowDown" ? (i + 1) % nb : (i - 1 + nb) % nb));
+      const pos = actives.indexOf(surligne);
+      const suivant = e.key === "ArrowDown" ? actives[(pos + 1) % actives.length] : actives[(pos - 1 + actives.length) % actives.length];
+      setSurligne(suivant);
       return;
     }
     if (liste && (e.key === "Enter" || e.key === "Tab") && choix.length) {
@@ -281,33 +418,50 @@ export function BarreCommande({
     }
     if (e.key === "Enter") {
       e.preventDefault();
-      if (mode === "recherche" && surligne >= 0 && lignes[surligne]) return lignes[surligne].action();
-      if (mode === "tache" || tache || reunion || projet || personne) return ajouter();
+      if (surligne >= 0 && lignes[surligne]?.action) return lignes[surligne].action!();
+      if (question) return;
+      if (agir) return envoyer();
       return chercher();
     }
   };
 
-  const puce = (texte: string, retirer: (() => void) | null, classe = "") => (
+  const puce = (t: string, retirer: (() => void) | null, classe = "") => (
     <span className={`saisie-rapide__morceau ${classe}`}>
-      {texte}
+      {t}
       {retirer ? (
-        <button type="button" className="puce__retirer" onClick={retirer} aria-label={`Retirer ${texte}`}>
+        <button type="button" className="puce__retirer" onClick={retirer} aria-label={`Retirer ${t}`}>
           ×
         </button>
       ) : null}
     </span>
   );
+  const puceProjet = (p: ProjetSaisie | null, retirable: boolean) =>
+    p ? puce(`${p.code} · ${p.titre}`, retirable ? () => setProjet(null) : null, "saisie-rapide__morceau--projet") : puce("Hors projet", null, "saisie-rapide__morceau--discret");
+
+  const bouton = enCours
+    ? "…"
+    : tache
+      ? rienAChanger
+        ? "Ouvrir"
+        : "Mettre à jour"
+      : question
+        ? "Demander"
+        : genre === "reunion"
+          ? "Noter"
+          : genre === "note"
+            ? "Ajouter au rapport"
+            : genre === "projet"
+              ? "Mettre à jour"
+              : agir
+                ? "Ajouter"
+                : "Chercher";
+  const annuleIci = annule && etat.annulation && annule.pour === etat.annulation ? annule : null;
+  const icone = question ? "loupe" : reunion ? "reunion" : genre === "note" ? "document" : mode === "recherche" ? "loupe" : "ajouter";
 
   return (
-    <form
-      ref={formulaire}
-      action={tache ? actionMaj : reunion ? actionReunion : actionAjout}
-      className="saisie-rapide"
-      role={mode === "recherche" ? "search" : undefined}
-      onSubmit={(e) => (tache ? rienAChanger : reunion ? !analyseReunion?.titre : !analyse?.titre) && e.preventDefault()}
-    >
-      <label htmlFor={`${idListe}-champ`} className="visuellement-cache">
-        {tache ? `Mettre à jour la tâche « ${tache.titre} »` : mode === "recherche" ? "Rechercher, ajouter une tâche ou noter une réunion" : "Ajouter une tâche, ou noter une réunion"}
+    <form ref={formulaire} action={action} className="saisie-rapide" role={mode === "recherche" ? "search" : undefined} onSubmit={(e) => !(tache ? !rienAChanger : pret) && e.preventDefault()}>
+      <label htmlFor={idChamp ?? `${idListe}-champ`} className="visuellement-cache">
+        {tache ? `Mettre à jour la tâche « ${tache.titre} »` : "Écrire une tâche, une réunion, une note pour le rapport, ou une question"}
       </label>
       <div className="commande">
         <div className="saisie-rapide__ligne">
@@ -318,31 +472,38 @@ export function BarreCommande({
               <span aria-hidden="true">×</span>
             </button>
           ) : (
-            <Icone nom={reunion ? "reunion" : mode === "recherche" ? "loupe" : "ajouter"} taille={18} />
+            <Icone nom={icone} taille={18} />
           )}
           <input
             ref={champ}
-            id={`${idListe}-champ`}
-            name="saisie"
+            id={idChamp ?? `${idListe}-champ`}
             value={texte}
             onChange={(e) => {
               setTexte(e.target.value);
               setErreur(null);
+              setAnnulable(false);
               setSurligne(-1);
+              setVide(!e.target.value);
               reperer(e.target.value, e.target.selectionStart ?? e.target.value.length);
             }}
+            onFocus={() => setVide(true)}
             onKeyDown={clavier}
-            onBlur={() => setTimeout(() => setListe(null), 150)}
+            onBlur={() =>
+              setTimeout(() => {
+                setListe(null);
+                setVide(false);
+              }, 150)
+            }
             maxLength={300}
             autoComplete="off"
             autoFocus={focus}
-            enterKeyHint={mode === "recherche" && !tache ? "search" : "done"}
+            enterKeyHint={question || !agir ? "search" : "done"}
             placeholder={
               tache
-                ? "faite · en cours · bloquée … · une date · 2h · une note · @ confier"
+                ? "faite · en cours · bloquée … · une date · relancer · @ confier"
                 : mode === "recherche"
-                  ? "Chercher, ou écrire une tâche ( / projet · @ personne · # une tâche )"
-                  : "Ajouter une tâche ( / projet · @ personne · # mettre à jour une tâche )"
+                  ? "Chercher ou ajouter : une tâche, « Réunion … », « Décision : … », une question ?"
+                  : "Une tâche, « Réunion … », « Décision : … » ou une question ?"
             }
             role="combobox"
             aria-expanded={ouvert}
@@ -353,14 +514,19 @@ export function BarreCommande({
           <button
             type="button"
             className="bouton-ambre"
-            disabled={enCours || (tache ? false : reunion ? !analyseReunion?.titre : mode === "tache" ? !analyse?.titre : !texte.trim())}
-            onClick={() => (mode === "tache" || tache || reunion || projet || personne ? ajouter() : chercher())}
+            disabled={enCours || (tache ? false : question ? !texte.trim() : genre !== "tache" ? !pret : mode === "tache" ? !analyse?.titre : !texte.trim())}
+            onClick={() => (question ? champ.current?.focus() : agir ? envoyer() : chercher())}
           >
-            {enCours ? "…" : tache ? (rienAChanger ? "Ouvrir" : "Mettre à jour") : reunion ? "Noter" : mode === "tache" || projet || personne ? "Ajouter" : "Chercher"}
+            {bouton}
           </button>
         </div>
         {ouvert ? (
-          <ul id={`${idListe}-liste`} role="listbox" className="commande__liste" aria-label={liste ? (liste.type === "projet" ? "Projets" : liste.type === "tache" ? "Tâches" : reunion ? "Participants" : "Personnes") : "Résultats"}>
+          <ul
+            id={`${idListe}-liste`}
+            role="listbox"
+            className="commande__liste"
+            aria-label={liste ? (liste.type === "projet" ? "Projets" : liste.type === "tache" ? "Tâches" : reunion ? "Participants" : "Personnes") : question ? "Réponse" : suggestions.length ? "Suggestions" : "Résultats"}
+          >
             {liste
               ? choix.map((c, i) => (
                   <li
@@ -381,30 +547,43 @@ export function BarreCommande({
                     </span>
                   </li>
                 ))
-              : lignes.map((l, i) => (
-                  <li
-                    key={l.cle}
-                    id={`${idListe}-o${i}`}
-                    role="option"
-                    aria-selected={i === surligne}
-                    className={`commande__option${l.cle === "ajouter" ? " commande__option--ajouter" : ""}`}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      l.action();
-                    }}
-                  >
-                    {l.code ? <span className="mono">{l.code}</span> : null}
-                    <span className="commande__texte">
+              : lignes.map((l, i) =>
+                  l.titre ? (
+                    <li key={l.cle} role="presentation" className="commande__titre">
                       <span className="commande__libelle">{l.libelle}</span>
                       {l.sous ? <span className="commande__sous">{l.sous}</span> : null}
-                    </span>
-                  </li>
-                ))}
+                    </li>
+                  ) : (
+                    <li
+                      key={l.cle}
+                      id={`${idListe}-o${i}`}
+                      role="option"
+                      aria-selected={i === surligne}
+                      className={`commande__option${l.cle === "ajouter" ? " commande__option--ajouter" : ""}`}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        l.action?.();
+                      }}
+                    >
+                      {l.code ? <span className="mono">{l.code}</span> : null}
+                      <span className="commande__texte">
+                        <span className="commande__libelle">{l.libelle}</span>
+                        {l.sous ? <span className="commande__sous">{l.sous}</span> : null}
+                      </span>
+                    </li>
+                  ),
+                )}
           </ul>
         ) : null}
         {liste && !choix.length ? (
           <p className="commande__vide" role="status">
-            {liste.type === "projet" ? "Aucun projet ne correspond." : liste.type === "tache" ? "Aucune tâche ouverte ne correspond (les vôtres, celles de votre équipe, celles que vous avez confiées, celles de vos projets)." : reunion ? "Personne ne correspond." : "Personne ne correspond parmi celles à qui vous pouvez confier une tâche."}
+            {liste.type === "projet"
+              ? "Aucun projet ne correspond."
+              : liste.type === "tache"
+                ? "Aucune tâche ouverte ne correspond (les vôtres, celles de votre équipe, celles que vous avez confiées, celles de vos projets)."
+                : reunion
+                  ? "Personne ne correspond."
+                  : "Personne ne correspond parmi celles à qui vous pouvez confier une tâche."}
           </p>
         ) : null}
       </div>
@@ -413,21 +592,17 @@ export function BarreCommande({
           <>
             <span className="saisie-rapide__titre">{rienAChanger ? "Écrivez ce qui change, ou Entrée pour ouvrir la tâche" : `« ${tache.titre} »`}</span>
             {maj?.morceaux.map((m) => (
-              <span key={m.type} className={`saisie-rapide__morceau saisie-rapide__morceau--${m.type === "statut" ? "echeance" : m.type === "note" ? "discret" : m.type}`}>
+              <span key={m.type} className={`saisie-rapide__morceau saisie-rapide__morceau--${m.type === "statut" || m.type === "relance" ? "echeance" : m.type === "note" ? "discret" : m.type}`}>
                 {m.texte}
               </span>
             ))}
             {projet ? puce(`Vers ${projet.code} · ${projet.titre}`, () => setProjet(null), "saisie-rapide__morceau--projet") : null}
-            {personne ? puce(`Confier à ${personne.id === moiId ? "moi" : personne.nom}`, () => setPersonne(null), "saisie-rapide__morceau--personne") : null}
+            {personneEff ? puce(`Confier à ${personneEff.id === moiId ? "moi" : personneEff.nom}`, personne ? () => setPersonne(null) : null, "saisie-rapide__morceau--personne") : null}
           </>
         ) : analyseReunion ? (
           <>
             <span className="saisie-rapide__titre">{analyseReunion.titre ? `Réunion « ${analyseReunion.titre} »` : "Réunion : écrivez son titre"}</span>
-            {projet
-              ? puce(`${projet.code} · ${projet.titre}`, () => setProjet(null), "saisie-rapide__morceau--projet")
-              : analyseReunion.projet
-                ? puce(`${analyseReunion.projet.code} · ${analyseReunion.projet.titre}`, null, "saisie-rapide__morceau--projet")
-                : puce("Hors projet", null, "saisie-rapide__morceau--discret")}
+            {puceProjet(projetEff, !!projet)}
             {analyseReunion.morceaux
               .filter((m) => m.type !== "projet")
               .map((m) => (
@@ -435,56 +610,83 @@ export function BarreCommande({
                   {m.texte}
                 </span>
               ))}
-            {invites.map((p) => (
-              <span key={p.id}>{puce(`Avec ${p.nom}`, () => setInvites(invites.filter((i) => i.id !== p.id)), "saisie-rapide__morceau--personne")}</span>
+            {invitesEff.map((p) => (
+              <span key={p.id}>{puce(`Avec ${p.nom}`, invites.some((i) => i.id === p.id) ? () => setInvites(invites.filter((i) => i.id !== p.id)) : null, "saisie-rapide__morceau--personne")}</span>
             ))}
           </>
-        ) : analyse && (mode === "tache" || projet || personne) ? (
+        ) : note ? (
+          <>
+            <span className="saisie-rapide__titre">Pour le rapport du vendredi</span>
+            {puce(LIBELLES_NOTE[note.rubrique], null, "saisie-rapide__morceau--echeance")}
+            {puceProjet(projetEff, !!projet)}
+            {note.texte ? puce(`« ${note.texte} »`, null, "saisie-rapide__morceau--discret") : null}
+          </>
+        ) : genre === "projet" ? (
+          <>
+            <span className="saisie-rapide__titre">{projetMaj ? `Mettre à jour ${projetMaj.code} · ${projetMaj.titre}` : "Quel projet ?"}</span>
+            {majProjet ? puce(texteMajProjet(majProjet), null, "saisie-rapide__morceau--echeance") : null}
+          </>
+        ) : question ? (
+          <span className="ton-discret">Question : la réponse s&apos;affiche au fur et à mesure. Rien n&apos;est modifié.</span>
+        ) : analyse && agir ? (
           <>
             <span className="saisie-rapide__titre">{analyse.titre || "Écrivez ce qu'il y a à faire"}</span>
-            {projet
-              ? puce(`${projet.code} · ${projet.titre}`, () => setProjet(null), "saisie-rapide__morceau--projet")
-              : analyse.projet
-                ? puce(`${analyse.projet.code} · ${analyse.projet.titre}`, null, "saisie-rapide__morceau--projet")
-                : puce("Hors projet", null, "saisie-rapide__morceau--discret")}
-            {personne ? puce(`Pour ${personne.id === moiId ? "moi" : personne.nom}`, () => setPersonne(null), "saisie-rapide__morceau--personne") : null}
-            {analyse.morceaux.filter((m) => m.type !== "projet").map((m) => (
-              <span key={m.type} className={`saisie-rapide__morceau saisie-rapide__morceau--${m.type}`}>
-                {m.texte}
-              </span>
-            ))}
+            {projet ? puceProjet(projet, true) : puceProjet(mots?.projet ?? analyse.projet, false)}
+            {personneEff ? puce(`Pour ${personneEff.id === moiId ? "moi" : personneEff.nom}`, personne ? () => setPersonne(null) : null, "saisie-rapide__morceau--personne") : null}
+            {analyse.morceaux
+              .filter((m) => m.type !== "projet")
+              .map((m) => (
+                <span key={m.type} className={`saisie-rapide__morceau saisie-rapide__morceau--${m.type}`}>
+                  {m.texte}
+                </span>
+              ))}
           </>
         ) : etat.ok && etat.message ? (
-          <span className="ton-ok">
-            {etat.message}{" "}
-            {dernier === "reunion" && etat.semaine ? (
-              <a href={`/reunions?semaine=${etat.semaine}`} className="lien-discret">
-                Voir les réunions
-              </a>
-            ) : etat.ok && etat.id ? (
-              <a href={`/taches/${etat.id}?retour=${encodeURIComponent(retour)}`} className="lien-discret">
-                {dernier === "maj" ? "Voir la tâche" : "Préciser"}
-              </a>
+          <span className={annuleIci ? (annuleIci.ok ? "ton-discret" : "ton-retard") : "ton-ok"}>
+            {annuleIci ? annuleIci.message : etat.message}{" "}
+            {annulable && etat.annulation && !annuleIci ? (
+              <button type="button" className="lien-bouton" onClick={annuler}>
+                Annuler
+              </button>
+            ) : null}
+            {etat.lien && !annuleIci?.ok ? (
+              <>
+                {" "}
+                <a href={etat.lien} className="lien-discret">
+                  Voir
+                </a>
+              </>
             ) : null}
           </span>
         ) : mode === "tache" ? (
           <span className="ton-discret">
-            <kbd>/</kbd> un projet · <kbd>@</kbd> une personne · <kbd>#</kbd> une tâche à mettre à jour (faite, bloquée…, une date, @ quelqu'un) ; une date (demain, vendredi, 12/11) et des heures (2h) sont reconnues ; « Réunion … » note une réunion.{" "}
+            <kbd>/</kbd> un projet · <kbd>@</kbd> une personne · <kbd>#</kbd> une tâche à mettre à jour · « Réunion … » · « Décision : … » · une question ?{" "}
             <a href={`/taches/nouvelle?retour=${encodeURIComponent(retour)}`} className="lien-discret">
               Formulaire complet
             </a>
           </span>
         ) : null}
       </p>
-      {erreur && (tache || analyse || analyseReunion) ? (
+      {reunion && occupes.length ? (
+        <div className="avertissement-creneau" role="status">
+          {occupes.map((o) => (
+            <p key={o.id} style={{ margin: 0 }}>
+              {phraseOccupe(o)}.
+            </p>
+          ))}
+        </div>
+      ) : null}
+      {erreur && genre !== "question" ? (
         <p className="saisie-rapide__erreur ton-retard" role="alert">
           {erreur}
         </p>
       ) : null}
+      <input type="hidden" name="genre" value={genre} />
+      <input type="hidden" name="saisie" value={genre === "projet" ? texte : net} />
       <input type="hidden" name="tacheId" value={tache?.id ?? ""} />
-      <input type="hidden" name="projetId" value={projet?.id ?? ""} />
-      <input type="hidden" name="assigneId" value={personne?.id ?? ""} />
-      {reunion ? invites.map((p) => <input key={p.id} type="hidden" name="participants" value={p.id} />) : null}
+      <input type="hidden" name="projetId" value={genre === "projet" ? (projet?.id ?? "") : (projet?.id ?? mots?.projet?.id ?? "")} />
+      <input type="hidden" name="assigneId" value={personneEff?.id ?? ""} />
+      {reunion ? invitesEff.map((p) => <input key={p.id} type="hidden" name="participants" value={p.id} />) : null}
     </form>
   );
 }

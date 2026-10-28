@@ -212,7 +212,9 @@ export async function modifierProjet(projetId: string, d: ModifProjet, parId: st
 
 /** Ce qui empêche de supprimer un projet (il s'archive alors). */
 export async function activiteDuProjet(projetId: string) {
-  const compte = async (table: typeof schema.taches | typeof schema.lignesRapport | typeof schema.reponsesRapport | typeof schema.lignesConseil | typeof schema.historiqueProjet | typeof schema.reunions) => {
+  const compte = async (
+    table: typeof schema.taches | typeof schema.lignesRapport | typeof schema.reponsesRapport | typeof schema.lignesConseil | typeof schema.historiqueProjet | typeof schema.reunions | typeof schema.documentsProjet,
+  ) => {
     const [{ n }] = await db.select({ n: count() }).from(table).where(eq(table.projetId, projetId));
     return Number(n);
   };
@@ -223,6 +225,7 @@ export async function activiteDuProjet(projetId: string) {
     lignesConseil: await compte(schema.lignesConseil),
     historique: await compte(schema.historiqueProjet),
     reunions: await compte(schema.reunions),
+    documents: await compte(schema.documentsProjet),
   };
 }
 
@@ -233,7 +236,7 @@ export async function archiverProjet(projetId: string, archiver: boolean, parId:
 
 /** Supprime un projet sans activité (sinon : refus, il faut l'archiver). */
 export async function supprimerProjet(projetId: string, parId: string): Promise<{ ok: true } | { erreur: string }> {
-  if (!projetSupprimable(await activiteDuProjet(projetId))) return { erreur: "Ce projet a une histoire (tâches, rapports ou réunions) : archivez-le plutôt." };
+  if (!projetSupprimable(await activiteDuProjet(projetId))) return { erreur: "Ce projet a une histoire (tâches, rapports, réunions ou documents) : archivez-le plutôt." };
   const [p] = await db.delete(schema.projets).where(eq(schema.projets.id, projetId)).returning({ titre: schema.projets.titre, code: schema.projets.code });
   await noter(parId, "projet_supprime", projetId, p ?? {});
   return { ok: true };

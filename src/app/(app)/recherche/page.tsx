@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
+import { CodeProjet, LienProjet } from "@/components/Liens";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { rechercher } from "@/lib/donnees/recherche";
 import { Bandeau } from "@/components/Bandeau";
-import { BarreCommande } from "@/components/BarreCommande";
-import { donneesBarre } from "@/lib/donnees/saisie";
 
 export const metadata: Metadata = { title: "Rechercher" };
 
@@ -12,7 +11,7 @@ export default async function PageRecherche({ searchParams }: { searchParams: Pr
   const u = await exigerUtilisateur();
   const q = String((await searchParams).q ?? "").trim().slice(0, 100);
   const r = q ? await rechercher(u, q) : null;
-  const total = r ? r.personnes.total + r.projets.total + r.taches.total : 0;
+  const total = r ? r.ecrans.total + r.personnes.total + r.projets.total + r.taches.total : 0;
   const groupe = (titre: string, id: string, n: number, contenu: React.ReactNode) =>
     n ? (
       <section className="carte carte--liste" aria-labelledby={id}>
@@ -28,11 +27,30 @@ export default async function PageRecherche({ searchParams }: { searchParams: Pr
     <>
       <Bandeau surtitre="Chercher, ou ajouter une tâche" titre="Rechercher" />
       <div className="page" style={{ maxWidth: 760 }}>
-        <BarreCommande key={q} mode="recherche" retour="/a-faire" initial={q} {...await donneesBarre(u)} />
         {q && !r ? <p className="note">Tapez au moins deux lettres.</p> : null}
         {r && !total ? <p className="vide">Rien trouvé pour « {q} ». Essayez un autre mot, ou une partie du nom.</p> : null}
         {r ? (
           <>
+            {groupe(
+              "Aller à",
+              "rq-ecrans",
+              r.ecrans.total,
+              r.ecrans.liste.map((e) => (
+                <li key={e.lien}>
+                  <a href={e.lien} className="rangee">
+                    {e.code ? (
+                      <span className="mono" aria-hidden="true">
+                        {e.code}
+                      </span>
+                    ) : null}
+                    <span className="rangee__texte">
+                      <span className="rangee__titre">{e.texte}</span>
+                      <span className="rangee__sous">{e.sous}</span>
+                    </span>
+                  </a>
+                </li>
+              )),
+            )}
             {groupe(
               "Projets",
               "rq-projets",
@@ -57,19 +75,26 @@ export default async function PageRecherche({ searchParams }: { searchParams: Pr
               r.taches.total,
               r.taches.liste.map((t) => (
                 <li key={t.id}>
-                  <a href={`/taches/${t.id}`} className="rangee">
-                    {t.code ? (
-                      <span className="mono" aria-hidden="true">
-                        {t.code}
-                      </span>
-                    ) : null}
+                  <div className="rangee rangee--etiree">
+                    {t.code ? <CodeProjet id={t.projetId} code={t.code} titre={t.projetTitre} visible={t.projetVisible} mono /> : null}
                     <span className="rangee__texte">
-                      <span className="rangee__titre" style={t.statut === "faite" ? { textDecoration: "line-through", color: "var(--discret)" } : undefined}>
+                      <a href={`/taches/${t.id}`} className="rangee__titre rangee__lien" style={t.statut === "faite" ? { textDecoration: "line-through", color: "var(--discret)" } : undefined}>
                         {t.texte}
+                      </a>
+                      <span className="rangee__sous">
+                        {t.projetId && t.projetTitre ? (
+                          <>
+                            <LienProjet id={t.projetId} visible={t.projetVisible}>
+                              {t.projetTitre}
+                            </LienProjet>
+                            {t.sous ? ` · ${t.sous}` : ""}
+                          </>
+                        ) : (
+                          [t.sous, t.projetId ? null : "Hors projet"].filter(Boolean).join(" · ")
+                        )}
                       </span>
-                      <span className="rangee__sous">{t.sous || "Hors projet"}</span>
                     </span>
-                  </a>
+                  </div>
                 </li>
               )),
             )}

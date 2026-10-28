@@ -2,8 +2,8 @@
  * Un champ du rapport, selon son type : en saisie (le brouillon), en lecture (un rapport envoyé),
  * ou en aperçu (l'éditeur de modèles). Les contrôles interactifs sont dans rapport/Lignes.tsx.
  */
-import { ajouterLigne, deposer, redigerSynthese, retirer, suggererDecision } from "@/app/(app)/rapport/actions";
-import { BoutonRemettre, CasePartie, ChoixSegmente, CommentaireFeu, InterrupteurRemonter, LigneEditable, TexteReponse } from "@/app/(app)/rapport/Lignes";
+import { deposer, redigerSynthese, retirer, suggererDecision } from "@/app/(app)/rapport/actions";
+import { AjoutLigne, BoutonRemettre, CasePartie, ChoixSegmente, CommentaireFeu, InterrupteurRemonter, LigneEditable, TexteReponse } from "@/app/(app)/rapport/Lignes";
 import { Icone } from "@/components/Icone";
 import {
   CATALOGUE,
@@ -26,7 +26,7 @@ import type { AvisSante, ChargeMembre, LigneLue, MatiereSynthese, ReponseLue } f
 import type { PieceLue } from "@/lib/donnees/pieces";
 import type { ComptesCharge } from "@/lib/modeles";
 import { ACCEPT, tailleLisible } from "@/lib/pieces";
-import { LienPersonne, LienProjet } from "@/components/Liens";
+import { CodeProjet, LienPersonne, LienProjet } from "@/components/Liens";
 
 export type ContexteRapport = {
   mode: "saisie" | "lecture" | "apercu";
@@ -62,6 +62,8 @@ export type ContexteRapport = {
   semaine?: string;
   /** Projets que le lecteur peut ouvrir : leurs noms deviennent des liens. Absent (aperçu) : pas de liens. */
   projetsVisibles?: "tous" | Set<string>;
+  /** Code → projet, pour les éléments qui ne gardent que le code (réunions figées dans le rapport). */
+  codesProjets?: Map<string, { id: string; titre: string }>;
 };
 
 const voitProjet = (x: ContexteRapport, id: string | null | undefined) => !!id && !!x.projetsVisibles && (x.projetsVisibles === "tous" || x.projetsVisibles.has(id));
@@ -144,7 +146,7 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
         ) : (
           <ul className="liste champ-rapport__corps">
             {propres.map((l) => (
-              <LigneEditable key={l.id} ligne={l} projets={x.projets} modifiable={saisie} parProjet={c.parProjet !== false} />
+              <LigneEditable key={l.id} ligne={l} projets={x.projets} modifiable={saisie} parProjet={c.parProjet !== false} projetVisible={voitProjet(x, l.projetId)} />
             ))}
             {propres.length === 0 ? (
               <li style={{ borderTop: 0 }} className="vide">
@@ -153,32 +155,7 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
             ) : null}
           </ul>
         )}
-        {saisie ? (
-          <form action={ajouterLigne.bind(null, x.rapportId, c.id)} className="champ-rapport__corps" style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-            <label className="visuellement-cache" htmlFor={`ajout-${c.id}`}>
-              Ajouter une ligne à « {c.libelle} »
-            </label>
-            <input id={`ajout-${c.id}`} name="texte" maxLength={500} placeholder="Ajouter une ligne" style={{ flex: "1 1 220px", minHeight: 40, padding: "0 12px", border: "1px solid var(--filet-fort)", background: "var(--champ)", fontSize: 14 }} />
-            {c.parProjet !== false ? (
-              <>
-                <label className="visuellement-cache" htmlFor={`ajout-projet-${c.id}`}>
-                  Projet de la ligne
-                </label>
-                <select id={`ajout-projet-${c.id}`} name="projetId" defaultValue="" style={{ minHeight: 40, border: "1px solid var(--filet-fort)", background: "var(--champ)", fontSize: 13, maxWidth: 200 }}>
-                  <option value="">Sans projet</option>
-                  {x.projets.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.code} · {p.titre}
-                    </option>
-                  ))}
-                </select>
-              </>
-            ) : null}
-            <button type="submit" className="bouton-contour">
-              <Icone nom="ajouter" taille={16} /> Ajouter
-            </button>
-          </form>
-        ) : null}
+        {saisie ? <AjoutLigne rapportId={x.rapportId} champId={c.id} libelle={c.libelle} projets={x.projets} parProjet={c.parProjet !== false} /> : null}
       </section>
     );
   }
@@ -206,7 +183,7 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
                   <legend className="visuellement-cache">{r.projetTitre}</legend>
                   <div className="feu__ligne">
                     <span className="feu__nom">
-                      <span className="etiquette-projet">{r.projetCode}</span>
+                      <CodeProjet id={r.projetId} code={r.projetCode ?? "—"} titre={r.projetTitre} visible={voitProjet(x, r.projetId)} />
                       <span className="rangee__texte">
                         <span className="rangee__titre">
                           <LienProjet id={r.projetId} visible={voitProjet(x, r.projetId)}>
@@ -353,7 +330,7 @@ export function ChampRapport({ c, x }: { c: Champ; x: ContexteRapport }) {
                         {jourAbrege(m.jour)}
                         {m.heure ? ` ${m.heure.replace(":", " h ")}` : ""}
                       </span>
-                      {m.projet ? <span className="etiquette-projet">{m.projet}</span> : null}
+                      {m.projet ? <CodeProjet id={x.codesProjets?.get(m.projet)?.id} code={m.projet} titre={x.codesProjets?.get(m.projet)?.titre} visible={voitProjet(x, x.codesProjets?.get(m.projet)?.id)} /> : null}
                       <span className="rangee__texte">
                         <span className="rangee__titre">{m.titre}</span>
                         {m.avec ? <span className="rangee__sous">avec {m.avec} autre{m.avec > 1 ? "s" : ""} personne{m.avec > 1 ? "s" : ""}</span> : null}
@@ -504,7 +481,7 @@ function Synthese({ c, x, reponses, idT, idA }: { c: Champ; x: ContexteRapport; 
             return (
               <div key={projetId} className="synthese">
                 <h4 className="groupe-projet__titre" id={`${idP}-t`}>
-                  <span className="etiquette-projet">{code}</span>
+                  <CodeProjet id={projetId} code={code} titre={titre} visible={voitProjet(x, projetId)} />
                   <LienProjet id={projetId} visible={voitProjet(x, projetId)}>
                     {titre}
                   </LienProjet>
@@ -597,7 +574,7 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
                     <legend className="visuellement-cache">{p.titre}</legend>
                     <div className="feu__ligne">
                       <span className="feu__nom">
-                        <span className="etiquette-projet">{p.code}</span>
+                        <CodeProjet id={p.projetId} code={p.code} titre={p.titre} visible={voitProjet(x, p.projetId)} />
                         <span className="rangee__texte">
                           <span className="rangee__titre">
                             <LienProjet id={p.projetId} visible={voitProjet(x, p.projetId)}>
@@ -631,7 +608,7 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
               <div key={r.id} className="feu">
                 <div className="feu__ligne">
                   <span className="feu__nom">
-                    <span className="etiquette-projet">{r.projetCode}</span>
+                    <CodeProjet id={r.projetId} code={r.projetCode ?? "—"} titre={r.projetTitre} visible={voitProjet(x, r.projetId)} />
                     <span className="rangee__texte">
                       <span className="rangee__titre">
                         <LienProjet id={r.projetId} visible={voitProjet(x, r.projetId)}>
@@ -737,9 +714,7 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
             {gardees.map((l) => (
               <li key={l.id} className="recu">
                 <div className="recu__ligne">
-                  <span className="etiquette-projet" title={l.projetTitre ?? "Sans projet"}>
-                    {l.projetCode ?? "—"}
-                  </span>
+                  <CodeProjet id={l.projetId} code={l.projetCode ?? "—"} titre={l.projetTitre ?? "Sans projet"} visible={voitProjet(x, l.projetId)} />
                   <ul className="liste">
                     <LigneEditable ligne={l} projets={x.projets} modifiable={saisie} parProjet={false} auteurs={auteurs(l)} />
                   </ul>
@@ -760,7 +735,7 @@ function Reprise({ c, x, lignes, reponses, idT, idA }: { c: Champ; x: ContexteRa
           [...groupes.values()].map((g) => (
             <div key={g.code + g.titre} className="groupe-projet">
               <h4 className="groupe-projet__titre">
-                <span className="etiquette-projet">{g.code}</span>
+                <CodeProjet id={g.id} code={g.code} titre={g.titre} visible={voitProjet(x, g.id)} />
                 <LienProjet id={g.id} visible={voitProjet(x, g.id)}>
                   {g.titre}
                 </LienProjet>

@@ -36,7 +36,7 @@ export async function monEquipe(a: Acces) {
       direct: sup?.id === a.moi.id,
       rapport: r?.statut === "envoye" ? { id: r.id, envoyeLe: r.envoyeLe } : null,
       ...c,
-      projets: [...new Set(siennes.map((t) => t.projetCode).filter(Boolean))] as string[],
+      projets: [...new Map(siennes.filter((t) => t.projetId && t.projetCode).map((t) => [t.projetId!, { id: t.projetId!, code: t.projetCode!, titre: t.projetTitre ?? "" }])).values()],
       minutesReunion: reunions.get(id) ?? 0,
     };
   });
@@ -68,15 +68,20 @@ export async function monEquipe(a: Acces) {
 
   const bloquees = ids.length
     ? await db
-        .select({ id: schema.taches.id, titre: schema.taches.titre, assigneId: schema.taches.assigneId, majLe: schema.taches.majLe, projet: schema.projets.titre })
+        .select({ id: schema.taches.id, titre: schema.taches.titre, assigneId: schema.taches.assigneId, majLe: schema.taches.majLe, projetId: schema.taches.projetId, projet: schema.projets.titre, projetCode: schema.projets.code })
         .from(schema.taches)
         .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
         .where(and(inArray(schema.taches.assigneId, ids), eq(schema.taches.statut, "bloquee"), isNull(schema.taches.annuleeLe)))
         .orderBy(asc(schema.taches.majLe))
     : [];
 
-  const charge = new Map<string, number>();
-  for (const t of taches) if (t.statut !== "faite" && t.projetTitre) charge.set(t.projetTitre, (charge.get(t.projetTitre) ?? 0) + 1);
+  const charge = new Map<string, { id: string; titre: string; n: number }>();
+  for (const t of taches)
+    if (t.statut !== "faite" && t.projetId && t.projetTitre) {
+      const c = charge.get(t.projetId) ?? { id: t.projetId, titre: t.projetTitre, n: 0 };
+      c.n += 1;
+      charge.set(t.projetId, c);
+    }
 
   return {
     semaine,
@@ -93,7 +98,7 @@ export async function monEquipe(a: Acces) {
       faites: personnes.reduce((s, p) => s + p.faites, 0),
     },
     blocages: bloquees.map((b) => ({ ...b, qui: nomComplet(org.personnes.get(b.assigneId)!), depuis: dateLocale(b.majLe) })),
-    charge: [...charge.entries()].sort((x, y) => y[1] - x[1]).slice(0, 8),
+    charge: [...charge.values()].sort((x, y) => y.n - x.n).slice(0, 8),
   };
 }
 

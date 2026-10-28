@@ -93,7 +93,7 @@ function sans(texte: string, m: RegExpExecArray): string {
 }
 
 /** Première échéance reconnue dans le texte : la date et le texte sans elle. */
-function extraireEcheance(texte: string, aujourdhui: string): { echeance: string | null; reste: string } {
+export function extraireEcheance(texte: string, aujourdhui: string): { echeance: string | null; reste: string } {
   for (const r of REGLES) {
     const m = r.motif.exec(texte);
     const d = m ? r.date(m, aujourdhui) : null;
@@ -103,14 +103,14 @@ function extraireEcheance(texte: string, aujourdhui: string): { echeance: string
 }
 
 /** Estimation reconnue (« 2h », « 3 h », « en 4 heures », de 1 à 400 heures) et le texte sans elle. */
-function extraireHeures(texte: string): { heures: number | null; reste: string } {
+export function extraireHeures(texte: string): { heures: number | null; reste: string } {
   const h = HEURES.exec(texte);
   if (h && Number(h[1]) >= 1 && Number(h[1]) <= 400) return { heures: Number(h[1]), reste: sans(texte, h) };
   return { heures: null, reste: texte };
 }
 
 /** Texte restant, sans espaces doubles ni petits mots qui traînent à la fin. */
-function nettoyer(texte: string, longueur: number): string {
+export function nettoyer(texte: string, longueur: number): string {
   return texte
     .replace(/\s+/g, " ")
     .trim()
@@ -120,21 +120,24 @@ function nettoyer(texte: string, longueur: number): string {
     .slice(0, longueur);
 }
 
+/** Le code d'un projet écrit tel quel, en majuscules (« UR »), n'importe où dans le texte, et le texte sans lui. */
+export function extraireCodeProjet(texte: string, projets: ProjetSaisie[]): { projet: ProjetSaisie | null; reste: string } {
+  const parCode = new Map(projets.map((p) => [p.code.toUpperCase(), p]));
+  const nu = new RegExp(`${D}([A-Z0-9]{2,4})${F}`, "g");
+  for (let m = nu.exec(texte); m; m = nu.exec(texte)) {
+    if (/[A-Z]/.test(m[1]) && parCode.has(m[1])) return { projet: parCode.get(m[1])!, reste: sans(texte, m) };
+  }
+  return { projet: null, reste: texte };
+}
+
 export function analyserSaisie(saisie: string, aujourdhui: string, projets: ProjetSaisie[]): Analyse {
   let texte = ` ${String(saisie ?? "").replace(/\s+/g, " ").trim().slice(0, 300)} `;
   const morceaux: Morceau[] = [];
 
   // Projet : le code tel quel, en majuscules (« UR »). Dans la barre, « / » ouvre aussi la liste des projets.
-  let projet: ProjetSaisie | null = null;
-  const parCode = new Map(projets.map((p) => [p.code.toUpperCase(), p]));
-  const nu = new RegExp(`${D}([A-Z0-9]{2,4})${F}`, "g");
-  for (let m = nu.exec(texte); m; m = nu.exec(texte)) {
-    if (/[A-Z]/.test(m[1]) && parCode.has(m[1])) {
-      projet = parCode.get(m[1])!;
-      texte = sans(texte, m);
-      break;
-    }
-  }
+  const c = extraireCodeProjet(texte, projets);
+  const projet = c.projet;
+  texte = c.reste;
   if (projet) morceaux.push({ type: "projet", texte: `${projet.code} · ${projet.titre}` });
 
   const e = extraireEcheance(texte, aujourdhui);
@@ -153,8 +156,8 @@ export function analyserSaisie(saisie: string, aujourdhui: string, projets: Proj
 // ---------------------------------------------------------------------------
 
 export type StatutTache = "a_faire" | "en_cours" | "bloquee" | "faite";
-export type MorceauMaj = { type: "statut" | "echeance" | "heures" | "note"; texte: string };
-export type MiseAJour = { statut: StatutTache | null; blocage: string | null; echeance: string | null; heures: number | null; note: string; morceaux: MorceauMaj[] };
+export type MorceauMaj = { type: "statut" | "echeance" | "heures" | "note" | "relance"; texte: string };
+export type MiseAJour = { statut: StatutTache | null; blocage: string | null; echeance: string | null; heures: number | null; note: string; relance: string | null; morceaux: MorceauMaj[] };
 
 export const LIBELLES_STATUT: Record<StatutTache, string> = { a_faire: "À faire", en_cours: "En cours", bloquee: "Bloquée", faite: "Faite" };
 
@@ -171,6 +174,13 @@ const ETATS: { motif: RegExp; statut: StatutTache; garder?: boolean }[] = [
 export function analyserMiseAJour(saisie: string, aujourdhui: string): MiseAJour {
   let texte = String(saisie ?? "").replace(/\s+/g, " ").trim().slice(0, 600);
   const morceaux: MorceauMaj[] = [];
+  // « relancer » (et un message facultatif) : la personne à qui la tâche est confiée est relancée ; rien d'autre ne change.
+  const relance = /^relance[rz]?(?=$|[\s:,.;!–—-])[\s:,.;!–—-]*(.*)$/i.exec(texte);
+  if (relance) {
+    const message = nettoyer(relance[1], 300);
+    morceaux.push({ type: "relance", texte: message ? `Relancer : « ${message} »` : "Relancer" });
+    return { statut: null, blocage: null, echeance: null, heures: null, note: "", relance: message, morceaux };
+  }
   let statut: StatutTache | null = null;
   let garder = false;
   for (const e of ETATS) {
@@ -187,7 +197,7 @@ export function analyserMiseAJour(saisie: string, aujourdhui: string): MiseAJour
     const blocage = nettoyer(garder ? texte : texte.replace(/^[\s:,.;–—-]*(?:(?:par|car|parce\s+que|à\s+cause\s+de|:)\s+)?/i, ""), 1000) || null;
     const b = blocage ? blocage.charAt(0).toUpperCase() + blocage.slice(1) : null;
     morceaux.push({ type: "statut", texte: b ? `Bloquée : ${b}` : "Bloquée" });
-    return { statut, blocage: b, echeance: null, heures: null, note: "", morceaux };
+    return { statut, blocage: b, echeance: null, heures: null, note: "", relance: null, morceaux };
   }
   if (statut) morceaux.push({ type: "statut", texte: LIBELLES_STATUT[statut] });
   texte = ` ${texte} `;
@@ -199,7 +209,7 @@ export function analyserMiseAJour(saisie: string, aujourdhui: string): MiseAJour
   if (h.heures) morceaux.push({ type: "heures", texte: `${h.heures} h de travail` });
   const note = nettoyer(texte, 500);
   if (note) morceaux.push({ type: "note", texte: `Note : ${note}` });
-  return { statut, blocage: null, echeance: e.echeance, heures: h.heures, note, morceaux };
+  return { statut, blocage: null, echeance: e.echeance, heures: h.heures, note, relance: null, morceaux };
 }
 
 // ---------------------------------------------------------------------------

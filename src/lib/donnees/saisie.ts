@@ -8,6 +8,8 @@ import { and, asc, eq, inArray, isNull, ne, or, sql, type SQL } from "drizzle-or
 import { db, schema } from "@/db";
 import { acces, contactsVisibles, idsProjetsVisibles, peutModifierTache, type Acces } from "@/lib/acces";
 import { chargerOrganisation } from "@/lib/organisation";
+import { reunionsDe } from "@/lib/donnees/reunions";
+import { lundiDe } from "@/lib/dates";
 import type { Utilisateur } from "@/lib/auth/session";
 import { aujourdhui } from "@/lib/dates";
 import { assignables } from "@/lib/donnees/gestion";
@@ -67,6 +69,9 @@ export async function participantsPourBarre(a: Acces) {
 
 export async function donneesBarre(u: Utilisateur) {
   const a = await acces(u);
-  const [projets, pour, taches, participants] = await Promise.all([projetsPourSaisie(u), assignables(a), tachesPourBarre(a), participantsPourBarre(a)]);
-  return { projets, personnes: pour.personnes, base: pour.base, parProjet: pour.parProjet, taches, participants, moiId: u.id, aujourdhui: aujourdhui() };
+  const jour = aujourdhui();
+  const [projets, pour, taches, participants, reunions] = await Promise.all([projetsPourSaisie(u), assignables(a), tachesPourBarre(a), participantsPourBarre(a), reunionsDe(u.id, jour, jour)]);
+  // Suggestions de la barre vide : les réunions du jour (pour les compléter).
+  const reunionsDuJour = reunions.map((r) => ({ id: r.id, titre: r.titre, heure: r.heure, semaine: lundiDe(r.jour), mienne: r.noteeParId === u.id }));
+  return { projets, personnes: pour.personnes, base: pour.base, parProjet: pour.parProjet, taches, participants, reunionsDuJour, moiId: u.id, aujourdhui: jour };
 }

@@ -100,6 +100,7 @@ export default async function PageRapport({ searchParams }: { searchParams: Prom
     suggestions,
     ia: iaDisponible(),
     projetsVisibles: visibles,
+    codesProjets: new Map(projets.map((p) => [p.code, { id: p.id, titre: p.titre }])),
     reunions: brouillon && f.some((c) => c.type === "reunions") ? await reunionsDeLaSemaine(u.id, rapport.semaine) : null,
     semaine: rapport.semaine,
   };

@@ -24,3 +24,23 @@ export function LienProjet({ id, visible = true, children, className }: { id: st
     </a>
   );
 }
+
+/**
+ * Le code d'un projet en pastille (« UR »), qui mène à sa fiche quand on la voit. Le titre complet s'affiche
+ * au survol et se lit au lecteur d'écran. « mono » : le carré plein des listes de tâches ; sinon l'étiquette fine.
+ */
+export function CodeProjet({ id, code, titre, visible = true, mono = false, className }: { id: string | null | undefined; code: string; titre?: string | null; visible?: boolean; mono?: boolean; className?: string }) {
+  const classe = `${mono ? "mono" : "etiquette-projet"} ${className ?? ""}`;
+  // Un projet qu'on ne peut pas ouvrir garde son code, sans titre au survol.
+  if (!id || !visible)
+    return (
+      <span className={classe} title={!id ? (titre ?? undefined) : undefined}>
+        {code}
+      </span>
+    );
+  return (
+    <a href={`/projets/${id}`} className={`${classe} lien-projet`} title={titre ? `${titre} : ouvrir le projet` : "Ouvrir le projet"} aria-label={titre ? `Projet ${titre}` : `Projet ${code}`}>
+      {code}
+    </a>
+  );
+}

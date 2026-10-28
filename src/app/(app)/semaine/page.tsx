@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { exigerUtilisateur } from "@/lib/auth/session";
+import { acces, idsProjetsVisibles } from "@/lib/acces";
+import { CodeProjet } from "@/components/Liens";
 import { redigeUnRapport } from "@/lib/regles";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -11,8 +13,6 @@ import { Jauge } from "@/components/Charge";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { ONGLETS_SEMAINE, SousOnglets } from "@/components/SousOnglets";
-import { BarreCommande } from "@/components/BarreCommande";
-import { donneesBarre } from "@/lib/donnees/saisie";
 import { reunionsDe } from "@/lib/donnees/reunions";
 import { dureeTexte } from "@/lib/projets";
 
@@ -52,6 +52,8 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
   ]);
   const minutesReunion = reunions.reduce((t, r) => t + r.dureeMinutes, 0);
   const reunionsDuJour = reunions.filter((r) => r.jour === jourVu);
+  const visibles = await idsProjetsVisibles(await acces(u));
+  const voit = (id: string | null) => !!id && (visibles === "tous" || visibles.has(id));
   const charge = maCharge.lignes[0]?.charge;
   const c = compter(taches, jour);
   const envoye = rapport.rapport?.statut === "envoye";
@@ -79,7 +81,6 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
       </Bandeau>
       <div className="page">
         <SousOnglets onglets={ONGLETS_SEMAINE} courant="/semaine" label="Ma semaine" />
-        <BarreCommande mode="tache" retour="/semaine" {...await donneesBarre(u)} />
         <nav className="frise-semaine" aria-label="Semaines">
           <a href={`/semaine?jour=${ajouterJours(semaineVue, -7)}`} className="bouton-icone" aria-label="Semaine précédente" title="Semaine précédente">
             <Icone nom="chevron-gauche" taille={20} />
@@ -146,17 +147,17 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
               <ul className="liste">
                 {journee.faits.map((f) => (
                   <li key={f.id}>
-                    <a href={`/taches/${f.tacheId}`} className="rangee" style={{ minHeight: 52 }}>
+                    <div className="rangee rangee--etiree" style={{ minHeight: 52 }}>
                       <span className="rangee__meta" style={{ flex: "0 0 64px", fontVariantNumeric: "tabular-nums" }}>
                         {heure(f.heure)}
                       </span>
-                      {f.projetCode ? <span className="etiquette-projet">{f.projetCode}</span> : null}
+                      {f.projetCode ? <CodeProjet id={f.projetId} code={f.projetCode} titre={f.projetTitre} visible={voit(f.projetId)} /> : null}
                       <span className="rangee__texte">
-                        <span className="rangee__titre" style={{ whiteSpace: "normal" }}>
+                        <a href={`/taches/${f.tacheId}`} className="rangee__titre rangee__lien" style={{ whiteSpace: "normal" }}>
                           {f.texte}
-                        </span>
+                        </a>
                       </span>
-                    </a>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -167,16 +168,18 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
                 <ul className="liste">
                   {reunionsDuJour.map((r) => (
                     <li key={r.id}>
-                      <a href={`/reunions?semaine=${semaineVue}`} className="rangee" style={{ minHeight: 48 }}>
+                      <div className="rangee rangee--etiree" style={{ minHeight: 48 }}>
                         <span className="rangee__meta" style={{ flex: "0 0 64px", fontVariantNumeric: "tabular-nums" }}>
                           {r.heure ? r.heure.replace(":", " h ") : "—"}
                         </span>
-                        {r.projetCode ? <span className="etiquette-projet">{r.projetCode}</span> : null}
+                        {r.projetCode ? <CodeProjet id={r.projetId} code={r.projetCode} titre={r.projetTitre} visible={voit(r.projetId)} /> : null}
                         <span className="rangee__texte">
-                          <span className="rangee__titre">{r.titre}</span>
+                          <a href={`/reunions?semaine=${semaineVue}`} className="rangee__titre rangee__lien">
+                            {r.titre}
+                          </a>
                         </span>
                         <span className="rangee__meta">{dureeTexte(r.dureeMinutes)}</span>
-                      </a>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -188,13 +191,15 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
                 <ul className="liste">
                   {journee.echeances.map((t) => (
                     <li key={t.id}>
-                      <a href={`/taches/${t.id}`} className="rangee" style={{ minHeight: 48 }}>
-                        {t.projetCode ? <span className="etiquette-projet">{t.projetCode}</span> : null}
+                      <div className="rangee rangee--etiree" style={{ minHeight: 48 }}>
+                        {t.projetCode ? <CodeProjet id={t.projetId} code={t.projetCode} titre={t.projetTitre} visible={voit(t.projetId)} /> : null}
                         <span className="rangee__texte">
-                          <span className="rangee__titre">{t.titre}</span>
+                          <a href={`/taches/${t.id}`} className="rangee__titre rangee__lien">
+                            {t.titre}
+                          </a>
                         </span>
                         <span className={`rangee__meta ${t.statut === "faite" ? "ton-ok" : t.statut === "bloquee" ? "ton-veille" : jourVu < jour ? "ton-retard" : ""}`}>{t.libelle}</span>
-                      </a>
+                      </div>
                     </li>
                   ))}
                 </ul>

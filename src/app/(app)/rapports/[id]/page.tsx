@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { tousLesProjetsActifs } from "@/lib/donnees/projets";
 import { notFound, redirect } from "next/navigation";
 import { acces, idsProjetsVisibles, suitPersonne } from "@/lib/acces";
 import { exigerInterne } from "@/lib/auth/session";
@@ -45,6 +46,10 @@ export default async function PageRapportRecu({ params }: { params: Promise<{ id
     equipe: null,
     niveauTitre: formulaire.some((c) => c.type === "intertitre") ? 3 : 2,
     projetsVisibles: await idsProjetsVisibles(a),
+    codesProjets: await (async () => {
+      const visibles = await idsProjetsVisibles(a);
+      return new Map((await tousLesProjetsActifs()).filter((p) => visibles === "tous" || visibles.has(p.id)).map((p) => [p.code, { id: p.id, titre: p.titre }]));
+    })(),
     // Pièces des seuls champs que ce lecteur voit (un chef de projet n'en voit aucune).
     pieces: lu.complet ? (await piecesDuRapport(rapport.id)).filter((x) => formulaire.some((c) => c.id === x.champId && c.type === "piece_jointe")) : [],
   };

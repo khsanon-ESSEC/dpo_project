@@ -4055,3 +4055,372 @@ a.puce:hover {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
+/* Créneau déjà pris (réunions) : un avertissement, pas une erreur. */
+.avertissement-creneau {
+  padding: 10px 14px;
+  border-left: 3px solid var(--veille-point);
+  background: var(--relief);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--encre);
+}
+
+/* Barre : « Annuler » (un bouton qui ressemble à un lien) et les titres dans la liste (réponse, suggestions). */
+.lien-bouton {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--encre);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  min-height: 32px;
+}
+.commande__titre {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px 6px;
+  color: var(--discret);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+.commande__titre .commande__libelle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--encre-2);
+  white-space: normal;
+}
+.commande__titre .commande__sous {
+  white-space: normal;
+}
+
+/* Projet : pourquoi il est à surveiller ou en retard ; date prévue d'un jalon. */
+.note-sante {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--veille-point);
+  background: var(--relief);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--encre);
+}
+.note-sante--retard {
+  border-left-color: var(--retard-point);
+}
+.indicateur__date {
+  font-size: 13px;
+  color: var(--discret);
+}
+
+/* ---------- Ligne de formulaire écrite comme dans la barre (rapport, actions de réunion, fiches) ---------- */
+.ligne-saisie {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+/* À côté d'un bouton (rapport, fiches) : la ligne prend la place qui reste. */
+.ajout-ligne .ligne-saisie,
+.ligne-maj__rangee .ligne-saisie {
+  flex: 1 1 260px;
+}
+.ligne-saisie .commande {
+  z-index: 25;
+}
+.ligne-saisie input:not([type="hidden"]) {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--controle);
+  border-radius: 0;
+  background: var(--champ);
+  color: var(--encre);
+  font-size: 15px;
+}
+.champ .ligne-saisie input:not([type="hidden"]) {
+  min-height: 48px;
+  padding: 0 14px;
+  font-size: 16px;
+}
+.ligne-saisie__puces {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 22px;
+}
+.ligne-saisie__puces:empty {
+  display: none;
+}
+.ajout-ligne {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ajout-ligne .bouton-contour {
+  min-height: 44px;
+}
+.ligne-maj {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ligne-maj__rangee {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ligne-maj__rangee .bouton-ambre {
+  min-height: 44px;
+  flex: none;
+}
+.ligne-maj__message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+}
+/* Une étiquette longue (jalon, blocage) passe à la ligne plutôt que de sortir de la carte. */
+.ligne-saisie__puces .saisie-rapide__morceau {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Projets cliquables partout ---------- */
+a.lien-projet {
+  text-decoration: none;
+}
+a.etiquette-projet.lien-projet:hover,
+a.etiquette-projet.lien-projet:focus-visible {
+  border-color: var(--arc);
+  color: var(--arc);
+}
+a.mono.lien-projet:hover,
+a.mono.lien-projet:focus-visible {
+  background: var(--arc);
+  color: #ffffff;
+}
+a.lien-projet:focus-visible {
+  outline: 2px solid var(--arc);
+  outline-offset: 2px;
+}
+/* Une rangée cliquable (vers une tâche) qui contient d'autres liens (le projet, la personne) : le lien
+   principal couvre toute la rangée, les autres liens passent au-dessus. Un lien n'en contient jamais un autre. */
+.rangee--etiree {
+  position: relative;
+}
+.rangee__lien {
+  color: inherit;
+  text-decoration: none;
+}
+.rangee__lien::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+.rangee__lien:focus-visible {
+  outline: none;
+}
+.rangee__lien:focus-visible::after {
+  outline: 2px solid var(--arc);
+  outline-offset: -2px;
+}
+.rangee--etiree a:not(.rangee__lien),
+.rangee--etiree button,
+.rangee--etiree input,
+.rangee--etiree label {
+  position: relative;
+  z-index: 1;
+}
+.rangee--etiree:hover .rangee__lien {
+  text-decoration: underline;
+  text-decoration-color: var(--filet-fort);
+  text-underline-offset: 3px;
+}
+
+/* ---------- Équipe : une ligne par personne, colonnes alignées d'une personne à l'autre ---------- */
+.carte--equipe {
+  container: equipe / inline-size;
+}
+.ligne-equipe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  min-height: 64px;
+  padding: 10px 0;
+}
+.ligne-equipe__nom {
+  flex: 1 1 170px;
+  min-width: 0;
+}
+.ligne-equipe__rapport {
+  flex: 0 0 128px;
+}
+.ligne-equipe__taches {
+  flex: 0 0 112px;
+}
+.ligne-equipe__reunions {
+  flex: 0 0 84px;
+}
+.ligne-equipe__alertes {
+  flex: 0 0 150px;
+}
+.ligne-equipe__charge {
+  flex: 0 0 170px;
+}
+.ligne-equipe__projets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+@container equipe (min-width: 860px) {
+  .ligne-equipe {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) 128px 112px 84px 150px 170px;
+  }
+}
+
+/* ---------- La barre unique, en haut de toutes les pages ---------- */
+.barre-globale {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--bande);
+}
+.barre-globale__corps {
+  max-width: 1180px;
+  padding: 14px 48px 10px;
+}
+.barre-globale .saisie-rapide {
+  max-width: 860px;
+}
+.barre-globale .saisie-rapide__ligne {
+  border-color: transparent;
+  background: var(--surface);
+}
+/* Sur le fond marine : les lignes sous la barre (aperçu, message, erreur) prennent les couleurs claires. */
+.barre-globale .saisie-rapide__apercu,
+.barre-globale .saisie-rapide__erreur {
+  --encre: #ffffff;
+  --encre-2: #d9e0f0;
+  --discret: #a9b6d6;
+  --filet-fort: rgba(255, 255, 255, 0.22);
+  --arc: #e4edf3;
+  --arc-2: #7f93c4;
+  --retard: #ff9d8c;
+  --veille-point: #f3c77a;
+  --ok: #8fd4b0;
+  --ok-point: #8fd4b0;
+  color: var(--encre-2);
+}
+.barre-globale .saisie-rapide__apercu:empty {
+  display: none;
+}
+/* Le bandeau de la page continue la barre : moins d'air au-dessus du titre. */
+.barre-globale + .bandeau .bandeau__corps {
+  padding-top: 18px;
+}
+@media (max-width: 899px) {
+  .barre-globale__corps {
+    padding: 10px 16px 6px;
+  }
+  .barre-globale + .bandeau .bandeau__corps {
+    padding-top: 8px;
+  }
+}
+
+/* ---------- Documents du projet ---------- */
+.documents__groupe + .documents__groupe {
+  margin-top: 12px;
+}
+.documents__titre {
+  margin: 12px 0 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--discret);
+}
+.document {
+  gap: 12px;
+}
+.document__type {
+  font-size: 9px;
+}
+.document__retirer {
+  position: relative;
+  flex: none;
+}
+.document__retirer summary {
+  list-style: none;
+}
+.document__retirer summary::-webkit-details-marker {
+  display: none;
+}
+.document__retirer[open] summary {
+  border-color: var(--retard-point);
+}
+.document__retirer form {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 5;
+}
+.bouton-mini--danger {
+  border-color: var(--retard-point);
+  color: var(--retard);
+  background: var(--surface);
+}
+.depot-documents {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--filet);
+}
+.choix-categorie {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.puce-choix {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--filet-fort);
+  border-radius: 9999px;
+  font-size: 13px;
+  color: var(--encre-2);
+  cursor: pointer;
+}
+.puce-choix input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.puce-choix--active {
+  border-color: var(--arc);
+  background: var(--choisi);
+  color: var(--encre);
+  font-weight: 500;
+}
+.puce-choix:focus-within {
+  outline: 2px solid var(--arc);
+  outline-offset: 2px;
+}
+/* Les ancres (#documents, #noter…) ne passent pas sous la barre collante du haut. */
+.contenu [id] {
+  scroll-margin-top: 96px;
+}

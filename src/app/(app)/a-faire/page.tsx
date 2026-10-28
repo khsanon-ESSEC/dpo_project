@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
 import { exigerUtilisateur } from "@/lib/auth/session";
+import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { aujourdhui, echeanceRelative, jourComplet } from "@/lib/dates";
 import { compter, confieesHorsDivision, tachesDe, trier } from "@/lib/donnees/semaine";
 import { nomComplet } from "@/lib/regles";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { CaseTache } from "@/components/CaseTache";
 import { Icone } from "@/components/Icone";
-import { LienPersonne } from "@/components/Liens";
+import { CodeProjet, LienPersonne, LienProjet } from "@/components/Liens";
 import { ONGLETS_SEMAINE, SousOnglets } from "@/components/SousOnglets";
-import { BarreCommande } from "@/components/BarreCommande";
-import { donneesBarre } from "@/lib/donnees/saisie";
 
 export const metadata: Metadata = { title: "À faire" };
 
@@ -17,8 +16,10 @@ export const metadata: Metadata = { title: "À faire" };
 export default async function PageAFaire() {
   const u = await exigerUtilisateur();
   const jour = aujourdhui();
-  const [taches, confiees, barre] = await Promise.all([tachesDe([u.id]), confieesHorsDivision(u.id), donneesBarre(u)]);
+  const [taches, confiees] = await Promise.all([tachesDe([u.id]), confieesHorsDivision(u.id)]);
   const c = compter(taches, jour);
+  const visibles = await idsProjetsVisibles(await acces(u));
+  const voit = (id: string | null) => !!id && (visibles === "tous" || visibles.has(id));
   const liste = trier(taches, jour);
 
   return (
@@ -44,7 +45,6 @@ export default async function PageAFaire() {
       </Bandeau>
       <div className="page">
         <SousOnglets onglets={ONGLETS_SEMAINE} courant="/a-faire" label="Ma semaine" />
-        <BarreCommande mode="tache" retour="/a-faire" {...barre} />
         <div className="colonnes">
           <section className="carte carte--liste colonne-large" aria-labelledby="t-afaire" style={{ gap: 0 }}>
             <div className="carte__entete">
@@ -65,19 +65,24 @@ export default async function PageAFaire() {
                     t.statut === "faite" ? { texte: "Faite", classe: "ton-discret" } : t.statut === "bloquee" ? { texte: "Bloquée", classe: "ton-veille" } : { texte: e.texte, classe: e.retard ? "ton-retard" : "ton-discret" };
                   return (
                     <CaseTache key={t.id} id={t.id} titre={t.titre} faite={t.statut === "faite"}>
-                      <a href={`/taches/${t.id}?retour=%2Fa-faire`} className="rangee" style={{ flex: 1, minWidth: 0 }}>
-                        {t.projetCode ? (
-                          <span className="mono" aria-hidden="true">
-                            {t.projetCode}
-                          </span>
-                        ) : null}
+                      <div className="rangee rangee--etiree" style={{ flex: 1, minWidth: 0 }}>
+                        {t.projetCode ? <CodeProjet id={t.projetId} code={t.projetCode} titre={t.projetTitre} visible={voit(t.projetId)} mono /> : null}
                         <span className="rangee__texte">
-                          <span className="rangee__titre">{t.titre}</span>
+                          <a href={`/taches/${t.id}?retour=%2Fa-faire`} className="rangee__titre rangee__lien">
+                            {t.titre}
+                          </a>
                           <span className="rangee__sous">
-                            {t.projetTitre ?? "Hors projet"} · <span className={meta.classe}>{meta.texte}</span>
+                            {t.projetId ? (
+                              <LienProjet id={t.projetId} visible={voit(t.projetId)}>
+                                {t.projetTitre}
+                              </LienProjet>
+                            ) : (
+                              "Hors projet"
+                            )}{" "}
+                            · <span className={meta.classe}>{meta.texte}</span>
                           </span>
                         </span>
-                      </a>
+                      </div>
                     </CaseTache>
                   );
                 })}
@@ -101,7 +106,7 @@ export default async function PageAFaire() {
                   const e = echeanceRelative(t.echeance, jour);
                   return (
                     <li key={t.id} className="rangee" style={{ minHeight: 56, alignItems: "flex-start", paddingTop: 10, paddingBottom: 10 }}>
-                      {t.projetCode ? <span className="etiquette-projet">{t.projetCode}</span> : null}
+                      {t.projetCode ? <CodeProjet id={t.projetId} code={t.projetCode} titre={t.projetTitre} visible={voit(t.projetId)} /> : null}
                       <span className="rangee__texte">
                         <a href={`/taches/${t.id}?retour=%2Fa-faire`} className="rangee__titre lien-nom">
                           {t.titre}

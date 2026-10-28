@@ -133,6 +133,37 @@ Une seconde relecture du code, faite sans voir ce travail, n'a trouvé aucun poi
 - **Barre** : une tâche changée de projet et bloquée dans la même saisie prévient le chef du nouveau projet.
 - **[déduction] Reste** : la recherche relit les tâches à chaque frappe (avec un délai de 200 ms) ; acceptable à l'échelle de la division, à surveiller si l'application s'étend.
 
+## Barre étendue, barre unique, formulaires en une ligne, documents de projet (ajoutés le 28 octobre 2026)
+
+Ce qui a été ajouté : la barre en haut de toutes les pages (notes pour le rapport, mise à jour d'un projet, questions, écrans, relance, « Annuler »), la vérification des créneaux de réunion, les formulaires écrits comme la barre (ligne du rapport, actions de réunion, fiche d'une tâche, fiche d'un projet, nouvelle tâche), les liens vers les projets partout, les heures de réunion sur la fiche d'un employé, et les **documents d'un projet**.
+
+**[vérifié]** par lecture du code et par les tests (`tests/barre-base.test.ts`, `tests/documents-base.test.ts`) :
+
+- Chaque action de la barre relit la phrase au serveur et vérifie ses droits (projet visible, chef de projet ou sa direction pour un projet, règles d'assignation pour confier, rapport à soi et en brouillon pour une note) ; l'aperçu de la page n'est jamais pris pour acquis.
+- Les champs cachés des formulaires en une ligne (projet d'une ligne de rapport, personne d'une action de réunion) sont vérifiés comme l'étaient les listes déroulantes : projet visible, personne à qui l'on peut confier une tâche.
+- « Annuler » : jeton gardé au serveur, réservé à son auteur, utilisable une seule fois (mise à jour atomique), trois minutes au plus (horloge de la base) ; les droits sont revérifiés au moment d'annuler.
+- Documents : téléchargement seulement pour qui voit le projet du document (pas d'accès d'un projet à l'autre), toujours en pièce à enregistrer (`attachment`, `nosniff`, CSP `sandbox`, `no-store`) ; formats reconnus au contenu ; dépôt réservé à l'équipe du projet, à la personne qui l'a demandé et à ceux qui le gèrent ; journal du dépôt, du téléchargement et du retrait.
+- Vérification des créneaux : l'intitulé d'une réunion n'apparaît qu'à qui y participe aussi ; les personnes interrogées sont filtrées au serveur.
+- La barre, chargée sur chaque page, ne reçoit que ce que la personne voyait déjà sur ses pages Semaine et Rechercher (pour une personne hors division : ses tâches, ses contacts, ses projets).
+
+### Relecture indépendante (28 octobre 2026, seconde) et corrections
+
+Une relecture du code faite sans voir ce travail n'a trouvé **aucun point grave** (pas d'accès d'un projet à l'autre, pas d'action sans contrôle de droits). Corrigé **[vérifié par tests]** :
+
+- **[Moyen] « Annuler » laissait la personne dans l'équipe du projet** : confier une tâche y fait entrer la personne ; annuler la tâche l'en fait maintenant ressortir, si c'est bien cette action qui l'y avait fait entrer et si rien d'autre ne l'y retient (autre tâche, chef, référent).
+- **[Faible] Supprimer un projet effaçait ses documents** : un projet qui a des documents s'archive désormais au lieu de se supprimer.
+- **[Faible] « Annuler » ne vérifiait pas tout** : il refuse désormais une note du rapport retouchée depuis, un jalon déjà avancé, une réunion modifiée ou qui a reçu des actions ; il ne retire plus que les alertes créées par l'action elle-même ; une relance annulée garde sa trace (« relance annulée ») et compte toujours dans la limite d'une relance par heure.
+- **[Faible] Documents** : on ne retire plus un document d'un projet archivé ou refusé ; le journal garde de quoi reconnaître un document retiré (nom, taille, empreinte, déposant) ; le fichier n'est chargé qu'après la vérification des droits.
+- **[Faible] Titre d'un projet qu'on ne voit pas** : la recherche ne le renvoie plus, et le code d'un tel projet ne le montre plus au survol. **[déduction]** Ailleurs, le nom d'un projet qu'on ne peut pas ouvrir reste affiché en texte quand on voit une de ses tâches (règle d'origine de l'application) ; à confirmer si la banque veut le masquer aussi.
+
+Restent à décider **[à confirmer]** (points de règle, pas des failles) :
+
+- Messages passés dans l'adresse (`?erreur=…`, `?doc=…`) : le texte est échappé (pas d'injection), mais un lien fabriqué peut afficher un message trompeur dans l'application. Remplacer par des codes de message si la revue externe le demande.
+- Une personne hors division membre d'un projet lit ses documents, et en dépose si elle est membre de l'équipe.
+- Les formats .doc, .xls, .ppt (anciens formats Office) peuvent contenir des macros, et aucun antivirus ne passe sur les fichiers : à brancher sur l'antivirus de la banque, ou à retirer de la liste.
+- La page d'un employé et la question « réunions de … » montrent l'intitulé des réunions des personnes suivies (supérieur, direction, exécutifs).
+- Les plages occupées (sans intitulé) de toute personne active peuvent être consultées par une personne interne au moment de noter une réunion.
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.

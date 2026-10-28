@@ -8,8 +8,6 @@ import { seDeconnecter } from "@/app/actions-communes";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { ChoixTheme } from "../profil/ChoixTheme";
-import { BarreCommande } from "@/components/BarreCommande";
-import { donneesBarre } from "@/lib/donnees/saisie";
 
 export const metadata: Metadata = { title: "Plus" };
 
@@ -66,7 +64,6 @@ export default async function PagePlus() {
     <>
       <Bandeau surtitre={`${u.prenom} ${u.nom}`} titre="Plus" />
       <div className="page" style={{ maxWidth: 640 }}>
-        <BarreCommande mode="recherche" retour="/a-faire" focus={false} {...await donneesBarre(u)} />
         {groupes.map((g) => (
           <section key={g.titre} className="carte carte--liste" aria-labelledby={`plus-${g.titre}`}>
             <h2 id={`plus-${g.titre}`} className="carte__titre">

@@ -98,6 +98,9 @@ export const projets = pgTable("projets", {
   strategique: boolean().notNull().default(false),
   statut: statutProjet().notNull().default("en_cours"),
   sante: santeProjet().notNull().default("dans_les_temps"),
+  /** Pourquoi le projet est « à surveiller » ou « en retard » (dit par le chef de projet), et depuis quand. */
+  santeMotif: text("sante_motif").notNull().default(""),
+  santeLe: timestamp("sante_le", { withTimezone: true }),
   chefProjetId: uuid("chef_projet_id").references(() => personnes.id, { onDelete: "set null" }),
   /** Projet d'une autre division : son nom (vide = la DPO). */
   division: text().notNull().default(""),
@@ -150,6 +153,8 @@ export const indicateurs = pgTable(
     libelle: text().notNull(),
     etat: etatIndicateur().notNull().default("a_venir"),
     atteintLe: date("atteint_le"),
+    /** Jalon : date prévue (facultative). */
+    prevuLe: date("prevu_le"),
   },
   (t) => [index("indicateurs_projet_idx").on(t.projetId)],
 );
@@ -460,6 +465,31 @@ export const piecesJointes = pgTable(
   (t) => [index("pieces_jointes_rapport_idx").on(t.rapportId)],
 );
 
+/**
+ * Documents d'un projet (cahier des charges, spécification, compte rendu…). Lus par qui voit le projet ;
+ * déposés par l'équipe du projet et ceux qui le gèrent ; retirés par qui les a déposés ou gère le projet.
+ */
+export const documentsProjet = pgTable(
+  "documents_projet",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    projetId: uuid("projet_id")
+      .notNull()
+      .references(() => projets.id, { onDelete: "cascade" }),
+    /** « cahier_des_charges », « specification », « compte_rendu » ou « autre ». */
+    categorie: text().notNull().default("autre"),
+    nom: text().notNull(),
+    type: text().notNull(),
+    taille: integer().notNull(),
+    /** SHA-256 du contenu, en hexadécimal. */
+    empreinte: text().notNull(),
+    contenu: octets().notNull(),
+    deposeParId: uuid("depose_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("documents_projet_projet_idx").on(t.projetId, t.creeLe)],
+);
+
 export const sessions = pgTable(
   "sessions",
   {
@@ -534,3 +564,20 @@ export type VersionModele = typeof versionsModele.$inferSelect;
 export type PieceJointe = typeof piecesJointes.$inferSelect;
 export type RapportConseil = typeof rapportsConseil.$inferSelect;
 export type Reunion = typeof reunions.$inferSelect;
+
+/**
+ * « Annuler » juste après une action faite depuis la barre : ce qu'il faut pour la défaire, gardé côté
+ * serveur quelques minutes (la page n'a qu'un identifiant, elle ne peut pas décrire elle-même quoi défaire).
+ */
+export const annulations = pgTable(
+  "annulations",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    personneId: uuid("personne_id").notNull().references(() => personnes.id, { onDelete: "cascade" }),
+    genre: text().notNull(),
+    donnees: jsonb().$type<Record<string, unknown>>().notNull(),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+    utiliseeLe: timestamp("utilisee_le", { withTimezone: true }),
+  },
+  (t) => [index("annulations_personne_idx").on(t.personneId, t.creeLe)],
+);

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { and, count, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
@@ -9,6 +10,8 @@ import { Assistant } from "@/components/Assistant";
 import { Onglets, Rail, type ElementNav } from "@/components/Navigation";
 import { RaccourciRecherche } from "@/components/RaccourciRecherche";
 import { Consultation } from "@/components/Consultation";
+import { BarreGlobale } from "@/components/BarreGlobale";
+import { donneesBarre } from "@/lib/donnees/saisie";
 
 export default async function LayoutApplication({ children }: { children: React.ReactNode }) {
   const u = await exigerUtilisateur();
@@ -27,6 +30,8 @@ export default async function LayoutApplication({ children }: { children: React.
   const conseil = a.toutVoir || a.directeur;
   const organisation = a.toutVoir || u.administrateur;
   const alertes = Number(nonLues);
+  // La barre unique, en haut de chaque page : ce qu'il lui faut (projets, personnes, tâches à mettre à jour…).
+  const barre = await donneesBarre(u);
 
   const RAPPORT: ElementNav = { href: "/rapport", libelle: "Rapport", icone: "document", actifs: ["/rapports"] };
   const EQUIPE: ElementNav = { href: "/equipe", libelle: "Équipe", icone: "clients", actifs: ["/charge"] };
@@ -62,7 +67,12 @@ export default async function LayoutApplication({ children }: { children: React.
   return (
     <div className="coquille">
       <Rail elements={elements} initiales={initiales(u)} nom={`${u.prenom} ${u.nom}`} />
-      <div className="contenu">{children}</div>
+      <div className="contenu">
+        <Suspense fallback={null}>
+          <BarreGlobale {...barre} />
+        </Suspense>
+        {children}
+      </div>
       <Onglets elements={telephone} />
       <Assistant />
       <RaccourciRecherche />

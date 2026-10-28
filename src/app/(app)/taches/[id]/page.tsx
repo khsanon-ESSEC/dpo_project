@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { acces, exigerTacheVisible, idsProjetsVisibles } from "@/lib/acces";
+import { acces, exigerTacheVisible, idsProjetsVisibles, peutModifierTache } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { aujourdhui, dateCourte, echeanceRelative, jourAbrege, lundiDe } from "@/lib/dates";
 import { dateLocale } from "@/lib/dates";
@@ -14,6 +14,7 @@ import { Icone } from "@/components/Icone";
 import { LienPersonne, LienProjet } from "@/components/Liens";
 import { FormulaireTache } from "./FormulaireTache";
 import { DefinitionTache } from "./DefinitionTache";
+import { LigneMiseAJour } from "@/components/LigneMiseAJour";
 import { assignables, histoireDeTache } from "@/lib/donnees/gestion";
 import { tousLesProjetsActifs } from "@/lib/donnees/projets";
 import { tacheSupprimable } from "@/lib/projets";
@@ -40,6 +41,12 @@ export default async function PageTache({ params, searchParams }: { params: Prom
   const { personnes, base, parProjet, externesPartout, horsProjet } = await assignables(a);
   const actuel = org.personnes.get(t.assigneId)!;
   if (!personnes.some((x) => x.id === t.assigneId)) personnes.push({ id: t.assigneId, nom: nomComplet(actuel), externe: actuel.externe, organisation: actuel.organisation });
+  // « @ » ou « pour … » dans la ligne de mise à jour : les personnes à qui l'on peut confier cette tâche
+  // (mêmes règles que « Confiée à » plus bas ; le serveur les vérifie de nouveau).
+  const modifiable = peutModifierTache(a, t);
+  const permisLigne = new Set([...base, ...(parProjet[t.projetId ?? ""] ?? [])]);
+  const externesLigne = externesPartout || (!t.projetId && horsProjet) || (!!t.projetId && t.projetId in parProjet);
+  const personnesLigne = personnes.filter((x) => permisLigne.has(x.id) || (x.externe && externesLigne));
   const supprimable = tacheSupprimable({ statut: t.statut, ...(await histoireDeTache(t.id)) });
   const chef = projet?.chefProjetId ? org.personnes.get(projet.chefProjetId) : null;
   const assigne = org.personnes.get(t.assigneId)!;
@@ -59,6 +66,8 @@ export default async function PageTache({ params, searchParams }: { params: Prom
     if (ev.type === "assignation") return `Confiée à ${ev.note ?? "une autre personne"}`;
     if (ev.type === "annulation") return `Annulée : ${ev.note ?? ""}`;
     if (ev.type === "retablie") return "Rétablie";
+    if (ev.type === "relance") return `Relance${ev.note ? ` : « ${ev.note} »` : ""}`;
+    if (ev.type === "relance_annulee") return "Relance annulée";
     return ev.note ?? "";
   };
 
@@ -146,8 +155,22 @@ export default async function PageTache({ params, searchParams }: { params: Prom
           </div>
         ) : null}
         {t.description && t.annuleeLe ? <p style={{ whiteSpace: "pre-line" }}>{t.description}</p> : null}
+        {t.annuleeLe || !modifiable ? null : (
+          <section aria-labelledby="t-ligne" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <h2 id="t-ligne" className="carte__titre" style={{ margin: 0 }}>
+              En une ligne
+            </h2>
+            <LigneMiseAJour
+              cible={{ genre: "maj", tacheId: t.id, personnes: personnesLigne, moiId: u.id }}
+              aujourdhui={aujourdhui()}
+              libelle="Mettre à jour la tâche en une ligne"
+              placeholder="« faite », « bloquée attente DTI », « vendredi 3h », « @ » pour la confier"
+            />
+          </section>
+        )}
         {t.annuleeLe ? null : (
         <FormulaireTache
+          key={`etat-${t.majLe.toISOString()}`}
           tacheId={t.id}
           statut={statutDemande === "bloquee" ? "bloquee" : t.statut}
           blocage={t.blocage ?? ""}
@@ -160,6 +183,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
         )}
         {t.annuleeLe ? null : (
           <DefinitionTache
+            key={`def-${t.majLe.toISOString()}`}
             tacheId={t.id}
             titre={t.titre}
             description={t.description}

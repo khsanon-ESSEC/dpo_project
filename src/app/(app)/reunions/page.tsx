@@ -10,10 +10,11 @@ import { DUREES_REUNION, dureeTexte } from "@/lib/projets";
 import { nomComplet } from "@/lib/regles";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
-import { LienPersonne, LienProjet } from "@/components/Liens";
+import { CodeProjet, LienPersonne, LienProjet } from "@/components/Liens";
 import { ONGLETS_SEMAINE, SousOnglets } from "@/components/SousOnglets";
 import { modifier, noter, quitter, supprimer } from "./actions";
 import { ChoixParticipants } from "./ChoixParticipants";
+import { VerifierCreneau } from "./VerifierCreneau";
 import { ActionsReunion } from "./ActionsReunion";
 import { assignables } from "@/lib/donnees/gestion";
 
@@ -130,7 +131,7 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
                         <span className="reunion__heure">{r.heure ? r.heure.replace(":", " h ") : "—"}</span>
                         <div className="reunion__corps">
                           <span className="reunion__titre">
-                            {r.projetCode ? <span className="etiquette-projet">{r.projetCode}</span> : null}
+                            {r.projetCode ? <CodeProjet id={r.projetId} code={r.projetCode} titre={r.projetTitre} visible={visible(r.projetId)} /> : null}
                             {r.titre}
                           </span>
                           <span className="rangee__sous">
@@ -263,7 +264,8 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
                 <label htmlFor="r-notes">Notes (facultatif)</label>
                 <textarea id="r-notes" name="notes" rows={3} maxLength={2000} defaultValue={enModif?.notes ?? ""} placeholder="Ce qui a été dit ou décidé" />
               </div>
-              {!u.externe ? <ActionsReunion moiId={u.id} personnes={pourActions.personnes} base={pourActions.base} parProjet={pourActions.parProjet} projetInitial={enModif?.projetId ?? ""} /> : null}
+              {!u.externe ? <ActionsReunion moiId={u.id} personnes={pourActions.personnes} base={pourActions.base} parProjet={pourActions.parProjet} projetInitial={enModif?.projetId ?? ""} aujourdhui={aujourdhui()} /> : null}
+              <VerifierCreneau sauf={enModif?.id} />
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
                 <button type="submit" className="bouton-ambre">
                   {enModif ? "Enregistrer" : "Noter la réunion"}

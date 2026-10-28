@@ -13,6 +13,7 @@ export type TacheListe = {
   titre: string;
   statut: "a_faire" | "en_cours" | "bloquee" | "faite";
   echeance: string | null;
+  projetId: string | null;
   projetCode: string | null;
   projetTitre: string | null;
   assigneId: string;
@@ -29,6 +30,7 @@ export async function tachesDe(personneIds: string[], options: { semaine?: strin
       echeance: schema.taches.echeance,
       termineeLe: schema.taches.termineeLe,
       assigneId: schema.taches.assigneId,
+      projetId: schema.taches.projetId,
       projetCode: schema.projets.code,
       projetTitre: schema.projets.titre,
     })
@@ -66,7 +68,7 @@ export async function activiteDeLaSemaine(personneId: string, semaine = semaineC
   const lignes = await db
     .select({ jour: sql<string>`to_char(${schema.evenementsTache.creeLe} at time zone ${TZ}, 'YYYY-MM-DD')`, n: sql<number>`count(*)::int` })
     .from(schema.evenementsTache)
-    .where(and(eq(schema.evenementsTache.auteurId, personneId), sql`${schema.evenementsTache.creeLe} >= ${debut}`, sql`${schema.evenementsTache.creeLe} < ${fin}`))
+    .where(and(eq(schema.evenementsTache.auteurId, personneId), ne(schema.evenementsTache.type, "relance_annulee"), sql`${schema.evenementsTache.creeLe} >= ${debut}`, sql`${schema.evenementsTache.creeLe} < ${fin}`))
     .groupBy(sql`1`);
   const parJour = new Map(lignes.map((l) => [l.jour, l.n]));
   return [0, 1, 2, 3, 4].map((i) => {
@@ -77,7 +79,7 @@ export async function activiteDeLaSemaine(personneId: string, semaine = semaineC
 
 const LIBELLE_STATUT: Record<string, string> = { a_faire: "À faire", en_cours: "En cours", bloquee: "Bloquée", faite: "Faite" };
 
-export type FaitDuJour = { id: string; heure: Date; tacheId: string; titre: string; projetCode: string | null; texte: string; type: string };
+export type FaitDuJour = { id: string; heure: Date; tacheId: string; titre: string; projetId: string | null; projetCode: string | null; projetTitre: string | null; texte: string; type: string };
 
 /**
  * Une journée passée (ou celle d'aujourd'hui) : ce que la personne a fait sur ses tâches (créées,
@@ -96,12 +98,14 @@ export async function journeeDe(personneId: string, jour: string) {
       creeLe: schema.evenementsTache.creeLe,
       tacheId: schema.taches.id,
       titre: schema.taches.titre,
+      projetId: schema.taches.projetId,
       projetCode: schema.projets.code,
+      projetTitre: schema.projets.titre,
     })
     .from(schema.evenementsTache)
     .innerJoin(schema.taches, eq(schema.taches.id, schema.evenementsTache.tacheId))
     .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
-    .where(and(eq(schema.evenementsTache.auteurId, personneId), sql`${schema.evenementsTache.creeLe} >= ${debut}`, sql`${schema.evenementsTache.creeLe} < ${fin}`))
+    .where(and(eq(schema.evenementsTache.auteurId, personneId), ne(schema.evenementsTache.type, "relance_annulee"), sql`${schema.evenementsTache.creeLe} >= ${debut}`, sql`${schema.evenementsTache.creeLe} < ${fin}`))
     .orderBy(asc(schema.evenementsTache.creeLe));
   const faits: FaitDuJour[] = evenements.map((e) => {
     const t = `« ${e.titre} »`;
@@ -116,11 +120,13 @@ export async function journeeDe(personneId: string, jour: string) {
               ? `Échéance de ${t} déplacée${e.apres ? ` au ${e.apres.split("-").reverse().join("/")}` : ""}`
               : e.type === "note"
                 ? `Note sur ${t} : ${e.note ?? ""}`
-                : `${t} : ${e.type}`;
-    return { id: e.id, heure: e.creeLe, tacheId: e.tacheId, titre: e.titre, projetCode: e.projetCode, texte, type: e.type };
+                : e.type === "relance"
+                  ? `Relance sur ${t}${e.note ? ` : « ${e.note} »` : ""}`
+                  : `${t} : ${e.type}`;
+    return { id: e.id, heure: e.creeLe, tacheId: e.tacheId, titre: e.titre, projetId: e.projetId, projetCode: e.projetCode, projetTitre: e.projetTitre, texte, type: e.type };
   });
   const echeances = await db
-    .select({ id: schema.taches.id, titre: schema.taches.titre, statut: schema.taches.statut, projetCode: schema.projets.code })
+    .select({ id: schema.taches.id, titre: schema.taches.titre, statut: schema.taches.statut, projetId: schema.taches.projetId, projetCode: schema.projets.code, projetTitre: schema.projets.titre })
     .from(schema.taches)
     .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
     .where(and(eq(schema.taches.assigneId, personneId), eq(schema.taches.echeance, jour), isNull(schema.taches.annuleeLe)))
@@ -179,7 +185,9 @@ export async function confieesHorsDivision(personneId: string) {
       prenom: schema.personnes.prenom,
       nom: schema.personnes.nom,
       organisation: schema.personnes.organisation,
+      projetId: schema.taches.projetId,
       projetCode: schema.projets.code,
+      projetTitre: schema.projets.titre,
     })
     .from(schema.taches)
     .innerJoin(schema.personnes, eq(schema.personnes.id, schema.taches.assigneId))

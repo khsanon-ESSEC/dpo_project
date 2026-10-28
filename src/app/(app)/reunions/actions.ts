@@ -1,15 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/db";
 import { redirect } from "next/navigation";
 import { acces, contactsVisibles, idsProjetsVisibles, type Acces } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { aujourdhui, dateCourte, lundiDe } from "@/lib/dates";
 import { tousLesProjetsActifs } from "@/lib/donnees/projets";
 import { analyserReunion, texteDuree } from "@/lib/saisie-rapide";
+import { phraseOccupe, type Disponibilite } from "@/lib/creneaux";
 import { modifierReunion, noterReunion, quitterReunion, supprimerReunion, type SaisieReunion } from "@/lib/donnees/reunions";
 import { trouverOuCreerExterne } from "@/lib/donnees/externes";
 import { creerTacheGeree } from "@/lib/donnees/gestion";
+import { enregistrerAnnulation, etatReunion } from "@/lib/donnees/annulations";
 
 const UUID = /^[0-9a-f-]{36}$/;
 
@@ -74,6 +78,9 @@ async function creerActions(a: Acces, form: FormData, reunionId: string, projetI
 const messageActions = (r: { creees: number; refus: string[] }) =>
   [r.creees ? `${r.creees} action${r.creees > 1 ? "s" : ""} ajoutée${r.creees > 1 ? "s" : ""} aux tâches.` : "", r.refus.length ? `Non créée${r.refus.length > 1 ? "s" : ""} : ${r.refus.join(" ; ")}` : ""].filter(Boolean).join(" ");
 
+/** « Attention : Fabienne Michel est déjà pris(e) de 10 h à 11 h. » */
+const messageOccupes = (o: Disponibilite[]) => (o.length ? `Attention : ${o.map(phraseOccupe).join(" ; ")}.` : "");
+
 const semaineDe = (jour: string) => (/^\d{4}-\d{2}-\d{2}$/.test(jour) ? lundiDe(jour) : "");
 
 const revalider = () => {
@@ -95,7 +102,7 @@ export async function noter(form: FormData) {
   }
   const act = await creerActions(a, form, r.id, UUID.test(d.projetId) ? d.projetId : null);
   revalider();
-  const m = messageActions(act);
+  const m = [messageActions(act), messageOccupes(r.occupes)].filter(Boolean).join(" ");
   redirect(`/reunions?semaine=${s}&notee=1${m ? `&${act.refus.length ? "erreur" : "info"}=${encodeURIComponent(m)}` : ""}`);
 }
 
@@ -112,7 +119,7 @@ export async function modifier(id: string, form: FormData) {
   }
   const act = await creerActions(a, form, id, UUID.test(d.projetId) ? d.projetId : null);
   revalider();
-  const m = messageActions(act);
+  const m = [messageActions(act), messageOccupes(r.occupes)].filter(Boolean).join(" ");
   redirect(`/reunions?semaine=${s}${m ? `&${act.refus.length ? "erreur" : "info"}=${encodeURIComponent(m)}` : ""}`);
 }
 
@@ -134,7 +141,7 @@ export async function quitter(id: string, semaine: string) {
   redirect(`/reunions?${s ? `semaine=${s}` : ""}${"erreur" in r ? `&erreur=${encodeURIComponent(r.erreur)}` : ""}`);
 }
 
-export type EtatReunionRapide = { message: string | null; ok?: boolean; n?: number; semaine?: string };
+export type EtatReunionRapide = { message: string | null; ok?: boolean; n?: number; semaine?: string; annulation?: string };
 
 /**
  * Noter une réunion depuis la barre (« Réunion comité de pilotage /unib @fab jeudi 10h 1h30 ») : la saisie est
@@ -156,14 +163,25 @@ export async function noterReunionRapide(etat: EtatReunionRapide, form: FormData
     const contacts = await contactsVisibles(a);
     participants = participants.filter((id) => contacts.has(id));
   }
+  const depuis = new Date();
   const n = await noterReunion(a, { titre: r.titre, jour: r.jour, heure: r.heure ?? "", dureeMinutes: r.dureeMinutes, projetId: projet?.id ?? "", notes: "", participants }, visibles);
   if ("erreur" in n) return { message: n.erreur, n: etat.n };
+  const [notee] = await db.select().from(schema.reunions).where(eq(schema.reunions.id, n.id));
+  const annulation = await enregistrerAnnulation(a.moi.id, {
+    genre: "reunion",
+    reunionId: n.id,
+    titre: r.titre,
+    participants: participants.filter((id) => id !== a.moi.id),
+    depuis: depuis.toISOString(),
+    etat: notee ? etatReunion(notee) : undefined,
+  });
   revalider();
   const autres = participants.length;
   return {
-    message: `Réunion notée : « ${r.titre} », ${dateCourte(r.jour)}${r.heure ? ` à ${r.heure.replace(":", " h ").replace(" h 00", " h")}` : ""}, ${texteDuree(r.dureeMinutes)}${autres ? ` ; ${autres > 1 ? "les participants la voient dans leur semaine" : "l'autre participant la voit dans sa semaine"}` : ""}.`,
+    message: `Réunion notée : « ${r.titre} », ${dateCourte(r.jour)}${r.heure ? ` à ${r.heure.replace(":", " h ").replace(" h 00", " h")}` : ""}, ${texteDuree(r.dureeMinutes)}${autres ? ` ; ${autres > 1 ? "les participants la voient dans leur semaine" : "l'autre participant la voit dans sa semaine"}` : ""}.${n.occupes.length ? ` ${messageOccupes(n.occupes)}` : ""}`,
     ok: true,
     n: (etat.n ?? 0) + 1,
     semaine: lundiDe(r.jour),
+    annulation,
   };
 }

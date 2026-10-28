@@ -352,7 +352,7 @@ export default async function PageModele({ params, searchParams }: { params: Pro
             <p className="note" style={{ marginTop: 0 }}>
               Rapport chaque semaine. À l&apos;heure « prêt à relire », le brouillon est complété avec les tâches de la semaine et la personne est prévenue ; après l&apos;heure limite, son chef voit les rapports qui manquent.
             </p>
-            <form action={modifierHorairesModele.bind(null, m.id)} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <form key={JSON.stringify(horaires)} action={modifierHorairesModele.bind(null, m.id)} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <ChoixMoment cle="pret" titre="Prêt à relire" valeur={horaires.pret} />
               <ChoixMoment cle="rappel" titre="Rappel si pas encore envoyé" valeur={horaires.rappel} facultatif />
               <ChoixMoment cle="limite" titre="À envoyer avant" valeur={horaires.limite} facultatif />

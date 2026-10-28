@@ -238,7 +238,7 @@ export default async function PageModifierProjet({ params, searchParams }: { par
             </>
           ) : (
             <p className="note" style={{ margin: 0 }}>
-              Ce projet a une histoire ({[activite.taches ? `${activite.taches} tâche${activite.taches > 1 ? "s" : ""}` : null, activite.lignesRapport ? "des lignes de rapport" : null, activite.lignesConseil || activite.historique ? "des rapports au conseil" : null, activite.reunions ? "des réunions" : null].filter(Boolean).join(", ")}) : il ne se supprime pas. Archivé, il quitte le portefeuille et reste lisible.
+              Ce projet a une histoire ({[activite.taches ? `${activite.taches} tâche${activite.taches > 1 ? "s" : ""}` : null, activite.lignesRapport ? "des lignes de rapport" : null, activite.lignesConseil || activite.historique ? "des rapports au conseil" : null, activite.reunions ? "des réunions" : null, activite.documents ? "des documents" : null].filter(Boolean).join(", ")}) : il ne se supprime pas. Archivé, il quitte le portefeuille et reste lisible.
             </p>
           )}
           {p.archiveLe ? (

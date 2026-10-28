@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { acces } from "@/lib/acces";
+import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { exigerInterne } from "@/lib/auth/session";
 import { aujourdhui, dateCourte, dateLocale, heure, jourAbrege, jourComplet } from "@/lib/dates";
 import { monEquipe } from "@/lib/donnees/equipe";
@@ -8,6 +8,7 @@ import { Niveau } from "@/components/Charge";
 import { nombre } from "@/lib/charge";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
+import { CodeProjet, LienPersonne, LienProjet } from "@/components/Liens";
 import { dureeTexte } from "@/lib/projets";
 import { ONGLETS_EQUIPE, SousOnglets } from "@/components/SousOnglets";
 import { relancerEquipe } from "./actions";
@@ -44,7 +45,9 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
     { id: "sans", libelle: `Sans rapport · ${e.manquants.length}` },
     { id: "bloc", libelle: `Avec blocage · ${e.personnes.filter((p) => p.bloquees > 0).length}` },
   ];
-  const maxCharge = Math.max(1, ...e.charge.map(([, n]) => n));
+  const maxCharge = Math.max(1, ...e.charge.map((c) => c.n));
+  const visibles = await idsProjetsVisibles(a);
+  const voit = (id: string) => visibles === "tous" || visibles.has(id);
 
   return (
     <>
@@ -103,7 +106,7 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
           </nav>
         ) : null}
         {groupes.map((g) => (
-          <section key={g.chefId} id={`g-${g.chefId}`} className="carte carte--liste" aria-labelledby={`g-${g.chefId}-t`}>
+          <section key={g.chefId} id={`g-${g.chefId}`} className="carte carte--liste carte--equipe" aria-labelledby={`g-${g.chefId}-t`}>
             <div className="carte__entete">
               <h2 id={`g-${g.chefId}-t`} className="carte__titre">
                 {g.titre}
@@ -116,7 +119,7 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
             </div>
             <ul className="liste">
               {g.visibles.map((p) => (
-                <LignePersonne key={p.id} p={p} semaines={chargeDe.get(p.id) ?? []} jour={jour} />
+                <LignePersonne key={p.id} p={p} semaines={chargeDe.get(p.id) ?? []} jour={jour} voit={voit} />
               ))}
               {g.visibles.length === 0 ? <li className="vide">Personne dans ce filtre.</li> : null}
             </ul>
@@ -131,19 +134,26 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
             </h2>
             <ul className="liste">
               {e.blocages.map((b) => (
-                <li key={b.id}>
-                  <a href={`/taches/${b.id}`} className="rangee">
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--veille-point)", flex: "none" }} />
-                    <span className="rangee__texte">
-                      <span className="rangee__titre">{b.titre}</span>
-                      <span className="rangee__sous">
-                        {b.qui} · {b.projet ?? "Hors projet"}
-                      </span>
+                <li key={b.id} className="rangee rangee--etiree">
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--veille-point)", flex: "none" }} />
+                  <span className="rangee__texte">
+                    <a href={`/taches/${b.id}`} className="rangee__titre rangee__lien">
+                      {b.titre}
+                    </a>
+                    <span className="rangee__sous">
+                      <LienPersonne id={b.assigneId}>{b.qui}</LienPersonne> ·{" "}
+                      {b.projetId ? (
+                        <LienProjet id={b.projetId} visible={voit(b.projetId)}>
+                          {b.projet}
+                        </LienProjet>
+                      ) : (
+                        "Hors projet"
+                      )}
                     </span>
-                    <span className="rangee__meta" style={{ fontSize: 12 }}>
-                      depuis le {dateCourte(b.depuis)}
-                    </span>
-                  </a>
+                  </span>
+                  <span className="rangee__meta" style={{ fontSize: 12 }}>
+                    depuis le {dateCourte(b.depuis)}
+                  </span>
                 </li>
               ))}
               {e.blocages.length === 0 ? <li className="vide">Aucun blocage.</li> : null}
@@ -154,10 +164,14 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
               Tâches ouvertes par projet
             </h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {e.charge.map(([nom, n]) => (
-                <div key={nom} role="img" aria-label={`${nom} : ${n} tâches ouvertes`} style={{ display: "grid", gridTemplateColumns: "minmax(0, 170px) minmax(0, 1fr) 24px", alignItems: "center", gap: 14 }}>
-                  <span style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nom}</span>
-                  <span className="barre" style={{ height: 10 }}>
+              {e.charge.map(({ id, titre: nom, n }) => (
+                <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 170px) minmax(0, 1fr) 24px", alignItems: "center", gap: 14 }}>
+                  <span style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <LienProjet id={id} visible={voit(id)}>
+                      {nom}
+                    </LienProjet>
+                  </span>
+                  <span className="barre" style={{ height: 10 }} role="img" aria-label={`${nom} : ${n} tâches ouvertes`}>
                     <span style={{ width: `${Math.round((n / maxCharge) * 100)}%` }} />
                   </span>
                   <span className="rangee__meta" style={{ textAlign: "right" }}>
@@ -177,64 +191,64 @@ type Personne = Awaited<ReturnType<typeof monEquipe>>["personnes"][number];
 
 type Semaines = Awaited<ReturnType<typeof chargeDesPersonnes>>["lignes"][number]["charge"]["semaines"];
 
-function LignePersonne({ p, semaines, jour }: { p: Personne; semaines: Semaines; jour: string }) {
+function LignePersonne({ p, semaines, jour, voit }: { p: Personne; semaines: Semaines; jour: string; voit: (id: string) => boolean }) {
   return (
     <li>
-                <div className="rangee" style={{ minHeight: 64, gap: 16, flexWrap: "wrap" }}>
-                  <span className="mono" style={{ width: 36, height: 36, fontSize: 12 }} aria-hidden="true">
-                    {p.initiales}
-                  </span>
-                  <span className="rangee__texte" style={{ flex: "1 1 170px" }}>
-                    <span className="rangee__titre">
-                      <a href={`/equipe/${p.id}`} className="lien-nom" title={`Tâches, charge et rapports de ${p.nom}`}>
-                        {p.nom}
-                      </a>
-                    </span>
-                    <span className="rangee__sous">{p.poste}</span>
-                  </span>
-                  {p.rapport ? (
-                    <a href={`/rapports/${p.rapport.id}`} style={{ flex: "0 0 128px", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className="ton-ok lien-nom" aria-label={`Rapport de ${p.nom}`}>
-                      <Icone nom="coche" taille={16} />
-                      {p.rapport.envoyeLe && dateLocale(p.rapport.envoyeLe) === jour ? `${p.direct ? "Reçu" : "Envoyé"} à ${heure(p.rapport.envoyeLe)}` : `${p.direct ? "Reçu" : "Envoyé"} ${p.rapport.envoyeLe ? jourAbrege(dateLocale(p.rapport.envoyeLe)).toLowerCase() : ""}`}
-                    </a>
-                  ) : (
-                    <span style={{ flex: "0 0 128px", display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className="ton-retard">
-                      <Icone nom="horloge" taille={16} />
-                      Pas encore
-                    </span>
-                  )}
-                  <span role="img" aria-label={`${p.faites} tâches faites sur ${p.total}`} style={{ flex: "0 0 112px", display: "flex", alignItems: "center", gap: 10 }}>
-                    <span className="barre" style={{ width: 64 }}>
-                      <span style={{ width: `${p.total ? Math.round((p.faites / p.total) * 100) : 0}%` }} />
-                    </span>
-                    <span className="rangee__meta">
-                      {p.faites}/{p.total}
-                    </span>
-                  </span>
-                  <span style={{ flex: "0 0 92px", display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }} title="Réunions notées cette semaine" className={p.minutesReunion ? undefined : "ton-discret"}>
-                    <Icone nom="reunion" taille={15} />
-                    {p.minutesReunion ? dureeTexte(p.minutesReunion) : "—"}
-                    <span className="visuellement-cache"> en réunion cette semaine</span>
-                  </span>
-                  <span style={{ flex: "0 0 132px", fontSize: 13 }}>
-                    {p.retard ? <span className="ton-retard">{p.retard} en retard</span> : null}
-                    {p.retard && p.bloquees ? <span className="ton-discret"> · </span> : null}
-                    {p.bloquees ? <span className="ton-veille">{p.bloquees} bloquée{p.bloquees > 1 ? "s" : ""}</span> : null}
-                    {!p.retard && !p.bloquees ? <span className="ton-discret">—</span> : null}
-                  </span>
-                  <span style={{ flex: "0 0 168px", display: "flex", flexDirection: "column", gap: 4 }} aria-label="Charge">
-                    {semaines.map((w, i) => (
-                      <Niveau key={w.semaine} niveau={w.niveau} texte={`${i === 0 ? "Cette sem." : "Sem. proch."} ${nombre(w.heures)} / ${nombre(w.capacite)} h`} />
-                    ))}
-                  </span>
-                  <span style={{ flex: "0 0 auto", display: "flex", gap: 4 }}>
-                    {p.projets.map((m) => (
-                      <span key={m} className="etiquette-projet" style={{ width: 30 }}>
-                        {m}
-                      </span>
-                    ))}
-                  </span>
-                </div>
-              </li>
+      <div className="ligne-equipe">
+        <span className="mono" style={{ width: 36, height: 36, fontSize: 12 }} aria-hidden="true">
+          {p.initiales}
+        </span>
+        <span className="rangee__texte ligne-equipe__nom">
+          <span className="rangee__titre">
+            <a href={`/equipe/${p.id}`} className="lien-nom" title={`Tâches, charge et rapports de ${p.nom}`}>
+              {p.nom}
+            </a>
+          </span>
+          <span className="rangee__sous">{p.poste}</span>
+          {p.projets.length ? (
+            <span className="ligne-equipe__projets">
+              {p.projets.map((m) => (
+                <CodeProjet key={m.id} id={m.id} code={m.code} titre={m.titre} visible={voit(m.id)} />
+              ))}
+            </span>
+          ) : null}
+        </span>
+        {p.rapport ? (
+          <a href={`/rapports/${p.rapport.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className="ligne-equipe__rapport ton-ok lien-nom" aria-label={`Rapport de ${p.nom}`}>
+            <Icone nom="coche" taille={16} />
+            {p.rapport.envoyeLe && dateLocale(p.rapport.envoyeLe) === jour ? `${p.direct ? "Reçu" : "Envoyé"} à ${heure(p.rapport.envoyeLe)}` : `${p.direct ? "Reçu" : "Envoyé"} ${p.rapport.envoyeLe ? jourAbrege(dateLocale(p.rapport.envoyeLe)).toLowerCase() : ""}`}
+          </a>
+        ) : (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className="ligne-equipe__rapport ton-retard">
+            <Icone nom="horloge" taille={16} />
+            Pas encore
+          </span>
+        )}
+        <span role="img" aria-label={`${p.faites} tâches faites sur ${p.total}`} className="ligne-equipe__taches" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span className="barre" style={{ width: 64 }}>
+            <span style={{ width: `${p.total ? Math.round((p.faites / p.total) * 100) : 0}%` }} />
+          </span>
+          <span className="rangee__meta">
+            {p.faites}/{p.total}
+          </span>
+        </span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }} title="Réunions notées cette semaine" className={`ligne-equipe__reunions${p.minutesReunion ? "" : " ton-discret"}`}>
+          <Icone nom="reunion" taille={15} />
+          {p.minutesReunion ? dureeTexte(p.minutesReunion) : "—"}
+          <span className="visuellement-cache"> en réunion cette semaine</span>
+        </span>
+        <span className="ligne-equipe__alertes" style={{ fontSize: 13 }}>
+          {p.retard ? <span className="ton-retard">{p.retard} en retard</span> : null}
+          {p.retard && p.bloquees ? <span className="ton-discret"> · </span> : null}
+          {p.bloquees ? <span className="ton-veille">{p.bloquees} bloquée{p.bloquees > 1 ? "s" : ""}</span> : null}
+          {!p.retard && !p.bloquees ? <span className="ton-discret">—</span> : null}
+        </span>
+        <span className="ligne-equipe__charge" style={{ display: "flex", flexDirection: "column", gap: 4 }} aria-label="Charge">
+          {semaines.map((w, i) => (
+            <Niveau key={w.semaine} niveau={w.niveau} texte={`${i === 0 ? "Cette sem." : "Sem. proch."} ${nombre(w.heures)} / ${nombre(w.capacite)} h`} />
+          ))}
+        </span>
+      </div>
+    </li>
   );
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { creerTache, type EtatNouvelleTache } from "../actions";
 import { dateCourte, lundiDe } from "@/lib/dates";
 import { ChoixPour, externesPermisPour, NOUVELLE_PERSONNE, type PersonneChoix } from "@/components/ChoixPour";
+import { SaisieLigne, type ValeurLigne } from "@/components/SaisieLigne";
 
 type Indication = { capacite: number; semaines: { semaine: string; heures: number | null; capacite: number; niveau: string }[] };
 
@@ -47,6 +48,29 @@ export function FormulaireNouvelleTache({
   const [pour, setPour] = useState(pourParDefaut || personnes[0]?.id || "");
   const [echeance, setEcheance] = useState("");
   const [projet, setProjet] = useState(projetParDefaut);
+  const [heures, setHeures] = useState("");
+  const [pret, setPret] = useState(false);
+  // Ce que la phrase du titre a rempli : si elle cesse de le dire, le champ revient à sa valeur d'avant
+  // (sauf si on l'a changé à la main entre-temps).
+  const rempli = useRef<{ projet?: string; pour?: string; echeance?: string; heures?: string }>({});
+  const suivre = (v: ValeurLigne) => {
+    setPret(!!v.texte.trim());
+    const r = rempli.current;
+    const appliquer = (cle: "projet" | "pour" | "echeance" | "heures", valeur: string | null, set: (f: (x: string) => string) => void, defaut: string) => {
+      if (valeur) {
+        set(() => valeur);
+        r[cle] = valeur;
+      } else if (r[cle] !== undefined) {
+        const avant = r[cle];
+        set((x) => (x === avant ? defaut : x));
+        r[cle] = undefined;
+      }
+    };
+    appliquer("projet", v.projet?.id ?? null, setProjet, projetParDefaut);
+    appliquer("pour", v.personne?.id ?? null, setPour, pourParDefaut || personnes[0]?.id || "");
+    appliquer("echeance", v.echeance, setEcheance, "");
+    appliquer("heures", v.heures ? String(v.heures) : null, setHeures, "");
+  };
   const permis = new Set([...base, ...(parProjet[projet] ?? [])]);
   const externesPermis = externesPermisPour(projet, parProjet, externesPartout, horsProjet);
   const choix = personnes.filter((p) => permis.has(p.id) || (p.externe && externesPermis));
@@ -68,7 +92,24 @@ export function FormulaireNouvelleTache({
       ) : null}
       <div className="champ">
         <label htmlFor="titre">Titre</label>
-        <input id="titre" name="titre" required maxLength={200} />
+        <SaisieLigne
+          id="titre"
+          libelle={null}
+          placeholder="Ex. : Relire les maquettes UR pour Fabienne vendredi 3h"
+          projets={projets}
+          personnes={choix}
+          moiId={personnes.find((p) => p.nom === "Moi")?.id}
+          aujourdhui={aujourdhui}
+          heures
+          sansProjet={null}
+          noms={{ texte: "titre" }}
+          autoFocus
+          onValeur={suivre}
+        />
+        <p className="note" style={{ margin: 0 }}>
+          Écrivez la tâche d&apos;une traite : le projet (son code, « projet … » ou « / »), la personne (« pour … » ou « @ »), l&apos;échéance et le temps se
+          reportent dans les champs ci-dessous.
+        </p>
       </div>
       <div className="champ">
         <label htmlFor="description">Précisions (facultatif)</label>
@@ -113,11 +154,11 @@ export function FormulaireNouvelleTache({
         </div>
         <div className="champ" style={{ flex: "1 1 140px" }}>
           <label htmlFor="estimationHeures">Temps estimé (heures)</label>
-          <input id="estimationHeures" name="estimationHeures" type="number" min={1} max={400} step={1} inputMode="numeric" />
+          <input id="estimationHeures" name="estimationHeures" type="number" min={1} max={400} step={1} inputMode="numeric" value={heures} onChange={(e) => setHeures(e.target.value)} />
         </div>
       </div>
       <p className="note">Le temps estimé sert à mesurer la charge de chacun. Sans estimation, une tâche compte pour 4 heures.</p>
-      <button type="submit" className="bouton-ambre bouton-ambre--large" disabled={enCours}>
+      <button type="submit" className="bouton-ambre bouton-ambre--large" disabled={enCours || !pret}>
         {enCours ? "Création…" : "Créer la tâche"}
       </button>
     </form>

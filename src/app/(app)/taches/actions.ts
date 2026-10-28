@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { acces, exigerTacheVisible, idsProjetsVisibles, peutModifierTache } from "@/lib/acces";
 import { annulerTache, creerTacheGeree, modifierDefinitionTache, retablirTache, supprimerTache } from "@/lib/donnees/gestion";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
+import { enregistrerAnnulation } from "@/lib/donnees/annulations";
 import { retourValide } from "@/lib/retour";
 import { aujourdhui, dateCourte } from "@/lib/dates";
 import { tousLesProjetsActifs } from "@/lib/donnees/projets";
@@ -130,7 +131,7 @@ export async function creerTache(_: EtatNouvelleTache, form: FormData): Promise<
   redirect(retourValide(form.get("retour")) ?? "/semaine");
 }
 
-export type EtatSaisieRapide = { message: string | null; ok?: boolean; n?: number; id?: string };
+export type EtatSaisieRapide = { message: string | null; ok?: boolean; n?: number; id?: string; annulation?: string; lien?: string };
 
 /**
  * « Ajouter une tâche en une ligne » : la saisie est analysée de nouveau ici (l'aperçu de la page n'est
@@ -150,10 +151,12 @@ export async function ajouterTacheRapide(etat: EtatSaisieRapide, form: FormData)
   // Personne choisie dans la liste (« @ ») : les règles d'assignation s'appliquent (creerTacheGeree).
   const pour = String(form.get("assigneId") ?? "");
   const assigneId = /^[0-9a-f-]{36}$/.test(pour) ? pour : u.id;
+  const depuis = new Date();
   const c = await creerTacheGeree(a, { titre: r.titre, description: "", projetId: projet?.id ?? null, assigneId, echeance: r.echeance, debut: null, estimationHeures: r.heures });
   if ("erreur" in c) return { message: c.erreur, n: etat.n };
   revalidatePath("/", "layout");
-  return { message: `Ajoutée : « ${r.titre} »${assigneId !== u.id ? ", la personne est prévenue" : ""}.`, ok: true, n: (etat.n ?? 0) + 1, id: c.id };
+  const annulation = await enregistrerAnnulation(u.id, { genre: "tache_creee", tacheId: c.id, depuis: depuis.toISOString() });
+  return { message: `Ajoutée : « ${r.titre} »${assigneId !== u.id ? ", la personne est prévenue" : ""}.`, ok: true, n: (etat.n ?? 0) + 1, id: c.id, annulation };
 }
 
 /**
@@ -170,6 +173,29 @@ export async function mettreAJourTacheRapide(etat: EtatSaisieRapide, form: FormD
   if (!t || !peutModifierTache(a, t)) return { message: "Tâche introuvable.", n: etat.n };
   if (t.annuleeLe) return { message: "Cette tâche est annulée : rétablissez-la d'abord depuis sa fiche.", n: etat.n };
   const r = analyserMiseAJour(String(form.get("saisie") ?? ""), aujourdhui());
+  const depuis = new Date();
+  // « relancer » : seulement la relance (une alerte à la personne), rien d'autre ne change.
+  if (r.relance !== null) {
+    if (form.get("assigneId") || form.get("projetId")) return { message: "Relancez d'un côté, confiez de l'autre : une chose à la fois.", n: etat.n };
+    if (t.assigneId === u.id) return { message: "C'est votre propre tâche : personne à relancer.", n: etat.n };
+    const [cible] = await db.select({ actif: schema.personnes.actif, externe: schema.personnes.externe, acces: schema.personnes.motDePasseHash, prenom: schema.personnes.prenom }).from(schema.personnes).where(eq(schema.personnes.id, t.assigneId));
+    if (!cible?.actif) return { message: "Cette personne n'est plus active.", n: etat.n };
+    if (cible.externe && !cible.acces) return { message: "Cette personne hors division n'a pas accès à l'application : relancez-la directement.", n: etat.n };
+    const [recente] = await db
+      .select({ id: schema.evenementsTache.id })
+      .from(schema.evenementsTache)
+      .where(and(eq(schema.evenementsTache.tacheId, t.id), inArray(schema.evenementsTache.type, ["relance", "relance_annulee"]), sql`${schema.evenementsTache.creeLe} > now() - interval '1 hour'`))
+      .limit(1);
+    if (recente) return { message: "Déjà relancée il y a moins d'une heure.", n: etat.n };
+    const [ev] = await db.insert(schema.evenementsTache).values({ tacheId: t.id, auteurId: u.id, type: "relance", note: r.relance || null }).returning({ id: schema.evenementsTache.id });
+    const [no] = await db
+      .insert(schema.notifications)
+      .values({ personneId: t.assigneId, type: "relance", texte: `${u.prenom} ${u.nom} vous relance sur « ${t.titre} »${r.relance ? ` : ${r.relance}` : ""}`, lien: `/taches/${t.id}` })
+      .returning({ id: schema.notifications.id });
+    await noter(u.id, "tache_relancee", t.id);
+    const annulation = await enregistrerAnnulation(u.id, { genre: "relance", tacheId: t.id, evenementId: ev.id, notificationId: no.id });
+    return { message: `« ${t.titre} » : ${cible.prenom} est relancé(e).`, ok: true, n: (etat.n ?? 0) + 1, id: t.id, annulation };
+  }
   const pour = String(form.get("assigneId") ?? "");
   const assigneId = /^[0-9a-f-]{36}$/.test(pour) ? pour : t.assigneId;
   const versProjet = String(form.get("projetId") ?? "");
@@ -198,9 +224,17 @@ export async function mettreAJourTacheRapide(etat: EtatSaisieRapide, form: FormD
     if (p?.chef && p.chef !== u.id) await db.insert(schema.notifications).values({ personneId: p.chef, type: "blocage", texte: `${u.prenom} ${u.nom} est bloqué(e) sur « ${t.titre} »`, lien: `/taches/${t.id}` });
   }
   await noter(u.id, "tache_modifiee", t.id, { statut: r.statut ?? t.statut, barre: true });
+  const [apres] = await db.select({ majLe: schema.taches.majLe }).from(schema.taches).where(eq(schema.taches.id, t.id));
+  const annulation = await enregistrerAnnulation(u.id, {
+    genre: "tache_maj",
+    tacheId: t.id,
+    depuis: depuis.toISOString(),
+    apresMajLe: apres.majLe.toISOString(),
+    avant: { statut: t.statut, blocage: t.blocage, termineeLe: t.termineeLe ? t.termineeLe.toISOString() : null, echeance: t.echeance, estimationHeures: t.estimationHeures, assigneId: t.assigneId, projetId: t.projetId },
+  });
   revalidatePath("/", "layout");
   const fait = [r.statut ? LIBELLES_STATUT[r.statut].toLowerCase() : null, confier && assigneId !== t.assigneId ? "confiée, la personne est prévenue" : null, confier && projetId !== t.projetId ? "changée de projet" : null, r.echeance ? "échéance changée" : null, r.heures ? "estimation changée" : null, r.note ? "note ajoutée" : null].filter(Boolean);
-  return { message: `« ${t.titre} » : ${fait.join(", ")}.`, ok: true, n: (etat.n ?? 0) + 1, id: t.id };
+  return { message: `« ${t.titre} » : ${fait.join(", ")}.`, ok: true, n: (etat.n ?? 0) + 1, id: t.id, annulation };
 }
 
 /** Titre, description, projet et personne d'une tâche. */

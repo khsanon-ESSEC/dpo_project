@@ -3,7 +3,7 @@
  * Lancer avec TEST_DATABASE_URL=postgres://… npm test
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type * as AccesModule from "@/lib/acces";
 import type * as DbModule from "@/db";
 import type * as ReunionsModule from "@/lib/donnees/reunions";
@@ -69,7 +69,7 @@ describe.skipIf(!URL_TEST)("journal des réunions et bilan", () => {
     const wb = await acces("wesner.bazile");
     expect(await RE.modifierReunion(wb, id, saisie({ titre: "Autre titre" }), "tous")).toHaveProperty("erreur");
     expect(await RE.supprimerReunion(wb, id)).toHaveProperty("erreur");
-    expect(await RE.modifierReunion(lp, id, saisie({ titre: "Point imprévu avec Wesner", dureeMinutes: 60, participants: [qui("wesner.bazile").id] }), "tous")).toEqual({ ok: true });
+    expect(await RE.modifierReunion(lp, id, saisie({ titre: "Point imprévu avec Wesner", dureeMinutes: 60, participants: [qui("wesner.bazile").id] }), "tous")).toMatchObject({ ok: true });
     expect(await RE.quitterReunion(lp, id)).toHaveProperty("erreur");
     expect(await RE.quitterReunion(wb, id)).toEqual({ ok: true });
     expect((await RE.minutesDeReunion([qui("wesner.bazile").id], LUNDI, "2026-11-01")).get(qui("wesner.bazile").id)).toBe(avant);
@@ -125,5 +125,28 @@ describe.skipIf(!URL_TEST)("journal des réunions et bilan", () => {
     // Les exécutifs n'ont pas de rapport attendu.
     const [fdOct] = (await B.bilans([qui("frantz.desrosiers").id], [mois("2026-10")])).get(qui("frantz.desrosiers").id)!;
     expect(fdOct.rapportsAttendus).toBe(0);
+  });
+
+  it("créneau déjà pris : la personne qui note est avertie, la personne prise aussi ; le titre seulement pour qui y participe", async () => {
+    const lp = await acces("ludovic.pierre");
+    const mv = await acces("myriam.valcin");
+    const fm = qui("fabienne.michel").id;
+    // Myriam note un comité 14 h – 15 h avec Fabienne.
+    const comite = await RE.noterReunion(mv, saisie({ titre: "Comité confidentiel", jour: "2026-11-03", heure: "14:00", dureeMinutes: "60", participants: [fm] }), "tous");
+    expect(comite).toHaveProperty("id");
+    // Ludovic propose 14 h 30 avec Fabienne : elle est prise ; il ne voit pas le titre du comité (il n'y participe pas).
+    const r = await RE.noterReunion(lp, saisie({ titre: "Revue des risques", jour: "2026-11-03", heure: "14:30", dureeMinutes: "30", participants: [fm] }), "tous");
+    expect(r).toMatchObject({ occupes: [{ id: fm, moi: false, occupe: [{ debut: 840, fin: 900, titre: null }] }] });
+    const [alerte] = await D.db
+      .select()
+      .from(D.schema.notifications)
+      .where(and(eq(D.schema.notifications.personneId, fm), eq(D.schema.notifications.type, "reunion")))
+      .orderBy(desc(D.schema.notifications.creeLe))
+      .limit(1);
+    expect(alerte.texte).toMatch(/Revue des risques.*déjà pris\(e\) à cette heure/);
+    // Myriam, elle, voit le titre de sa propre réunion ; bout à bout (15 h) : personne n'est pris.
+    const DI = await import("@/lib/donnees/disponibilites");
+    expect(await DI.disponibilites({ moiId: mv.moi.id, personneIds: [fm], jour: "2026-11-03", heure: "14:15", duree: 30 })).toMatchObject([{ moi: true, occupe: [{ titre: "Comité confidentiel" }] }, { id: fm }]);
+    expect(await DI.disponibilites({ moiId: mv.moi.id, personneIds: [fm], jour: "2026-11-03", heure: "15:00", duree: 30 })).toEqual([]);
   });
 });

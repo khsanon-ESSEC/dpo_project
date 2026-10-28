@@ -88,6 +88,7 @@ describe("supprimer ou garder la trace", () => {
     expect(projetSupprimable(vide)).toBe(true);
     expect(projetSupprimable({ ...vide, taches: 1 })).toBe(false);
     expect(projetSupprimable({ ...vide, reunions: 2 })).toBe(false);
+    expect(projetSupprimable({ ...vide, documents: 1 })).toBe(false);
   });
 });
 

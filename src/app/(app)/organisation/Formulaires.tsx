@@ -108,7 +108,7 @@ export function FichePersonne({
           </span>
         </div>
       </div>
-      <form action={action} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <form key={JSON.stringify(p)} action={action} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <input type="hidden" name="personneId" value={p.id} />
         {etat.message ? (
           <p className={etat.ok ? "succes" : "erreur"} role={etat.ok ? "status" : "alert"}>
@@ -240,7 +240,7 @@ export function FicheExterne({
         {p.nbTaches ? `${p.nbTaches} tâche${p.nbTaches > 1 ? "s" : ""} ouverte${p.nbTaches > 1 ? "s" : ""}` : "Aucune tâche ouverte"}
         {p.projets.length ? ` · équipe de ${p.projets.join(", ")}` : ""}. Sans équipe ni supérieur ici : ni rapport du vendredi, ni charge, ni bilan.
       </p>
-      <form action={action} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <form key={JSON.stringify(p)} action={action} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <input type="hidden" name="personneId" value={p.id} />
         {etat.message ? (
           <p className={etat.ok ? "succes" : "erreur"} role={etat.ok ? "status" : "alert"}>

@@ -2,6 +2,7 @@
 
 import { useOptimistic, useState, useTransition } from "react";
 import {
+  ajouterLigne,
   basculerPartieRelue,
   basculerRemonte,
   changerProjetLigne,
@@ -13,6 +14,8 @@ import {
 } from "./actions";
 import { CocheSeule } from "@/components/CaseTache";
 import { Icone } from "@/components/Icone";
+import { SaisieLigne } from "@/components/SaisieLigne";
+import { CodeProjet } from "@/components/Liens";
 
 type Ligne = { id: string; texte: string; projetId: string | null; projetCode: string | null; projetTitre: string | null };
 type Projet = { id: string; code: string; titre: string };
@@ -24,6 +27,7 @@ export function LigneEditable({
   modifiable,
   parProjet = true,
   auteurs,
+  projetVisible = false,
 }: {
   ligne: Ligne;
   projets: Projet[];
@@ -31,6 +35,8 @@ export function LigneEditable({
   parProjet?: boolean;
   /** Élément reçu de l'équipe : initiales de ses auteurs (il se retire, il ne se supprime pas). */
   auteurs?: { id?: string; initiales: string; nom: string }[];
+  /** Le lecteur voit ce projet : son code mène à la fiche. */
+  projetVisible?: boolean;
 }) {
   const [texte, setTexte] = useState(ligne.texte);
   const [, demarrer] = useTransition();
@@ -53,11 +59,7 @@ export function LigneEditable({
   if (!modifiable) {
     return (
       <li style={{ display: "flex", alignItems: "baseline", gap: 12, padding: "6px 0", borderTop: 0, fontSize: 15, lineHeight: "22px" }}>
-        {parProjet ? (
-          <span className="etiquette-projet" title={ligne.projetTitre ?? "Sans projet"}>
-            {ligne.projetCode ?? "—"}
-          </span>
-        ) : null}
+        {parProjet ? <CodeProjet id={ligne.projetId} code={ligne.projetCode ?? "—"} titre={ligne.projetTitre ?? "Sans projet"} visible={projetVisible} /> : null}
         <span style={{ flex: 1, minWidth: 0 }}>{ligne.texte}</span>
         {Auteurs}
       </li>
@@ -86,9 +88,7 @@ export function LigneEditable({
           </select>
         </>
       ) : parProjet ? (
-        <span className="etiquette-projet" title={ligne.projetTitre ?? "Sans projet"}>
-          {ligne.projetCode ?? "—"}
-        </span>
+        <CodeProjet id={ligne.projetId} code={ligne.projetCode ?? "—"} titre={ligne.projetTitre ?? "Sans projet"} visible={projetVisible} />
       ) : null}
       <label className="visuellement-cache" htmlFor={`texte-${ligne.id}`}>
         Texte de la ligne
@@ -116,6 +116,45 @@ export function LigneEditable({
         <Icone nom="fermer" taille={16} />
       </button>
     </li>
+  );
+}
+
+/**
+ * Ajouter une ligne au rapport en une seule saisie, comme dans la barre : « Recette validée UR »,
+ * « Recette validée projet retail » ou « / » pour choisir le projet. Sans projet reconnu, la ligne reste sans projet.
+ */
+export function AjoutLigne({ rapportId, champId, libelle, projets, parProjet }: { rapportId: string; champId: string; libelle: string; projets: Projet[]; parProjet: boolean }) {
+  const [enCours, demarrer] = useTransition();
+  const [n, setN] = useState(0);
+  const [pret, setPret] = useState(false);
+  return (
+    <form
+      className="champ-rapport__corps ajout-ligne"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!pret || enCours) return;
+        const f = new FormData(e.currentTarget);
+        demarrer(async () => {
+          await ajouterLigne(rapportId, champId, f);
+          setN((x) => x + 1);
+          setPret(false);
+        });
+      }}
+    >
+      <SaisieLigne
+        key={n}
+        id={`ajout-${champId}`}
+        libelle={`Ajouter une ligne à « ${libelle} »`}
+        placeholder={parProjet ? "Ajouter une ligne : « Recette validée UR », « / » pour le projet" : "Ajouter une ligne"}
+        projets={parProjet ? projets : undefined}
+        noms={{ texte: "texte", projet: parProjet ? "projetId" : undefined }}
+        autoFocus={n > 0}
+        onValeur={(v) => setPret(!!v.texte.trim())}
+      />
+      <button type="submit" className="bouton-contour" disabled={!pret || enCours}>
+        <Icone nom="ajouter" taille={16} /> Ajouter
+      </button>
+    </form>
   );
 }
 

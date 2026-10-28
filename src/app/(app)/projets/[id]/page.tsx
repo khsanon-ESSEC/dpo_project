@@ -7,6 +7,9 @@ import { ficheProjet } from "@/lib/donnees/projets";
 import { membresDuProjet } from "@/lib/donnees/gestion";
 import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet } from "@/lib/regles";
+import { LigneMiseAJour } from "@/components/LigneMiseAJour";
+import { DocumentsProjet } from "./Documents";
+import { documentsDuProjet, peutDeposerDocument } from "@/lib/donnees/documents";
 import { LIBELLE_STATUT_PROJET, peutDecider, peutGererProjet, STATUTS_ACCEPTES } from "@/lib/projets";
 import { ajouter, archiver, decider, retirer } from "../gestion-actions";
 import { lignesDuProjetCetteSemaine } from "@/lib/donnees/rapport";
@@ -27,9 +30,9 @@ const SANTE = {
 } as const;
 const ETAT_IND = { atteint: "Atteint", en_cours: "En cours", a_venir: "À venir" } as const;
 
-export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string }> }) {
+export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string }> }) {
   const { id } = await params;
-  const { propose, erreur } = await searchParams;
+  const { propose, erreur, doc, docOk, docRetire } = await searchParams;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
   const a = await acces(u);
@@ -57,6 +60,8 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   };
   const ouvertesParPersonne = new Map(f.equipe.map((m) => [m.id, m.detail]));
   const auteurs = auteursLignesVisibles(a, id);
+  const [documents, peutDeposer] = await Promise.all([documentsDuProjet(id), peutDeposerDocument(a, p)]);
+  const nomsDeposants = new Map(documents.filter((d) => d.deposeParId).map((d) => [d.deposeParId!, nom(d.deposeParId) ?? "—"]));
   const rapports = auteurs ? await lignesDuProjetCetteSemaine(id, auteurs) : null;
   const jour = aujourdhui();
   const atteints = f.indicateurs.filter((i) => i.etat === "atteint").length;
@@ -259,6 +264,12 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
             ) : null}
           </div>
         ) : null}
+        {p.sante !== "dans_les_temps" && p.santeMotif ? (
+          <p className={`note-sante ${p.sante === "en_retard" ? "note-sante--retard" : ""}`}>
+            <strong>{SANTE[p.sante].texte}</strong>
+            {p.santeLe ? ` depuis le ${dateCourte(dateLocale(p.santeLe))}` : ""} : {p.santeMotif}
+          </p>
+        ) : null}
         <div className="ligne-actions">
           <OngletsVues projetId={p.id} vue="apercu" sansCharge={!!u.externe} />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
@@ -301,9 +312,14 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                     >
                       {i.etat === "atteint" ? <CocheSeule /> : null}
                     </span>
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 15, lineHeight: "20px", color: i.etat === "a_venir" ? "var(--discret)" : undefined }}>{i.libelle}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 15, lineHeight: "20px", color: i.etat === "a_venir" ? "var(--discret)" : undefined }}>
+                      {i.libelle}
+                      {i.prevuLe ? (
+                        <span className={`indicateur__date${i.etat !== "atteint" && i.prevuLe < aujourdhui() ? " ton-retard" : ""}`}> · prévu le {dateCourte(i.prevuLe)}</span>
+                      ) : null}
+                    </span>
                     {peutModifier && actif ? (
-                      <form action={changerIndicateur.bind(null, p.id, i.id)} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <form key={`${i.id}-${i.etat}`} action={changerIndicateur.bind(null, p.id, i.id)} style={{ display: "flex", gap: 6, alignItems: "center" }}>
                         <label className="visuellement-cache" htmlFor={`ind-${i.id}`}>
                           État de « {i.libelle} »
                         </label>
@@ -366,6 +382,18 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 })}
               </ul>
             </section>
+
+            <DocumentsProjet
+              projetId={p.id}
+              documents={documents}
+              noms={nomsDeposants}
+              moiId={u.id}
+              gere={peutModifier}
+              peutDeposer={peutDeposer}
+              erreur={doc ? doc.slice(0, 800) : undefined}
+              ajoutes={docOk ? Number(docOk) || 0 : undefined}
+              retire={docRetire === "1"}
+            />
 
             {rapports ? (
               <section className="carte carte--liste" aria-labelledby="p-rapports">
@@ -441,7 +469,16 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 <h2 id="p-maj" className="carte__titre" style={{ marginBottom: 16 }}>
                   Mettre à jour le projet
                 </h2>
-                <form action={mettreAJourProjet.bind(null, p.id)} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <LigneMiseAJour
+                  cible={{ genre: "projet", projetId: p.id }}
+                  aujourdhui={aujourdhui()}
+                  libelle="Mettre à jour le projet en une ligne"
+                  placeholder="« à surveiller : retard du prestataire », « jalon recette 15/11 », « fin prévue 20/12 »"
+                />
+                <p className="note" style={{ margin: "16px 0 12px" }}>
+                  Ou champ par champ :
+                </p>
+                <form key={`maj-${p.majLe.toISOString()}`} action={mettreAJourProjet.bind(null, p.id)} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                   <div className="champ">
                     <label htmlFor="sante">Santé</label>
                     <select id="sante" name="sante" defaultValue={p.sante}>
@@ -449,6 +486,10 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                       <option value="a_surveiller">À surveiller</option>
                       <option value="en_retard">En retard</option>
                     </select>
+                  </div>
+                  <div className="champ">
+                    <label htmlFor="sante-motif">Pourquoi (si à surveiller ou en retard)</label>
+                    <input id="sante-motif" name="santeMotif" type="text" maxLength={500} defaultValue={p.santeMotif} placeholder="ex. : retard du prestataire" />
                   </div>
                   <div className="champ">
                     <label htmlFor="fin">Fin prévue</label>

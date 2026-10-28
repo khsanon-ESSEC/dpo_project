@@ -150,7 +150,7 @@ export function tacheSupprimable(t: { statut: string; evenements: string[]; lign
 }
 
 /** Un projet se supprime vraiment seulement s'il n'a rien : ni tâche, ni rapport, ni historique, ni réunion. Sinon on l'archive. */
-export function projetSupprimable(c: { taches: number; lignesRapport: number; reponsesRapport: number; lignesConseil: number; historique: number; reunions: number }): boolean {
+export function projetSupprimable(c: { taches: number; lignesRapport: number; reponsesRapport: number; lignesConseil: number; historique: number; reunions: number; documents?: number }): boolean {
   return Object.values(c).every((n) => n === 0);
 }
 
