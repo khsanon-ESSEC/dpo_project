@@ -91,7 +91,7 @@ Ces chiffres décrivent ce qui est enregistré dans l'application ; ils ne mesur
 ## Personnes hors division et projets d'autres divisions
 
 - **Ajouter quelqu'un** : dans « Avec qui » d'une réunion (« + Quelqu'un d'autre, hors division »), dans « Pour » d'une tâche (« Quelqu'un d'autre, hors division… »), dans l'équipe d'un projet ou comme chef de projet. On donne son nom et son département ou sa société. Une fiche déjà connue (même nom, même organisation, sans tenir compte des accents ni des majuscules) est reprise plutôt que recréée.
-- **Confier une tâche** à une personne hors division : hors projet, tout le monde peut ; sur un projet, seulement son chef de projet (ou son référent DPO), un directeur ou un exécutif. Celui qui confie la tâche la voit et la suit dans *Semaine → À faire*, « Confiées hors division ».
+- **Confier une tâche** à une personne hors division : seulement le chef de projet (ou le référent DPO), sur son projet ; ni hors projet, ni sur le projet d'un autre, y compris pour la direction et les exécutifs. Celui qui confie la tâche la voit et la suit dans *Semaine → À faire*, « Confiées hors division ».
 - **Ce qu'elles ne font pas** : pas de supérieur ni d'équipe, pas de rapport du vendredi ; elles n'entrent ni dans la charge, ni dans le bilan, ni dans *Mon équipe*. Sans accès, elles ne reçoivent pas d'alerte.
 - **Organisation → Hors division** : liste avec le nombre de tâches et les projets de chacun ; modifier la fiche, ouvrir ou fermer un accès limité (administrateurs), **fusionner** deux fiches de la même personne (les tâches, réunions et projets passent sur celle qu'on garde).
 - **Projet d'une autre division** : la fiche porte le nom de la division et son chef de projet. Un chef de projet hors division demande un **référent DPO** ; c'est lui qui gère le projet et lit les lignes du projet dans les rapports. Un tel projet n'entre pas dans le rapport mensuel au conseil ; on peut le choisir pour un rapport ponctuel.
@@ -155,6 +155,7 @@ Lancer le serveur par un gestionnaire de services (systemd, par exemple) pour qu
 | `HEURE_DEMO` | Démonstration seulement : fige l'heure (« HH:MM ») pour les heures du rapport. **Vide en production** |
 | `IA_FOURNISSEUR` | `aucun`, `openai-compatible` ou `anthropic` |
 | `IA_URL`, `IA_CLE`, `IA_MODELE`, `IA_DELAI` | Connexion au fournisseur d'IA (voir plus bas) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_DOMAINE` | Connexion avec le compte Google de la banque (voir plus bas). Sans elles, connexion par mot de passe seulement |
 
 ### Mise à jour
 
@@ -209,6 +210,19 @@ L'assistant est désactivé par défaut (`IA_FOURNISSEUR=aucun`) ; les brouillon
 - `anthropic` : API Claude ; `IA_URL` peut rester vide.
 
 Choisir le fournisseur avec la Direction des risques et la conformité : les données des projets quittent le serveur dès qu'un fournisseur externe est utilisé.
+
+### Connexion avec le compte Google de la banque
+
+Le bouton « Continuer avec le compte Google UNIBANK » s'active quand `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` et `GOOGLE_DOMAINE` sont renseignés. Pour l'informatique :
+
+1. Dans la console Google Cloud, sur un projet de l'organisation Google Workspace de la banque : écran de consentement OAuth de type **Interne** (seuls les comptes de la banque), puis un identifiant client OAuth de type **Application Web**.
+2. Adresse de redirection autorisée : `<APP_URL>/api/auth/google/retour` (par exemple `https://pilotage.dpo.unibank.local/api/auth/google/retour`). Elle doit correspondre exactement à `APP_URL` : la connexion Google ne fonctionne qu'à cette adresse.
+3. Mettre l'identifiant et le secret dans `.env`, avec `GOOGLE_DOMAINE` (le domaine Workspace de la banque ; plusieurs, séparés par des virgules), puis redémarrer.
+4. Le serveur doit pouvoir joindre `accounts.google.com`, `oauth2.googleapis.com` et `www.googleapis.com` en HTTPS.
+
+Ce que l'application vérifie : flux OpenID Connect avec PKCE, état et nonce ; jeton d'identité signé par Google (clés publiées), destiné à cette application, non expiré ; adresse vérifiée ; compte de l'organisation de la banque (revendication `hd` **et** domaine de l'adresse parmi `GOOGLE_DOMAINE`). Un compte Gmail personnel est refusé.
+
+**Aucun compte n'est créé par Google** : la personne doit déjà exister dans *Organisation*, active, avec la même adresse. Une personne hors division ne se connecte avec Google que si son accès est ouvert. La connexion par mot de passe reste possible (personnes hors division sans compte Google, secours) ; un mot de passe provisoire n'est demandé à changer qu'à la connexion par mot de passe. Chaque connexion est notée au journal avec sa méthode.
 
 ---
 
@@ -274,12 +288,9 @@ src/lib/projets.ts  gestion des projets et des tâches : qui assigne, gère, dé
 src/lib/bilan.ts    bilan d'activité par période (sans base, testé)
 src/lib/donnees/    lectures et écritures par domaine
 src/lib/ia.ts       connecteur d'IA interchangeable
+src/lib/auth/       session, mots de passe, connexion Google (google-regles.ts : sans base, testé)
 scripts/            migration, création d'utilisateur, données de démonstration
 drizzle/            migrations SQL
 ```
 
-Pile : Next.js 16, React 19, TypeScript, PostgreSQL, Drizzle ORM, Argon2, docx.
-
-### Prévu
-
-- Connexion avec le compte Google de la banque (le bouton est déjà en place, désactivé).
+Pile : Next.js 16, React 19, TypeScript, PostgreSQL, Drizzle ORM, Argon2, jose (jetons Google), docx.

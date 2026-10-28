@@ -468,6 +468,8 @@ export const sessions = pgTable(
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
     ip: text(),
     agent: text(),
+    /** Comment la session a été ouverte : « mot_de_passe » ou « google ». */
+    methode: text().notNull().default("mot_de_passe"),
   },
   (t) => [index("sessions_personne_idx").on(t.personneId)],
 );

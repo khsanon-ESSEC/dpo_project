@@ -26,6 +26,8 @@ export type Utilisateur = {
   externe?: boolean;
   theme: string;
   doitChangerMotDePasse: boolean;
+  /** Comment la session en cours a été ouverte : « mot_de_passe » ou « google ». */
+  connexion?: string;
 };
 
 const empreinteJeton = (jeton: string) => createHash("sha256").update(jeton).digest("hex");
@@ -45,7 +47,7 @@ async function poserCookie(jeton: string, expire: Date) {
   (await cookies()).set(COOKIE, jeton, { httpOnly: true, sameSite: "lax", secure: SECURISE, path: "/", expires: expire });
 }
 
-export async function ouvrirSession(personneId: string) {
+export async function ouvrirSession(personneId: string, methode: "mot_de_passe" | "google" = "mot_de_passe") {
   const jeton = randomBytes(32).toString("base64url");
   const expire = new Date(Date.now() + HEURES * 3_600_000);
   const h = await headers();
@@ -55,6 +57,7 @@ export async function ouvrirSession(personneId: string) {
     expireLe: expire,
     ip: (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || null,
     agent: h.get("user-agent")?.slice(0, 300) ?? null,
+    methode,
   });
   await poserCookie(jeton, expire);
 }
@@ -89,6 +92,7 @@ export const utilisateurCourant = cache(async (): Promise<Utilisateur | null> =>
       externe: schema.personnes.externe,
       theme: schema.personnes.theme,
       doitChangerMotDePasse: schema.personnes.doitChangerMotDePasse,
+      connexion: schema.sessions.methode,
     })
     .from(schema.sessions)
     .innerJoin(schema.personnes, eq(schema.sessions.personneId, schema.personnes.id))
@@ -120,6 +124,22 @@ export async function exigerInterne(): Promise<Utilisateur> {
  */
 let leurre: Promise<string> | null = null;
 const empreinteLeurre = () => (leurre ??= hacherMotDePasse(randomBytes(16).toString("hex")));
+
+/**
+ * Connexion avec le compte Google de la banque, une fois l'adresse vérifiée par Google
+ * (src/lib/auth/google.ts). La personne doit exister, être active, et, si elle est hors division,
+ * avoir un accès ouvert. Aucun compte n'est créé ici.
+ */
+export async function connecterAvecGoogle(courriel: string): Promise<{ ok: true } | { ok: false }> {
+  const [p] = await db.select().from(schema.personnes).where(eq(schema.personnes.courriel, courriel)).limit(1);
+  if (!p || !p.actif || (p.externe && !p.motDePasseHash)) {
+    await noter(null, "connexion_refusee", courriel, { methode: "google" });
+    return { ok: false };
+  }
+  await ouvrirSession(p.id, "google");
+  await noter(p.id, "connexion", courriel, { methode: "google" });
+  return { ok: true };
+}
 
 export type ResultatConnexion = { ok: true } | { ok: false; message: string };
 

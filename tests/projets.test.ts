@@ -108,12 +108,15 @@ describe("durées de réunion", () => {
 
 describe("personnes hors division et projets d'autres divisions", () => {
   const directeur: Acteur = { ...employe, moiId: "d", directeur: true };
-  it("une personne hors division reçoit une tâche hors projet, ou sur un projet qu'on dirige ; la direction partout", () => {
-    expect(peutAssigner(employe, "ext", null, true)).toBe(true);
-    expect(peutAssigner(employe, "ext", P2, true)).toBe(false);
+  it("seul le chef du projet confie une tâche à une personne hors division, et sur son projet", () => {
     expect(peutAssigner(chef, "ext", P1, true)).toBe(true);
     expect(peutAssigner(chef, "ext", P2, true)).toBe(false);
-    expect(peutAssigner(directeur, "ext", P2, true)).toBe(true);
+    expect(peutAssigner(chef, "ext", null, true)).toBe(false); // pas hors projet
+    expect(peutAssigner(employe, "ext", null, true)).toBe(false);
+    expect(peutAssigner(directeur, "ext", P2, true)).toBe(false);
+    expect(peutAssigner(executif, "ext", P2, true)).toBe(false);
+    // Une personne hors division avec un accès limité se confie ses propres tâches.
+    expect(peutAssigner({ ...employe, moiId: "ext" }, "ext", null, true)).toBe(true);
   });
   it("le référent DPO a les droits de chef de projet ; c'est lui qui lit les lignes du projet", () => {
     const projet = { chefProjetId: "externe", referentId: "r", statut: "en_cours" };

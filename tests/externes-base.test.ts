@@ -74,7 +74,7 @@ describe.skipIf(!URL_TEST)("personnes hors division et projets d'autres division
     expect(await X.trouverOuCreerExterne("   ", "DTI", ml)).toBeNull();
   });
 
-  it("confier une tâche à quelqu'un hors division : hors projet ou sur un projet qu'on dirige", async () => {
+  it("confier une tâche à quelqu'un hors division : seulement le chef du projet, sur son projet", async () => {
     const mv = await acces("myriam.valcin");
     const r = await G.creerTacheGeree(mv, { ...base, titre: "Revue des journaux du pare-feu", projetId: projets.get("UR")!, assigneId: "", nouvelExterne: { nom: "Jonas Lafontant", organisation: "DTI" } });
     expect(r).toHaveProperty("id");
@@ -87,8 +87,11 @@ describe.skipIf(!URL_TEST)("personnes hors division et projets d'autres division
     const dj = await acces("daphnee.joseph");
     expect(await G.creerTacheGeree(dj, { ...base, titre: "Essai", projetId: projets.get("UR")!, assigneId: "", nouvelExterne: { nom: "Quelqu'un Dehors", organisation: "" } })).toHaveProperty("erreur");
     expect(await nbExternes()).toBe(avant);
-    // Hors projet, oui : elle la suit, la voit et la retrouve dans « À faire ».
-    const h = (await G.creerTacheGeree(dj, { ...base, titre: "Badge d'accès pour la consultante", projetId: null, assigneId: qui("nathalie.celestin").id })) as { id: string };
+    // Hors projet, non, même pour la direction et les exécutifs.
+    expect(await G.creerTacheGeree(dj, { ...base, titre: "Hors projet", projetId: null, assigneId: qui("nathalie.celestin").id })).toHaveProperty("erreur");
+    expect(await G.creerTacheGeree(await acces("frantz.desrosiers"), { ...base, titre: "Hors projet", projetId: null, assigneId: qui("nathalie.celestin").id })).toHaveProperty("erreur");
+    // Sur son projet (PR), oui : elle la suit, la voit et la retrouve dans « À faire ».
+    const h = (await G.creerTacheGeree(dj, { ...base, titre: "Badge d'accès pour la consultante", projetId: projets.get("PR")!, assigneId: qui("nathalie.celestin").id })) as { id: string };
     const [th] = await D.db.select().from(D.schema.taches).where(eq(D.schema.taches.id, h.id));
     expect(A.peutVoirTache(dj, th)).toBe(true);
     expect(A.peutVoirTache(await acces("ludovic.pierre"), th)).toBe(false);
@@ -171,7 +174,7 @@ describe.skipIf(!URL_TEST)("personnes hors division et projets d'autres division
   it("fusionner deux fiches de la même personne", async () => {
     const ml = qui("marc-antoine.louis").id;
     const doublon = (await X.trouverOuCreerExterne("Mireille St-Fort", "Réseau", ml))!;
-    const t = (await G.creerTacheGeree(await acces("nadege.augustin"), { ...base, titre: "Valider la liste des succursales pilotes", projetId: projets.get("OC")!, assigneId: doublon })) as { id: string };
+    const t = (await G.creerTacheGeree(await acces("wesner.bazile"), { ...base, titre: "Valider la liste des succursales pilotes", projetId: projets.get("OC")!, assigneId: doublon })) as { id: string };
     await X.fusionnerExternes(ml, doublon, qui("mireille.saint-fort").id);
     const [tache] = await D.db.select().from(D.schema.taches).where(eq(D.schema.taches.id, t.id));
     expect(tache.assigneId).toBe(qui("mireille.saint-fort").id);

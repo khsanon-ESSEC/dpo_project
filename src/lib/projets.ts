@@ -79,9 +79,10 @@ export function responsableId(p: { chefProjetId: string | null; referentId?: str
 
 /** Peut-on confier une tâche (de ce projet, ou hors projet) à cette personne ? */
 export function peutAssigner(a: Acteur, assigneId: string, projet: { id: string; chefProjetId: string | null; referentId?: string | null; membres: Set<string> } | null, externe = false): boolean {
+  // Hors division : seul le chef du projet (ou son référent DPO) lui confie une tâche, et sur ce projet.
+  // Une personne hors division avec un accès limité se confie ses propres tâches.
+  if (externe) return assigneId === a.moiId || (!!projet && a.projetsDiriges.has(projet.id));
   if (assigneId === a.moiId || suit(a, assigneId)) return true;
-  // Hors division : hors projet, sur un projet qu'on dirige ; la direction et les exécutifs partout.
-  if (externe) return !projet || a.projetsDiriges.has(projet.id) || a.directeur || a.toutVoir;
   if (projet && a.projetsDiriges.has(projet.id)) return assigneId === projet.chefProjetId || assigneId === projet.referentId || projet.membres.has(assigneId);
   return false;
 }

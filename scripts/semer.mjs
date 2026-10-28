@@ -271,7 +271,7 @@ await sql.begin(async (tx) => {
   };
   await tacheConfiee("mv", "pd", "UR", "Ouvrir les flux du pare-feu pour la recette", "a_faire", 6, 4);
   await tacheConfiee("mv", "nc", "UR", "Contre-audit de sécurité (points 4 à 6)", "en_cours", 12, 24);
-  await tacheConfiee("dj", "pd", null, "Accès VPN pour le prestataire de la plateforme", "a_faire", 3, 2);
+  await tacheConfiee("dj", "pd", "PR", "Accès VPN pour le prestataire de la plateforme", "a_faire", 3, 2);
   // Projet OC (Réseau) : des membres de la DPO y travaillent.
   await tache("sc", "OC", "Parcours d'ouverture de compte : maquettes", "en_cours", jour(8), [[2, "statut", "a_faire", "en_cours"]], null, { debut: jour(2), h: 12 });
   await tache("jd", "OC", "Pièces justificatives par type de client", "a_faire", jour(11), [], null, { debut: jour(8), h: 6 });

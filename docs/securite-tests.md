@@ -84,6 +84,17 @@ Un directeur pouvait modifier, archiver ou réorganiser tout projet qu'il voyait
 - **Connexion** : la réponse prend le même temps que l'adresse existe ou non **[vérifié]** (environ 100 ms dans les deux cas) ; on ne peut plus deviner les adresses valides au chronomètre. Après cinq échecs, le message de blocage reste propre aux comptes existants : compromis volontaire pour l'utilisateur.
 - **Image Docker** : **[vérifié]** le dossier `.local` (base de l'essai local) en était déjà exclu par `.dockerignore` ; rien à corriger.
 
+## Connexion avec le compte Google de la banque (ajoutée le 27 octobre 2026)
+
+Construite après la revue, avec les mêmes exigences. `src/lib/auth/google.ts`, `src/lib/auth/google-regles.ts`, `src/app/api/auth/google/`.
+
+- **Protocole** : OpenID Connect, flux « code » avec PKCE (S256), `state` et `nonce` aléatoires gardés dans un cookie temporaire (`httpOnly`, 10 minutes, effacé au retour). L'adresse de retour vient d'`APP_URL`, jamais de l'en-tête Host.
+- **Jeton d'identité** : signature vérifiée avec les clés publiées par Google (bibliothèque `jose`), émetteur, destinataire (notre identifiant client), expiration, `nonce`, adresse vérifiée par Google. Le compte doit appartenir à l'organisation de la banque : la revendication `hd` **et** le domaine de l'adresse doivent être parmi `GOOGLE_DOMAINE` ; un compte Gmail personnel est refusé.
+- **Comptes** : aucun compte n'est créé ; la personne doit exister, être active et, si elle est hors division, avoir un accès ouvert. Chaque connexion et chaque refus sont notés au journal avec la méthode.
+- **Messages** : la page de connexion n'affiche que des messages connus, choisis par un code (rien du texte de l'adresse n'est repris).
+- **[vérifié]** contre un fournisseur OpenID factice local (même protocole, jetons signés RS256) : connexion d'un compte inscrit ; refus d'un compte personnel, d'un compte de la banque non inscrit, d'une personne hors division sans accès, d'un `state` falsifié, d'un retour sans début ; annulation ; pas de détour par le mot de passe provisoire après Google ; 8 tests unitaires des exigences sur le jeton (`tests/google.test.ts`).
+- **[à vérifier]** avec le vrai client OAuth de la banque, une fois créé par l'informatique : l'essai ci-dessus n'a pas pu passer par les serveurs de Google.
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.

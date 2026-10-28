@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { utilisateurCourant } from "@/lib/auth/session";
+import { googleActive } from "@/lib/auth/google";
+import { MESSAGES_GOOGLE } from "@/lib/auth/google-regles";
 import { FormulaireConnexion } from "./FormulaireConnexion";
 
 export const metadata: Metadata = { title: "Connexion" };
@@ -11,8 +13,11 @@ const BARRES: [number, number, string][] = [
   [16, 44, "#233c7d"], [28, 64, "#284283"], [10, 34, "#1b316a"], [18, 48, "#233c7d"],
 ];
 
-export default async function PageConnexion() {
+export default async function PageConnexion({ searchParams }: { searchParams: Promise<{ google?: string }> }) {
   if (await utilisateurCourant()) redirect("/semaine");
+  const { google } = await searchParams;
+  // Seulement un message connu : jamais un texte venu de l'adresse de la page.
+  const erreurGoogle = google && Object.hasOwn(MESSAGES_GOOGLE, google) ? MESSAGES_GOOGLE[google] : null;
   return (
     <div className="connexion">
       <section aria-label="Pilotage des projets" className="connexion__heros">
@@ -36,7 +41,7 @@ export default async function PageConnexion() {
       </section>
       <main className="connexion__panneau">
         <div className="connexion__centre">
-          <FormulaireConnexion />
+          <FormulaireConnexion google={googleActive()} erreurGoogle={erreurGoogle} />
         </div>
         <p className="note" style={{ textAlign: "center", fontSize: 12 }}>
           Réservé au personnel UNIBANK

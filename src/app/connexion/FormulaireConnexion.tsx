@@ -3,15 +3,15 @@
 import { useActionState, useState } from "react";
 import { seConnecter, type EtatConnexion } from "./actions";
 
-export function FormulaireConnexion() {
+export function FormulaireConnexion({ google, erreurGoogle }: { google: boolean; erreurGoogle: string | null }) {
   const [etat, action, enCours] = useActionState<EtatConnexion, FormData>(seConnecter, { message: null });
   const [visible, setVisible] = useState(false);
   return (
     <form action={action} className="connexion__formulaire">
       <h2 className="connexion__soustitre">Connexion</h2>
-      {etat.message ? (
+      {etat.message || erreurGoogle ? (
         <p className="erreur" role="alert">
-          {etat.message}
+          {etat.message ?? erreurGoogle}
         </p>
       ) : null}
       <div className="champ">
@@ -44,12 +44,20 @@ export function FormulaireConnexion() {
         <span style={{ flex: 1, height: 1, background: "var(--filet)" }} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <button type="button" disabled aria-describedby="google-bientot" className="bouton-contour" style={{ height: 52, cursor: "not-allowed", color: "var(--discret)", borderColor: "var(--filet-fort)" }}>
-          Continuer avec le compte Google UNIBANK
-        </button>
-        <span id="google-bientot" className="aide" style={{ alignSelf: "center", fontSize: 12, color: "var(--discret)" }}>
-          Bientôt disponible
-        </span>
+        {google ? (
+          <a href="/api/auth/google" className="bouton-contour" style={{ height: 52, display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
+            Continuer avec le compte Google UNIBANK
+          </a>
+        ) : (
+          <>
+            <button type="button" disabled aria-describedby="google-bientot" className="bouton-contour" style={{ height: 52, cursor: "not-allowed", color: "var(--discret)", borderColor: "var(--filet-fort)" }}>
+              Continuer avec le compte Google UNIBANK
+            </button>
+            <span id="google-bientot" className="aide" style={{ alignSelf: "center", fontSize: 12, color: "var(--discret)" }}>
+              Pas encore activée sur ce serveur
+            </span>
+          </>
+        )}
       </div>
     </form>
   );

@@ -1,0 +1,1 @@
+ALTER TABLE "sessions" ADD COLUMN "methode" text DEFAULT 'mot_de_passe' NOT NULL;
