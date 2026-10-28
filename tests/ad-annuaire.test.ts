@@ -107,4 +107,31 @@ describe.skipIf(!URL_TEST)("connexion Windows contre un annuaire en LDAPS", () =
     expect(await AD.verifierAD("*)(uid=*", "x")).toMatchObject({ ok: false, refus: "identifiant" });
     expect((await liaisonsRecues()).length).toBe(n);
   });
+
+  describe("lire l'annuaire pour importer l'organisation", () => {
+    it("membres actifs du groupe (groupes imbriqués compris), avec poste, service et supérieur ; comptes désactivés exclus", async () => {
+      const ad = await charger();
+      const r = await ad.lireAnnuaire("jrnoel", "Windows-JeanRobert-1", { equipeDepuisService: true });
+      if (!r.ok) throw new Error(r.refus);
+      const parCourriel = new Map(r.lignes.map((l) => [l.courriel, l]));
+      expect(parCourriel.has("daphnee.joseph@demo.dpo.local")).toBe(false); // pas dans le groupe
+      expect(parCourriel.has("desactive@demo.dpo.local")).toBe(false); // compte désactivé
+      expect(parCourriel.get("rose.cadet@demo.dpo.local")).toMatchObject({ prenom: "Rose", nom: "Cadet", poste: "Chargée de projets", equipe: "Projets organisationnels", superieur: "jean-robert.noel@demo.dpo.local" });
+      expect(parCourriel.get("jean-robert.noel@demo.dpo.local")).toMatchObject({ superieur: "nadege.augustin@demo.dpo.local" });
+    });
+    it("sans le service comme équipe ; une unité d'organisation hors de la base est refusée ; mauvais mot de passe refusé", async () => {
+      const ad = await charger();
+      const r = await ad.lireAnnuaire("jrnoel", "Windows-JeanRobert-1", { equipeDepuisService: false });
+      expect(r.ok && r.lignes.every((l) => l.equipe === "")).toBe(true);
+      expect(await ad.lireAnnuaire("jrnoel", "Windows-JeanRobert-1", { ou: "ou=x,dc=autre,dc=local", equipeDepuisService: true })).toEqual({ ok: false, refus: "perimetre" });
+      expect(await ad.lireAnnuaire("jrnoel", "faux", { equipeDepuisService: true })).toEqual({ ok: false, refus: "identifiants" });
+      expect(await ad.lireAnnuaire("jrnoel", "", { equipeDepuisService: true })).toEqual({ ok: false, refus: "identifiants" });
+    });
+    it("sans groupe AD_GROUPE, une unité d'organisation est obligatoire", async () => {
+      const ad = await charger({ AD_GROUPE: undefined });
+      expect(await ad.lireAnnuaire("jrnoel", "Windows-JeanRobert-1", { equipeDepuisService: true })).toEqual({ ok: false, refus: "perimetre" });
+      const r = await ad.lireAnnuaire("jrnoel", "Windows-JeanRobert-1", { ou: "ou=personnes,dc=demo,dc=local", equipeDepuisService: true });
+      expect(r.ok && r.lignes.some((l) => l.courriel === "daphnee.joseph@demo.dpo.local")).toBe(true);
+    });
+  });
 });

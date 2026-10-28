@@ -66,6 +66,37 @@ export function refusDeLiaison(message: string): RefusAD {
 /** Comparaison de DN sans tenir compte de la casse ni des espaces après les virgules. */
 const dnNormal = (dn: string) => dn.trim().toLowerCase().replace(/\s*,\s*/g, ",");
 
+/**
+ * Une unité d'organisation saisie par un administrateur : un DN simple (OU=…,DC=…), sous la base de l'annuaire.
+ * Ni caractères de contrôle, ni caractères de filtre LDAP.
+ */
+export function dnDans(dn: string, base: string): boolean {
+  const d = dnNormal(dn);
+  if (!d || d.length > 500 || !/^(?:(?:ou|cn|dc)=[^,=+<>#;\\"()*\u0000-\u001f]+,)*(?:ou|cn|dc)=[^,=+<>#;\\"()*\u0000-\u001f]+$/.test(d)) return false;
+  return d === dnNormal(base) || d.endsWith(`,${dnNormal(base)}`);
+}
+
+/** Un compte de l'annuaire devient une ligne d'import ; null sans adresse (mail, sinon userPrincipalName). */
+export function ligneDepuisAnnuaire(
+  a: Record<string, string>,
+  superieur: (dn: string) => Record<string, string> | null,
+  ligne: number,
+  equipeDepuisService: boolean,
+): { ligne: number; prenom: string; nom: string; courriel: string; poste: string; equipe: string; superieur: string } | null {
+  const courriel = (a.mail || a.userPrincipalName || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(courriel)) return null;
+  let prenom = a.givenName ?? "";
+  let nom = a.sn ?? "";
+  if ((!prenom || !nom) && a.displayName) {
+    const [p, ...n] = a.displayName.trim().split(/\s+/);
+    prenom ||= p ?? "";
+    nom ||= n.join(" ");
+  }
+  const s = a.manager ? superieur(a.manager) : null;
+  const courrielSup = s ? (s.mail || s.userPrincipalName || "").trim().toLowerCase() : "";
+  return { ligne, prenom, nom, courriel, poste: a.title ?? "", equipe: equipeDepuisService ? (a.department ?? "") : "", superieur: courrielSup };
+}
+
 /** Appartenance directe à un groupe (attribut memberOf). */
 export function estDansGroupe(memberOf: unknown, groupe: string): boolean {
   const liste = Array.isArray(memberOf) ? memberOf : memberOf ? [memberOf] : [];

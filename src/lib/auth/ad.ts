@@ -14,8 +14,9 @@
  */
 import "server-only";
 import { readFileSync } from "node:fs";
-import { AndFilter, Client, EqualityFilter, ExtensibleFilter, InvalidCredentialsError } from "ldapts";
-import { compteDesactive, estDansGroupe, motDePasseADAcceptable, nomDeLiaison, normaliserIdentifiant, refusDeLiaison, type RefusAD } from "@/lib/auth/ad-regles";
+import { AndFilter, Client, EqualityFilter, ExtensibleFilter, InvalidCredentialsError, NotFilter, type Filter } from "ldapts";
+import { compteDesactive, dnDans, estDansGroupe, ligneDepuisAnnuaire, motDePasseADAcceptable, nomDeLiaison, normaliserIdentifiant, refusDeLiaison, type RefusAD } from "@/lib/auth/ad-regles";
+import type { LigneImport } from "@/lib/import-organisation";
 
 const urls = () =>
   (process.env.AD_URL ?? "")
@@ -109,4 +110,85 @@ async function dansGroupeImbrique(client: Client, dn: string, groupe: string): P
   } catch {
     return false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Importer l'organisation depuis l'annuaire (administrateurs)
+// ---------------------------------------------------------------------------
+
+export type RefusLecture = RefusAD | "perimetre";
+
+/**
+ * Lit les comptes de l'annuaire pour l'import : l'administrateur se lie avec SON compte Windows (rien n'est
+ * gardé), on lit les membres du groupe AD_GROUPE (groupes imbriqués compris) ou d'une unité d'organisation
+ * indiquée, comptes désactivés exclus. Le supérieur vient de l'attribut « manager ».
+ */
+export async function lireAnnuaire(
+  saisie: string,
+  motDePasse: unknown,
+  o: { ou?: string; equipeDepuisService: boolean },
+): Promise<{ ok: true; lignes: LigneImport[]; sansAdresse: number } | { ok: false; refus: RefusLecture }> {
+  const domaine = process.env.AD_DOMAINE!.trim();
+  const base = process.env.AD_BASE_DN!.trim();
+  const groupe = process.env.AD_GROUPE?.trim() || null;
+  const ou = (o.ou ?? "").trim();
+  if (ou && !dnDans(ou, base)) return { ok: false, refus: "perimetre" };
+  if (!groupe && !ou) return { ok: false, refus: "perimetre" };
+  const identifiant = normaliserIdentifiant(saisie, domaine);
+  if (!identifiant) return { ok: false, refus: "identifiant" };
+  if (!motDePasseADAcceptable(motDePasse)) return { ok: false, refus: "identifiants" };
+  const cle = identifiant.toLowerCase();
+  if (recents(cle).length >= essaisMax()) return { ok: false, refus: "trop" };
+
+  const filtres: Filter[] = [
+    new EqualityFilter({ attribute: "objectClass", value: "user" }),
+    new EqualityFilter({ attribute: "objectCategory", value: "person" }),
+    // Comptes désactivés exclus (bit 2 de userAccountControl, règle LDAP_MATCHING_RULE_BIT_AND).
+    new NotFilter({ filter: new ExtensibleFilter({ rule: "1.2.840.113556.1.4.803", matchType: "userAccountControl", value: "2" }) }),
+  ];
+  if (groupe) filtres.push(new ExtensibleFilter({ rule: "1.2.840.113556.1.4.1941", matchType: "memberOf", value: groupe }));
+
+  for (const url of urls()) {
+    const client = new Client({ url, timeout: 20000, connectTimeout: 5000, strictDN: false, tlsOptions: { ca: autorite(), minVersion: "TLSv1.2", rejectUnauthorized: true } });
+    try {
+      try {
+        await client.bind(nomDeLiaison(identifiant, domaine, process.env.AD_LIAISON), motDePasse);
+      } catch (e) {
+        if (e instanceof InvalidCredentialsError) {
+          noterEchec(cle);
+          return { ok: false, refus: refusDeLiaison(e.message) };
+        }
+        throw e;
+      }
+      echecs.delete(cle);
+      const ATTRIBUTS = ["givenName", "sn", "displayName", "mail", "userPrincipalName", "title", "department", "manager", "userAccountControl"];
+      const { searchEntries } = await client.search(ou || base, { scope: "sub", filter: new AndFilter({ filters: filtres }), attributes: ATTRIBUTS, paged: { pageSize: 500 }, sizeLimit: 3000 });
+      const entrees = searchEntries.filter((e) => !compteDesactive(attribut(e, "userAccountControl")));
+      const lire = (e: Record<string, unknown>) => Object.fromEntries(ATTRIBUTS.map((a) => [a, texte(attribut(e, a)).trim()]));
+      const parDn = new Map(entrees.map((e) => [e.dn.toLowerCase().replace(/\s*,\s*/g, ","), lire(e)]));
+      // Supérieurs hors du groupe : lus un par un (au plus 200), pour connaître leur adresse.
+      const manquants = [...new Set(entrees.map((e) => lire(e).manager).filter((m) => m && !parDn.has(m.toLowerCase().replace(/\s*,\s*/g, ","))))].slice(0, 200);
+      for (const dn of manquants) {
+        try {
+          const r = await client.search(dn, { scope: "base", filter: new EqualityFilter({ attribute: "objectClass", value: "user" }), attributes: ATTRIBUTS });
+          if (r.searchEntries[0]) parDn.set(dn.toLowerCase().replace(/\s*,\s*/g, ","), lire(r.searchEntries[0]));
+        } catch {
+          // supérieur illisible : la case reste vide
+        }
+      }
+      let sansAdresse = 0;
+      const lignes: LigneImport[] = [];
+      entrees.forEach((e, i) => {
+        const l = ligneDepuisAnnuaire(lire(e), (dn) => parDn.get(dn.toLowerCase().replace(/\s*,\s*/g, ",")) ?? null, i + 1, o.equipeDepuisService);
+        if (l) lignes.push(l);
+        else sansAdresse += 1;
+      });
+      return { ok: true, lignes, sansAdresse };
+    } catch (e) {
+      console.error(`annuaire ${url} :`, (e as Error).message);
+    } finally {
+      await client.unbind().catch(() => {});
+    }
+  }
+  return { ok: false, refus: "indisponible" };
 }

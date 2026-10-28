@@ -4031,3 +4031,27 @@ a.puce:hover {
   font-size: 13px;
   line-height: 18px;
 }
+
+/* Chiffres dans une carte (fond clair), par exemple l'aperçu d'un import. */
+.chiffres--clair {
+  margin: 0;
+  gap: 12px 40px;
+}
+.chiffres--clair .chiffre dt {
+  color: var(--discret);
+}
+.chiffres--clair .chiffre dd {
+  font-size: 36px;
+  line-height: 40px;
+  color: var(--encre);
+}
+.champ input[type="file"] {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.bouton-ambre:disabled,
+.bouton-contour:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

@@ -66,7 +66,7 @@ export default async function PagePilote() {
         </dl>
       </Bandeau>
       <div className="page" style={{ maxWidth: 980 }}>
-        <SousOnglets onglets={ONGLETS_ORGANISATION} courant="/pilote" label="Organisation" />
+        <SousOnglets onglets={u.administrateur ? ONGLETS_ORGANISATION : ONGLETS_ORGANISATION.filter((o) => o.href === "/organisation" || o.href === "/pilote")} courant="/pilote" label="Organisation" />
         <section className="carte" aria-labelledby="p-semaines">
           <h2 id="p-semaines" className="carte__titre">
             Semaine par semaine
