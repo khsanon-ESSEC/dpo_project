@@ -190,14 +190,15 @@ Conserver les sauvegardes hors du serveur, et tester une restauration au moins u
 - Mots de passe hachés avec Argon2id ; 12 caractères minimum, avec au moins une lettre et un chiffre.
 - Blocage de 15 minutes après 5 essais manqués.
 - Sessions stockées en base sous forme d'empreinte ; cookie `httpOnly`, `SameSite=Lax`, réservé à HTTPS.
-- Désactiver une personne ferme immédiatement ses sessions.
+- Désactiver une personne ferme immédiatement ses sessions ; changer son mot de passe déconnecte ses autres appareils.
+- On ne rattache une tâche qu'à un projet qu'on a le droit de voir : un projet caché ne s'ouvre pas en s'y confiant une tâche.
 - Chaque lecture passe par la couche d'accès (`src/lib/acces.ts`) : une page inaccessible répond « introuvable », sans dire si elle existe.
 - En-têtes de sécurité stricts (CSP sans ressource externe, interdiction d'affichage dans un cadre). Polices, logos et scripts sont servis par l'application elle-même.
 - Journal des actions sensibles (connexions, changements de rôles, envois, approbations, pièces déposées et téléchargées) dans la table `journal`.
 - Pièces jointes : formats de bureau seulement, reconnus à l'extension **et** au contenu ; toujours servies en téléchargement (jamais affichées dans la page), seulement à qui peut lire le champ.
 - Le conteneur tourne avec un utilisateur sans privilèges.
 
-**Avant la mise en production** : revue de sécurité selon la politique de la banque, sauvegardes testées, `DATE_DEMO` vide, `COOKIE_SECURISE=1`, aucune donnée de démonstration.
+**Avant la mise en production** : revue de sécurité selon la politique de la banque, sauvegardes testées, `DATE_DEMO` vide, `COOKIE_SECURISE=1`, aucune donnée de démonstration. Une première revue interne (injections, autorisations, session, pièces jointes, assistant, dépendances) est consignée dans `docs/securite-tests.md` ; elle prépare la revue externe, elle ne la remplace pas.
 
 ### Assistant et données
 

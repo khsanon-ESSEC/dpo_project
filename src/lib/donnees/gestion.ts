@@ -6,7 +6,7 @@
 import "server-only";
 import { and, asc, count, eq, isNull, max, ne } from "drizzle-orm";
 import { db, schema } from "@/db";
-import type { Acces } from "@/lib/acces";
+import { idsProjetsVisibles, type Acces } from "@/lib/acces";
 import { noter } from "@/lib/journal";
 import { chargerOrganisation, personneActuelle } from "@/lib/organisation";
 import { codeSuggere, codeValide, peutAssigner, projetOuvert, projetSupprimable, STATUTS_ACCEPTES, tacheSupprimable, verifierChefEtReferent, type StatutProjet } from "@/lib/projets";
@@ -20,6 +20,16 @@ const date = (v: unknown) => {
 const texte = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 
 export const acteur = (a: Acces) => ({ moiId: a.moi.id, suivis: a.suivis, projetsDiriges: a.projetsDiriges, directeur: a.directeur, toutVoir: a.toutVoir });
+
+/**
+ * On ne rattache une tâche qu'à un projet qu'on peut déjà voir (qu'on dirige, dont on est membre, et,
+ * pour la direction et les exécutifs, de leur périmètre). Sans ce contrôle, se confier une tâche sur
+ * n'importe quel projet y ferait entrer dans l'équipe du projet et en ouvrirait la lecture.
+ */
+async function projetAccessible(a: Acces, projetId: string): Promise<boolean> {
+  const visibles = await idsProjetsVisibles(a);
+  return visibles === "tous" || visibles.has(projetId);
+}
 
 async function codesPris(sauf?: string) {
   const lignes = await db.select({ id: schema.projets.id, code: schema.projets.code }).from(schema.projets);
@@ -365,6 +375,7 @@ export async function creerTacheGeree(
   if (d.debut && d.echeance && d.debut > d.echeance) return { erreur: "Le début doit précéder l'échéance." };
   const projet = await projetPourAssignation(d.projetId);
   if (d.projetId && !projet) return { erreur: "Projet introuvable." };
+  if (d.projetId && !(await projetAccessible(a, d.projetId))) return { erreur: "Projet introuvable." };
   if (projet && !projetOuvert(projet)) return { erreur: "Ce projet ne reçoit pas de tâches (demande, refusé, finalisé ou archivé)." };
   const eff = await assigneEffectif(a, d, projet);
   if ("erreur" in eff) return { erreur: eff.erreur! };
@@ -397,6 +408,7 @@ export async function modifierDefinitionTache(
   if ("erreur" in eff) return { erreur: eff.erreur! };
   d = { ...d, assigneId: eff.id };
   const change = { titre: titre !== tache.titre, projet: d.projetId !== tache.projetId, assigne: d.assigneId !== tache.assigneId };
+  if (change.projet && d.projetId && !(await projetAccessible(a, d.projetId))) return { erreur: "Projet introuvable." };
   if (change.projet && projet && !projetOuvert(projet)) return { erreur: "Ce projet ne reçoit pas de tâches (demande, refusé, finalisé ou archivé)." };
   const assigne = await personneActuelle(d.assigneId);
   if (change.assigne && !assigne?.actif) return { erreur: "Cette personne n'est plus active." };

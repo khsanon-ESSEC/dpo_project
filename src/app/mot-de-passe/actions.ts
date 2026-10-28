@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { verify } from "@node-rs/argon2";
 import { db, schema } from "@/db";
-import { exigerUtilisateur, hacherMotDePasse, motDePasseAcceptable } from "@/lib/auth/session";
+import { exigerUtilisateur, fermerAutresSessions, hacherMotDePasse, motDePasseAcceptable } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
 
 export type EtatMotDePasse = { message: string | null };
@@ -21,6 +21,7 @@ export async function changerMotDePasse(_: EtatMotDePasse, form: FormData): Prom
   if (nouveau !== confirmation) return { message: "Les deux saisies du nouveau mot de passe diffèrent." };
   if (nouveau === actuel) return { message: "Choisissez un mot de passe différent de l'actuel." };
   await db.update(schema.personnes).set({ motDePasseHash: await hacherMotDePasse(nouveau), doitChangerMotDePasse: false }).where(eq(schema.personnes.id, u.id));
+  await fermerAutresSessions(u.id);
   await noter(u.id, "mot_de_passe_change");
   redirect("/semaine");
 }

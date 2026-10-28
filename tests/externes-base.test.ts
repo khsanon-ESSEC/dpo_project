@@ -95,6 +95,23 @@ describe.skipIf(!URL_TEST)("personnes hors division et projets d'autres division
     expect((await S.confieesHorsDivision(dj.moi.id)).map((x) => x.titre)).toEqual(expect.arrayContaining(["Badge d'accès pour la consultante", "Accès VPN pour le prestataire de la plateforme"]));
   });
 
+  it("se confier une tâche sur un projet qu'on ne voit pas est refusé et n'ouvre pas le projet", async () => {
+    const dj = await acces("daphnee.joseph");
+    const cr = projets.get("CR")!;
+    const visibles = await A.idsProjetsVisibles(dj);
+    expect(visibles !== "tous" && visibles.has(cr)).toBe(false); // Daphnée ne voit pas CR au départ
+    const membreAvant = (await G.membresDuProjet(cr)).some((m) => m.personneId === dj.moi.id);
+    const r = await G.creerTacheGeree(dj, { ...base, titre: "M'inviter sur un projet caché", projetId: cr, assigneId: dj.moi.id });
+    expect(r).toHaveProperty("erreur");
+    // Elle n'est pas entrée dans l'équipe du projet, et CR reste invisible.
+    expect((await G.membresDuProjet(cr)).some((m) => m.personneId === dj.moi.id)).toBe(membreAvant);
+    const apres = await A.idsProjetsVisibles(dj);
+    expect(apres !== "tous" && apres.has(cr)).toBe(false);
+    // Sur un projet où elle travaille déjà, elle peut toujours se confier une tâche.
+    const ur = projets.get("UR")!;
+    expect(await G.creerTacheGeree(dj, { ...base, titre: "Ma tâche sur un projet où je suis", projetId: ur, assigneId: dj.moi.id })).toHaveProperty("id");
+  });
+
   it("projet d'une autre division : le référent DPO le gère et lit les lignes ; le rapport mensuel l'ignore", async () => {
     const oc = projets.get("OC")!;
     const wb = await acces("wesner.bazile");

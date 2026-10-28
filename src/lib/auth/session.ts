@@ -3,7 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { and, eq, gt } from "drizzle-orm";
+import { and, eq, gt, ne } from "drizzle-orm";
 import { hash, verify } from "@node-rs/argon2";
 import { db, schema } from "@/db";
 import { noter } from "@/lib/journal";
@@ -57,6 +57,13 @@ export async function ouvrirSession(personneId: string) {
     agent: h.get("user-agent")?.slice(0, 300) ?? null,
   });
   await poserCookie(jeton, expire);
+}
+
+/** Ferme toutes les sessions de la personne sauf celle en cours : après un changement de mot de passe, les autres appareils sont déconnectés. */
+export async function fermerAutresSessions(personneId: string) {
+  const jeton = (await cookies()).get(COOKIE)?.value;
+  const actuelle = jeton ? empreinteJeton(jeton) : "";
+  await db.delete(schema.sessions).where(actuelle ? and(eq(schema.sessions.personneId, personneId), ne(schema.sessions.id, actuelle)) : eq(schema.sessions.personneId, personneId));
 }
 
 export async function fermerSession() {

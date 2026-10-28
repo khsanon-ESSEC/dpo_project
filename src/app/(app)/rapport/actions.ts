@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import {
   champDeRubrique,
@@ -30,6 +31,13 @@ async function monBrouillon(rapportId: string) {
   return { u, r, f: formulaireDe(r) };
 }
 
+/** Une ligne de rapport ne peut porter que sur un projet que l'auteur voit déjà ; sinon on ne lui met pas de projet. */
+async function projetDeLigne(u: Awaited<ReturnType<typeof exigerUtilisateur>>, projetId: string | null): Promise<string | null> {
+  if (!projetId) return null;
+  const visibles = await idsProjetsVisibles(await acces(u));
+  return visibles === "tous" || visibles.has(projetId) ? projetId : null;
+}
+
 async function maLigne(ligneId: string) {
   const [l] = await db.select().from(schema.lignesRapport).where(eq(schema.lignesRapport.id, ligneId));
   if (!l) throw new Error("Ligne introuvable.");
@@ -46,8 +54,8 @@ export async function modifierLigne(ligneId: string, texte: string) {
 }
 
 export async function changerProjetLigne(ligneId: string, projetId: string | null) {
-  await maLigne(ligneId);
-  await db.update(schema.lignesRapport).set({ projetId: projetId || null }).where(eq(schema.lignesRapport.id, ligneId));
+  const { u } = await maLigne(ligneId);
+  await db.update(schema.lignesRapport).set({ projetId: await projetDeLigne(u, projetId || null) }).where(eq(schema.lignesRapport.id, ligneId));
   revalidatePath("/rapport");
 }
 
@@ -81,12 +89,12 @@ export async function basculerRemonte(ligneId: string) {
 }
 
 export async function ajouterLigne(rapportId: string, champId: string, form: FormData) {
-  const { f } = await monBrouillon(rapportId);
+  const { u, f } = await monBrouillon(rapportId);
   const c = f.find((x) => x.id === champId);
   if (!c || c.type !== "lignes" || c.partie === "equipe") return;
   const texte = String(form.get("texte") ?? "").trim().slice(0, 500);
   if (!texte) return;
-  const projetId = c.parProjet === false ? null : String(form.get("projetId") ?? "") || null;
+  const projetId = c.parProjet === false ? null : await projetDeLigne(u, String(form.get("projetId") ?? "") || null);
   await db.insert(schema.lignesRapport).values({ rapportId, champId, partie: c.rubrique && c.rubrique !== "autre" ? c.rubrique : null, texte, projetId, ordre: await ordreSuivant(rapportId) });
   revalidatePath("/rapport");
 }
