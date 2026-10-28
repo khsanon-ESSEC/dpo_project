@@ -1,0 +1,132 @@
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { exigerInterne } from "@/lib/auth/session";
+import { dateCourte } from "@/lib/dates";
+import { suiviPilote } from "@/lib/donnees/pilote";
+import { Bandeau } from "@/components/Bandeau";
+import { ONGLETS_ORGANISATION, SousOnglets } from "@/components/SousOnglets";
+
+export const metadata: Metadata = { title: "Suivi du pilote" };
+
+const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : null);
+
+/**
+ * Suivi du pilote, pour les administrateurs et les exécutifs : l'application est-elle utilisée ?
+ * Des nombres agrégés seulement : personne n'est suivi individuellement ici.
+ */
+export default async function PagePilote() {
+  const u = await exigerInterne();
+  if (!u.administrateur && !u.executif) notFound();
+  const s = await suiviPilote();
+  const derniere = [...s.semaines].reverse().find((w) => w.attendu);
+
+  const Barre = ({ valeur, total, etiquette }: { valeur: number; total: number; etiquette: string }) => {
+    const p = pct(valeur, total);
+    return (
+      <span style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+        <span aria-hidden="true" style={{ flex: "1 1 80px", maxWidth: 160, height: 8, background: "var(--piste)", position: "relative" }}>
+          <span style={{ position: "absolute", inset: 0, width: `${p ?? 0}%`, background: (p ?? 0) >= 80 ? "var(--ok-point)" : (p ?? 0) >= 50 ? "var(--veille-point)" : "var(--retard-point)" }} />
+        </span>
+        <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }} aria-label={etiquette}>
+          {p === null ? "—" : `${p} %`} <span className="ton-discret">({valeur}/{total})</span>
+        </span>
+      </span>
+    );
+  };
+
+  return (
+    <>
+      <Bandeau surtitre="Pilote · adoption de l'application" titre="Suivi du pilote">
+        <dl className="chiffres">
+          <div className="chiffre">
+            <dt>rapports à l&apos;heure, dernière semaine</dt>
+            <dd>
+              {derniere ? (pct(derniere.aLheure, derniere.redacteurs) ?? 0) : "—"}
+              <small>&nbsp;%</small>
+            </dd>
+          </div>
+          <div className="chiffre">
+            <dt>ont mis à jour une tâche avant vendredi</dt>
+            <dd>
+              {derniere ? (pct(derniere.tachesAJour, derniere.redacteurs) ?? 0) : "—"}
+              <small>&nbsp;%</small>
+            </dd>
+          </div>
+          <div className="chiffre">
+            <dt>personnes actives, 4 semaines</dt>
+            <dd>
+              {s.actifs}
+              <small>&nbsp;/ {s.utilisateurs}</small>
+            </dd>
+          </div>
+        </dl>
+      </Bandeau>
+      <div className="page" style={{ maxWidth: 980 }}>
+        <SousOnglets onglets={ONGLETS_ORGANISATION} courant="/pilote" label="Organisation" />
+        <section className="carte" aria-labelledby="p-semaines">
+          <h2 id="p-semaines" className="carte__titre">
+            Semaine par semaine
+          </h2>
+          <p className="note" style={{ margin: "4px 0 12px" }}>
+            Sur les {s.semaines[0]?.redacteurs ?? 0} personnes qui rédigent un rapport (ni exécutifs, ni personnes hors division). « À l&apos;heure » : avant l&apos;heure limite du modèle de rapport de chacun.
+          </p>
+          <div style={{ overflowX: "auto" }}>
+            <table className="tableau-simple">
+              <thead>
+                <tr>
+                  <th scope="col">Semaine du</th>
+                  <th scope="col">Rapports envoyés</th>
+                  <th scope="col">dont à l&apos;heure</th>
+                  <th scope="col">Tâches mises à jour (lundi → vendredi)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.semaines.map((w) => (
+                  <tr key={w.lundi}>
+                    <th scope="row">
+                      {dateCourte(w.lundi)}
+                      {w.enCours ? <span className="ton-discret"> · en cours</span> : null}
+                    </th>
+                    <td>{w.attendu || w.envoyes ? <Barre valeur={w.envoyes} total={w.redacteurs} etiquette={`${w.envoyes} rapports envoyés sur ${w.redacteurs}`} /> : <span className="ton-discret">attendus vendredi</span>}</td>
+                    <td>{w.attendu || w.envoyes ? <Barre valeur={w.aLheure} total={w.redacteurs} etiquette={`${w.aLheure} rapports à l'heure sur ${w.redacteurs}`} /> : "—"}</td>
+                    <td>
+                      <Barre valeur={w.tachesAJour} total={w.redacteurs} etiquette={`${w.tachesAJour} personnes sur ${w.redacteurs}`} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="carte carte--liste" aria-labelledby="p-ecrans">
+          <h2 id="p-ecrans" className="carte__titre">
+            Écrans ouverts · depuis le {dateCourte(s.depuis)}
+          </h2>
+          <p className="note" style={{ margin: "4px 0 8px" }}>
+            Nombre de personnes différentes qui ont ouvert chaque écran, du moins utilisé au plus utilisé : ce qui sert peu est à simplifier ou à retirer. Les écrans jamais ouverts n&apos;apparaissent pas.
+          </p>
+          {s.ecrans.length === 0 ? (
+            <p className="vide">Rien encore : les écrans ouverts sont comptés à partir de la mise en service de ce suivi.</p>
+          ) : (
+            <ul className="liste">
+              {s.ecrans.map((e) => (
+                <li key={e.ecran} className="rangee" style={{ minHeight: 48 }}>
+                  <span className="rangee__texte">
+                    <span className="rangee__titre">{e.libelle}</span>
+                  </span>
+                  <span className="rangee__meta" style={{ width: "min(260px, 50%)" }}>
+                    <Barre valeur={e.personnes} total={s.utilisateurs} etiquette={`${e.personnes} personnes sur ${s.utilisateurs}`} />
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <p className="note">
+          Les écrans sont notés « telle personne a ouvert tel écran tel jour », sans durée ni contenu, et ne s&apos;affichent ici qu&apos;en nombres. Les rapports en retard de chacun restent dans Équipe, pour son chef.
+        </p>
+      </div>
+    </>
+  );
+}

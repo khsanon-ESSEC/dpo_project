@@ -4,6 +4,7 @@ import { acces, exigerProjetVisible, peutVoirTache, type Acces } from "@/lib/acc
 import { exigerUtilisateur, type Utilisateur } from "@/lib/auth/session";
 import { tachesDuProjet, type TacheDuProjet } from "@/lib/donnees/projets";
 import { chargerOrganisation } from "@/lib/organisation";
+import { VuesSecondaires } from "./VuesSecondaires";
 import { nomComplet } from "@/lib/regles";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
@@ -21,16 +22,21 @@ const VUES: { id: Vue; libelle: string; icone: string; chemin: string }[] = [
 
 export const cheminVue = (projetId: string, vue: Vue) => `/projets/${projetId}${VUES.find((v) => v.id === vue)!.chemin}`;
 
+/** Vues principales ; les autres (Gantt, Calendrier, Charge) sont derrière « Plus de vues ». */
+const PRINCIPALES: Vue[] = ["apercu", "liste", "tableau"];
+
 /** Onglets des vues d'un projet. Chaque vue est une page à part (application multipage). */
 export function OngletsVues({ projetId, vue, sansCharge = false }: { projetId: string; vue: Vue; sansCharge?: boolean }) {
+  const autres = VUES.filter((v) => !PRINCIPALES.includes(v.id) && !(sansCharge && v.id === "charge"));
   return (
     <nav className="vues" aria-label="Vues du projet">
-      {VUES.filter((v) => !(sansCharge && v.id === "charge")).map((v) => (
+      {VUES.filter((v) => PRINCIPALES.includes(v.id)).map((v) => (
         <a key={v.id} href={cheminVue(projetId, v.id)} aria-current={v.id === vue ? "page" : undefined}>
           <Icone nom={v.icone} taille={16} />
           {v.libelle}
         </a>
       ))}
+      <VuesSecondaires vues={autres.map((v) => ({ href: cheminVue(projetId, v.id), libelle: v.libelle, icone: v.icone, courante: v.id === vue }))} active={autres.some((v) => v.id === vue)} />
     </nav>
   );
 }

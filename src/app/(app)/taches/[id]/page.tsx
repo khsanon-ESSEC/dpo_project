@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { acces, exigerTacheVisible, idsProjetsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
-import { aujourdhui, dateCourte, echeanceRelative, jourAbrege } from "@/lib/dates";
+import { aujourdhui, dateCourte, echeanceRelative, jourAbrege, lundiDe } from "@/lib/dates";
 import { dateLocale } from "@/lib/dates";
 import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet } from "@/lib/regles";
@@ -44,6 +44,11 @@ export default async function PageTache({ params, searchParams }: { params: Prom
   const chef = projet?.chefProjetId ? org.personnes.get(projet.chefProjetId) : null;
   const assigne = org.personnes.get(t.assigneId)!;
   const e = echeanceRelative(t.echeance, aujourdhui());
+  // Action décidée en réunion : la réunion d'origine (lien vers la semaine pour qui y a participé).
+  const [reunion] = t.reunionId ? await db.select({ id: schema.reunions.id, titre: schema.reunions.titre, jour: schema.reunions.jour }).from(schema.reunions).where(eq(schema.reunions.id, t.reunionId)) : [];
+  const [participe] = reunion
+    ? await db.select({ id: schema.participantsReunion.personneId }).from(schema.participantsReunion).where(and(eq(schema.participantsReunion.reunionId, reunion.id), eq(schema.participantsReunion.personneId, u.id)))
+    : [];
 
   const decrire = (ev: (typeof evenements)[number]) => {
     if (ev.type === "creation") return "Créée";
@@ -103,6 +108,18 @@ export default async function PageTache({ params, searchParams }: { params: Prom
         </dl>
       </Bandeau>
       <div className="page" style={{ maxWidth: 760 }}>
+        {reunion ? (
+          <p className="note" style={{ margin: 0 }}>
+            Action décidée en réunion :{" "}
+            {participe ? (
+              <a href={`/reunions?semaine=${lundiDe(reunion.jour)}`} className="lien-discret">
+                « {reunion.titre} », {dateCourte(reunion.jour)}
+              </a>
+            ) : (
+              <>« {reunion.titre} », {dateCourte(reunion.jour)}</>
+            )}
+          </p>
+        ) : null}
         {erreur ? (
           <p className="erreur" role="alert">
             {erreur}

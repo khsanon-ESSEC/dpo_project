@@ -3703,3 +3703,295 @@ a.puce:hover {
   font-size: 13px;
   cursor: pointer;
 }
+
+/* ---------- Ajouter une tâche en une ligne ---------- */
+.saisie-rapide {
+  /* Au-dessus des cartes qui suivent : l'animation d'apparition fait de chaque bloc de la page un plan à part,
+     sans quoi la liste des projets passerait sous la carte suivante. */
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.saisie-rapide__ligne {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 4px 4px 14px;
+  border: 1px solid var(--controle);
+  border-radius: 9999px;
+  background: var(--champ);
+  color: var(--discret);
+}
+.saisie-rapide__ligne:focus-within {
+  outline: 2px solid var(--arc);
+  outline-offset: 2px;
+}
+.saisie-rapide__ligne input {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--encre);
+  font: inherit;
+  font-size: 15px;
+}
+.saisie-rapide__ligne .bouton-ambre {
+  height: 40px;
+  padding: 0 18px;
+  flex: none;
+}
+.saisie-rapide__ligne .bouton-ambre:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.saisie-rapide__apercu {
+  margin: 0;
+  min-height: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.saisie-rapide__titre {
+  font-weight: 500;
+  color: var(--encre);
+  overflow-wrap: anywhere;
+}
+.saisie-rapide__morceau {
+  padding: 1px 10px;
+  border: 1px solid var(--filet-fort);
+  border-radius: 9999px;
+  color: var(--encre-2);
+  font-size: 12px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.saisie-rapide__morceau--projet {
+  border-color: var(--arc-2);
+  color: var(--arc);
+}
+.saisie-rapide__morceau--echeance {
+  border-color: var(--veille-point);
+}
+.saisie-rapide__morceau--discret {
+  color: var(--discret);
+}
+
+/* ---------- Actions décidées en réunion ---------- */
+.actions-reunion {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.actions-reunion legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.actions-reunion__ligne {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--filet-fort);
+}
+.actions-reunion__ligne input,
+.actions-reunion__ligne select {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--controle);
+  border-radius: 0;
+  background: var(--champ);
+  color: var(--encre);
+  font: inherit;
+  font-size: 14px;
+  min-width: 0;
+  max-width: 100%;
+}
+.actions-reunion__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.actions-reunion__details select {
+  flex: 1 1 160px;
+}
+.actions-reunion__details input[type="date"] {
+  flex: 0 1 150px;
+}
+/* Actions affichées sous une réunion */
+.reunion__actions-liste {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.reunion__actions-liste li::before {
+  content: "→ ";
+  color: var(--discret);
+}
+.reunion__actions-liste .faite {
+  text-decoration: line-through;
+  color: var(--discret);
+}
+
+/* « Plus de vues » d'un projet */
+.vues__plus {
+  flex: none;
+  height: 44px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--discret);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.vues__plus:hover,
+.vues__plus[aria-expanded="true"] {
+  color: var(--encre);
+}
+
+/* Tableau simple (suivi du pilote) */
+.tableau-simple {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 20px;
+}
+.tableau-simple th,
+.tableau-simple td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--filet);
+  text-align: left;
+  vertical-align: middle;
+}
+.tableau-simple th:first-child,
+.tableau-simple td:first-child {
+  padding-left: 0;
+}
+.tableau-simple thead th {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+.tableau-simple tbody th {
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* ---------- Barre : chercher, ajouter une tâche (« / » projet, « @ » personne) ---------- */
+.commande {
+  position: relative;
+  min-width: 0;
+}
+.commande__liste {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--filet-fort);
+  box-shadow: 0 12px 32px rgba(20, 36, 88, 0.16);
+}
+.commande__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 10px;
+  cursor: pointer;
+  color: var(--encre);
+}
+.commande__option[aria-selected="true"],
+.commande__option:hover {
+  background: var(--relief);
+}
+.commande__option--ajouter .commande__libelle {
+  font-weight: 600;
+}
+.commande__texte {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.commande__libelle {
+  font-size: 14px;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.commande__sous {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--discret);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.commande__vide {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--discret);
+}
+.saisie-rapide__morceau--personne {
+  border-color: var(--ok-point);
+}
+.saisie-rapide__morceau {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.puce__retirer {
+  border: 0;
+  background: none;
+  padding: 0 0 0 2px;
+  min-width: 20px;
+  min-height: 20px;
+  color: var(--discret);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.saisie-rapide kbd {
+  padding: 0 5px;
+  border: 1px solid var(--filet-fort);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 12px;
+}

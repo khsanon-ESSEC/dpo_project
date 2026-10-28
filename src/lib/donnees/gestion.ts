@@ -376,7 +376,7 @@ async function assigneEffectif(a: Acces, d: { assigneId: string; nouvelExterne?:
 
 export async function creerTacheGeree(
   a: Acces,
-  d: { titre: string; description: string; projetId: string | null; assigneId: string; nouvelExterne?: NouvelExterne | null; echeance: string | null; debut: string | null; estimationHeures: number | null },
+  d: { titre: string; description: string; projetId: string | null; assigneId: string; nouvelExterne?: NouvelExterne | null; echeance: string | null; debut: string | null; estimationHeures: number | null; reunionId?: string | null },
 ): Promise<{ id: string } | { erreur: string }> {
   const titre = texte(d.titre, 200);
   if (!titre) return { erreur: "Donnez un titre à la tâche." };
@@ -393,7 +393,7 @@ export async function creerTacheGeree(
   if (!peutAssigner(acteur(a), d.assigneId, projet, assigne.externe)) return { erreur: "Vous ne pouvez pas confier une tâche à cette personne." };
   const [t] = await db
     .insert(schema.taches)
-    .values({ titre, description: texte(d.description, 4000), projetId: d.projetId, assigneId: d.assigneId, echeance: d.echeance, debut: d.debut, estimationHeures: d.estimationHeures, creeParId: a.moi.id })
+    .values({ titre, description: texte(d.description, 4000), projetId: d.projetId, assigneId: d.assigneId, echeance: d.echeance, debut: d.debut, estimationHeures: d.estimationHeures, creeParId: a.moi.id, reunionId: d.reunionId ?? null })
     .returning({ id: schema.taches.id });
   await db.insert(schema.evenementsTache).values({ tacheId: t.id, auteurId: a.moi.id, type: "creation" });
   await entrerDansLEquipe(d.projetId, d.assigneId, a.moi.id);

@@ -1,0 +1,101 @@
+import type { Metadata } from "next";
+import { exigerUtilisateur } from "@/lib/auth/session";
+import { rechercher } from "@/lib/donnees/recherche";
+import { Bandeau } from "@/components/Bandeau";
+import { BarreCommande } from "@/components/BarreCommande";
+import { donneesBarre } from "@/lib/donnees/saisie";
+
+export const metadata: Metadata = { title: "Rechercher" };
+
+/** Une seule case : personnes, projets et tâches que l'on a le droit de voir. Touche « / » pour y venir. */
+export default async function PageRecherche({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const u = await exigerUtilisateur();
+  const q = String((await searchParams).q ?? "").trim().slice(0, 100);
+  const r = q ? await rechercher(u, q) : null;
+  const total = r ? r.personnes.total + r.projets.total + r.taches.total : 0;
+  const groupe = (titre: string, id: string, n: number, contenu: React.ReactNode) =>
+    n ? (
+      <section className="carte carte--liste" aria-labelledby={id}>
+        <h2 id={id} className="carte__titre">
+          {titre} · {n}
+        </h2>
+        <ul className="liste">{contenu}</ul>
+        {n > 20 ? <p className="note" style={{ margin: "8px 0 0" }}>Les 20 premiers : précisez la recherche pour voir les autres.</p> : null}
+      </section>
+    ) : null;
+
+  return (
+    <>
+      <Bandeau surtitre="Chercher, ou ajouter une tâche" titre="Rechercher" />
+      <div className="page" style={{ maxWidth: 760 }}>
+        <BarreCommande key={q} mode="recherche" retour="/a-faire" initial={q} {...await donneesBarre(u)} />
+        {q && !r ? <p className="note">Tapez au moins deux lettres.</p> : null}
+        {r && !total ? <p className="vide">Rien trouvé pour « {q} ». Essayez un autre mot, ou une partie du nom.</p> : null}
+        {r ? (
+          <>
+            {groupe(
+              "Projets",
+              "rq-projets",
+              r.projets.total,
+              r.projets.liste.map((p) => (
+                <li key={p.id}>
+                  <a href={`/projets/${p.id}`} className="rangee">
+                    <span className="mono" aria-hidden="true">
+                      {p.code}
+                    </span>
+                    <span className="rangee__texte">
+                      <span className="rangee__titre">{p.texte}</span>
+                      {p.sous ? <span className="rangee__sous">{p.sous}</span> : null}
+                    </span>
+                  </a>
+                </li>
+              )),
+            )}
+            {groupe(
+              "Tâches",
+              "rq-taches",
+              r.taches.total,
+              r.taches.liste.map((t) => (
+                <li key={t.id}>
+                  <a href={`/taches/${t.id}`} className="rangee">
+                    {t.code ? (
+                      <span className="mono" aria-hidden="true">
+                        {t.code}
+                      </span>
+                    ) : null}
+                    <span className="rangee__texte">
+                      <span className="rangee__titre" style={t.statut === "faite" ? { textDecoration: "line-through", color: "var(--discret)" } : undefined}>
+                        {t.texte}
+                      </span>
+                      <span className="rangee__sous">{t.sous || "Hors projet"}</span>
+                    </span>
+                  </a>
+                </li>
+              )),
+            )}
+            {groupe(
+              "Personnes",
+              "rq-personnes",
+              r.personnes.total,
+              r.personnes.liste.map((p) => (
+                <li key={p.id}>
+                  <a href={`/personnes/${p.id}`} className="rangee">
+                    <span className="rangee__texte">
+                      <span className="rangee__titre">{p.texte}</span>
+                      {p.sous ? <span className="rangee__sous">{p.sous}</span> : null}
+                    </span>
+                  </a>
+                </li>
+              )),
+            )}
+          </>
+        ) : !q ? (
+          <div className="note" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span>Une seule barre pour chercher et pour ajouter : écrivez « Relire maquettes », tapez / pour choisir un projet, @ pour une personne, puis Entrée. # affiche vos tâches ouvertes.</span>
+            <span>Depuis n&apos;importe quelle page, la touche « / » ouvre cette barre.</span>
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+}

@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { fermerSession, utilisateurCourant } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
+import { noterConsultation } from "@/lib/donnees/pilote";
 
 export async function choisirTheme(theme: "clair" | "sombre" | "auto") {
   if (!["clair", "sombre", "auto"].includes(theme)) return;
@@ -19,4 +20,11 @@ export async function seDeconnecter() {
   await fermerSession();
   if (u) await noter(u.id, "deconnexion");
   redirect("/connexion");
+}
+
+/** Suivi du pilote : l'écran ouvert est noté (une fois par jour et par personne), sans rien d'autre. */
+export async function consultation(chemin: string) {
+  const u = await utilisateurCourant();
+  if (!u || typeof chemin !== "string") return;
+  await noterConsultation(u.id, chemin).catch(() => {});
 }

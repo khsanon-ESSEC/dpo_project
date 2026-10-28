@@ -4,7 +4,7 @@
  * Celui qui l'a notée la modifie ou la supprime ; un participant peut s'en retirer.
  */
 import "server-only";
-import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Acces } from "@/lib/acces";
 import { ajouterJours, dateCourte } from "@/lib/dates";
@@ -32,7 +32,7 @@ export async function reunionsDe(personneId: string, debut: string, fin: string)
 async function detailler(ids: string[]) {
   if (!ids.length) return [];
   const org = await chargerOrganisation();
-  const [lignes, participants] = await Promise.all([
+  const [lignes, participants, actions] = await Promise.all([
     db
       .select({ r: schema.reunions, code: schema.projets.code, projetTitre: schema.projets.titre })
       .from(schema.reunions)
@@ -40,6 +40,12 @@ async function detailler(ids: string[]) {
       .where(inArray(schema.reunions.id, ids))
       .orderBy(asc(schema.reunions.jour), asc(schema.reunions.heure)),
     db.select().from(schema.participantsReunion).where(inArray(schema.participantsReunion.reunionId, ids)),
+    // Actions décidées en réunion : les tâches qui en viennent (sans les annulées).
+    db
+      .select({ id: schema.taches.id, reunionId: schema.taches.reunionId, titre: schema.taches.titre, statut: schema.taches.statut, echeance: schema.taches.echeance, assigneId: schema.taches.assigneId, projetId: schema.taches.projetId, creeParId: schema.taches.creeParId })
+      .from(schema.taches)
+      .where(and(inArray(schema.taches.reunionId, ids), isNull(schema.taches.annuleeLe)))
+      .orderBy(asc(schema.taches.creeLe)),
   ]);
   return lignes.map(({ r, code, projetTitre }) => {
     const avec = participants.filter((p) => p.reunionId === r.id).map((p) => p.personneId);
@@ -54,6 +60,12 @@ async function detailler(ids: string[]) {
         .map((p) => ({ id: p!.id, nom: nomComplet(p!), prenom: p!.prenom }))
         .sort((x, y) => x.nom.localeCompare(y.nom, "fr")),
       noteePar: notee ? { id: notee.id, nom: nomComplet(notee) } : null,
+      actions: actions
+        .filter((t) => t.reunionId === r.id)
+        .map((t) => {
+          const p = org.personnes.get(t.assigneId);
+          return { ...t, pour: p ? nomComplet(p) : "", prenom: p?.prenom ?? "" };
+        }),
     };
   });
 }

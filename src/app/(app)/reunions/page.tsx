@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { acces, idsProjetsVisibles, contactsVisibles } from "@/lib/acces";
+import { acces, idsProjetsVisibles, contactsVisibles, peutVoirTache } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { ajouterJours, aujourdhui, dateCourte, jourComplet, lundiDe } from "@/lib/dates";
 import { capacites } from "@/lib/donnees/charge";
@@ -14,13 +14,15 @@ import { LienPersonne, LienProjet } from "@/components/Liens";
 import { ONGLETS_SEMAINE, SousOnglets } from "@/components/SousOnglets";
 import { modifier, noter, quitter, supprimer } from "./actions";
 import { ChoixParticipants } from "./ChoixParticipants";
+import { ActionsReunion } from "./ActionsReunion";
+import { assignables } from "@/lib/donnees/gestion";
 
 export const metadata: Metadata = { title: "Réunions" };
 
 const JOUR = /^\d{4}-\d{2}-\d{2}$/;
 
-export default async function PageReunions({ searchParams }: { searchParams: Promise<{ semaine?: string; modifier?: string; erreur?: string; notee?: string }> }) {
-  const { semaine: s0, modifier: idModif, erreur, notee } = await searchParams;
+export default async function PageReunions({ searchParams }: { searchParams: Promise<{ semaine?: string; modifier?: string; erreur?: string; notee?: string; info?: string }> }) {
+  const { semaine: s0, modifier: idModif, erreur, notee, info } = await searchParams;
   const u = await exigerUtilisateur();
   const a = await acces(u);
   const jour = aujourdhui();
@@ -46,6 +48,8 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
       externe: p.externe,
       detail: p.externe ? ["Hors division", p.organisation].filter(Boolean).join(" · ") : [p.poste, !contacts && p.equipeId ? org.equipes.get(p.equipeId)?.nom : null].filter(Boolean).join(" · "),
     }));
+  // « Pour » des actions décidées : mêmes règles que pour confier une tâche.
+  const pourActions = await assignables(a);
   const parJour = new Map<string, typeof liste>();
   for (const r of liste) parJour.set(r.jour, [...(parJour.get(r.jour) ?? []), r]);
   const visible = (id: string | null) => !!id && (visibles === "tous" || visibles.has(id));
@@ -94,9 +98,10 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
             </a>
           ) : null}
         </nav>
-        {notee ? (
+        {notee || info ? (
           <p className="succes" role="status">
-            Réunion notée. Les autres participants la voient dans leur semaine : ils n&apos;ont pas à la noter.
+            {notee ? "Réunion notée. Les autres participants la voient dans leur semaine : ils n'ont pas à la noter. " : ""}
+            {info ?? ""}
           </p>
         ) : null}
         {erreur ? (
@@ -158,6 +163,29 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
                             ) : null}
                           </span>
                           {r.notes ? <span className="reunion__notes">{r.notes}</span> : null}
+                          {r.actions.length ? (
+                            <ul className="reunion__actions-liste" aria-label={`Actions décidées · ${r.titre}`}>
+                              {r.actions.map((t) =>
+                                peutVoirTache(a, t) ? (
+                                  <li key={t.id} className={t.statut === "faite" ? "faite" : undefined}>
+                                    <a href={`/taches/${t.id}`} className="lien-nom">
+                                      {t.titre}
+                                    </a>
+                                    <span className="ton-discret">
+                                      {" · "}
+                                      {t.assigneId === u.id ? "moi" : t.prenom}
+                                      {t.echeance ? `, ${dateCourte(t.echeance)}` : ""}
+                                      {t.statut === "faite" ? " · faite" : ""}
+                                    </span>
+                                  </li>
+                                ) : (
+                                  <li key={t.id} className="ton-discret">
+                                    Une action pour {t.prenom}
+                                  </li>
+                                ),
+                              )}
+                            </ul>
+                          ) : null}
                         </div>
                         <span className="reunion__duree">{dureeTexte(r.dureeMinutes)}</span>
                         <span className="reunion__actions">
@@ -233,8 +261,9 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
               <ChoixParticipants personnes={personnes} choisis={enModif ? enModif.participants.map((p) => p.id).filter((id) => id !== u.id) : []} autresPermis={!u.externe} />
               <div className="champ">
                 <label htmlFor="r-notes">Notes (facultatif)</label>
-                <textarea id="r-notes" name="notes" rows={3} maxLength={2000} defaultValue={enModif?.notes ?? ""} placeholder="Décisions, suites à donner" />
+                <textarea id="r-notes" name="notes" rows={3} maxLength={2000} defaultValue={enModif?.notes ?? ""} placeholder="Ce qui a été dit ou décidé" />
               </div>
+              {!u.externe ? <ActionsReunion moiId={u.id} personnes={pourActions.personnes} base={pourActions.base} parProjet={pourActions.parProjet} projetInitial={enModif?.projetId ?? ""} /> : null}
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
                 <button type="submit" className="bouton-ambre">
                   {enModif ? "Enregistrer" : "Noter la réunion"}

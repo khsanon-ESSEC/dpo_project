@@ -11,6 +11,8 @@ import { Jauge } from "@/components/Charge";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { ONGLETS_SEMAINE, SousOnglets } from "@/components/SousOnglets";
+import { BarreCommande } from "@/components/BarreCommande";
+import { donneesBarre } from "@/lib/donnees/saisie";
 import { reunionsDe } from "@/lib/donnees/reunions";
 import { dureeTexte } from "@/lib/projets";
 
@@ -77,6 +79,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
       </Bandeau>
       <div className="page">
         <SousOnglets onglets={ONGLETS_SEMAINE} courant="/semaine" label="Ma semaine" />
+        <BarreCommande mode="tache" retour="/semaine" {...await donneesBarre(u)} />
         <nav className="frise-semaine" aria-label="Semaines">
           <a href={`/semaine?jour=${ajouterJours(semaineVue, -7)}`} className="bouton-icone" aria-label="Semaine précédente" title="Semaine précédente">
             <Icone nom="chevron-gauche" taille={20} />

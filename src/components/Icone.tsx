@@ -32,6 +32,8 @@ const traces: Record<string, string> = {
   utilisateur: "M12 11.5a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4.5 20.5c0-4 3.4-6.5 7.5-6.5s7.5 2.5 7.5 6.5",
   liste: "M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h1M4.5 12h1M4.5 17.5h1",
   menu: "M4.5 7h15M4.5 12h15M4.5 17h15",
+  loupe: "M10.5 17.5a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM15.5 15.5l5 5",
+  importer: "M12 15V4M7 9.5l5-5 5 5M5 14v6h14v-6",
   historique: "M4 12a8 8 0 1 0 2.3-5.6M4 4.5V8h3.5M12 8v4.5l3 1.8",
   reprendre: "M15 5.5 19 9.5l-4 4M19 9.5H9a4.5 4.5 0 0 0 0 9h2",
   colonnes: "M4 4.5h4.5v15H4zM9.75 4.5h4.5v10h-4.5zM15.5 4.5H20v12.5h-4.5z",

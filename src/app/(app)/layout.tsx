@@ -7,6 +7,8 @@ import { rappelsDuMoment } from "@/lib/donnees/rappels";
 import { initiales, redigeUnRapport } from "@/lib/regles";
 import { Assistant } from "@/components/Assistant";
 import { Onglets, Rail, type ElementNav } from "@/components/Navigation";
+import { RaccourciRecherche } from "@/components/RaccourciRecherche";
+import { Consultation } from "@/components/Consultation";
 
 export default async function LayoutApplication({ children }: { children: React.ReactNode }) {
   const u = await exigerUtilisateur();
@@ -38,7 +40,8 @@ export default async function LayoutApplication({ children }: { children: React.
     ...(equipe ? [EQUIPE] : []),
     PROJETS,
     ...(conseil ? [{ href: "/conseil", libelle: "Conseil", icone: "banque" }] : []),
-    ...(organisation ? [{ href: "/organisation", libelle: "Organisation", icone: "agence" }] : []),
+    ...(organisation ? [{ href: "/organisation", libelle: "Organisation", icone: "agence", actifs: ["/pilote"] }] : []),
+    { href: "/recherche", libelle: "Rechercher", icone: "loupe" },
     { href: "/alertes", libelle: "Alertes", icone: "notification", compte: alertes },
   ];
   // Téléphone : quatre entrées. La dernière, « Plus », mène à tout le reste (avec le nombre d'alertes non lues).
@@ -47,13 +50,13 @@ export default async function LayoutApplication({ children }: { children: React.
         SEMAINE,
         RAPPORT,
         equipe ? EQUIPE : PROJETS,
-        { href: "/plus", libelle: "Plus", icone: "menu", compte: alertes, actifs: ["/alertes", "/profil", "/conseil", "/organisation", ...(equipe ? ["/projets"] : [])] },
+        { href: "/plus", libelle: "Plus", icone: "menu", compte: alertes, actifs: ["/alertes", "/profil", "/conseil", "/organisation", "/recherche", "/pilote", ...(equipe ? ["/projets"] : [])] },
       ]
     : [
         SEMAINE,
         EQUIPE,
         PROJETS,
-        { href: "/plus", libelle: "Plus", icone: "menu", compte: alertes, actifs: ["/alertes", "/profil", "/conseil", "/organisation"] },
+        { href: "/plus", libelle: "Plus", icone: "menu", compte: alertes, actifs: ["/alertes", "/profil", "/conseil", "/organisation", "/recherche", "/pilote"] },
       ];
 
   return (
@@ -62,6 +65,8 @@ export default async function LayoutApplication({ children }: { children: React.
       <div className="contenu">{children}</div>
       <Onglets elements={telephone} />
       <Assistant />
+      <RaccourciRecherche />
+      <Consultation />
     </div>
   );
 }

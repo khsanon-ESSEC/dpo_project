@@ -8,6 +8,8 @@ import { seDeconnecter } from "@/app/actions-communes";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { ChoixTheme } from "../profil/ChoixTheme";
+import { BarreCommande } from "@/components/BarreCommande";
+import { donneesBarre } from "@/lib/donnees/saisie";
 
 export const metadata: Metadata = { title: "Plus" };
 
@@ -31,7 +33,7 @@ export default async function PagePlus() {
         { href: "/reunions", libelle: "Réunions", sous: "Noter une réunion, voir le temps passé en réunion", icone: "reunion" },
         { href: "/bilan", libelle: "Mon bilan", sous: "Cette semaine comparée aux précédentes", icone: "bilan" },
         ...(redigeUnRapport(u) ? [{ href: "/rapports", libelle: "Mes rapports", sous: "Tous les rapports du vendredi que vous avez envoyés", icone: "historique" }] : []),
-        ...(equipe && redigeUnRapport(u) ? [{ href: "/projets", libelle: "Projets", sous: "Portefeuille, Gantt, tableau, calendrier", icone: "tableau-de-bord" }] : []),
+        ...(equipe && redigeUnRapport(u) ? [{ href: "/projets", libelle: "Projets", sous: "Portefeuille, liste, tableau", icone: "tableau-de-bord" }] : []),
       ],
     },
     ...(equipe
@@ -53,6 +55,7 @@ export default async function PagePlus() {
             entrees: [
               ...(a.toutVoir || a.directeur ? [{ href: "/conseil", libelle: "Rapports au conseil", sous: "Le rapport du mois, et les rapports ponctuels", icone: "banque" }] : []),
               ...(a.toutVoir || u.administrateur ? [{ href: "/organisation", libelle: "Organisation", sous: "Personnes, équipes, rôles", icone: "agence" }] : []),
+              ...(u.executif || u.administrateur ? [{ href: "/pilote", libelle: "Suivi du pilote", sous: "Rapports à l'heure, tâches à jour, écrans utilisés", icone: "bilan" }] : []),
             ],
           },
         ]
@@ -63,6 +66,7 @@ export default async function PagePlus() {
     <>
       <Bandeau surtitre={`${u.prenom} ${u.nom}`} titre="Plus" />
       <div className="page" style={{ maxWidth: 640 }}>
+        <BarreCommande mode="recherche" retour="/a-faire" focus={false} {...await donneesBarre(u)} />
         {groupes.map((g) => (
           <section key={g.titre} className="carte carte--liste" aria-labelledby={`plus-${g.titre}`}>
             <h2 id={`plus-${g.titre}`} className="carte__titre">

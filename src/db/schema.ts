@@ -179,8 +179,10 @@ export const taches = pgTable(
     annuleeLe: timestamp("annulee_le", { withTimezone: true }),
     annuleeParId: uuid("annulee_par_id").references(() => personnes.id, { onDelete: "set null" }),
     motifAnnulation: text("motif_annulation").notNull().default(""),
+    /** Action décidée en réunion : la réunion d'où vient la tâche (facultatif). */
+    reunionId: uuid("reunion_id").references((): AnyPgColumn => reunions.id, { onDelete: "set null" }),
   },
-  (t) => [index("taches_assigne_idx").on(t.assigneId), index("taches_projet_idx").on(t.projetId)],
+  (t) => [index("taches_assigne_idx").on(t.assigneId), index("taches_projet_idx").on(t.projetId), index("taches_reunion_idx").on(t.reunionId)],
 );
 
 /**
@@ -486,6 +488,38 @@ export const journal = pgTable(
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("journal_date_idx").on(t.creeLe)],
+);
+
+/**
+ * Courriels envoyés par l'application (rappels du rapport du vendredi) : un seul par personne, par type et
+ * par semaine, même si plusieurs serveurs ou redémarrages tentent l'envoi.
+ */
+export const envoisCourriel = pgTable(
+  "envois_courriel",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    personneId: uuid("personne_id").notNull().references(() => personnes.id, { onDelete: "cascade" }),
+    type: text().notNull(),
+    semaine: date().notNull(),
+    envoyeLe: timestamp("envoye_le", { withTimezone: true }).notNull().defaultNow(),
+    /** Vide si l'envoi a réussi ; sinon le message d'erreur du serveur de courriel. */
+    erreur: text().notNull().default(""),
+  },
+  (t) => [unique("envois_courriel_unique").on(t.personneId, t.type, t.semaine)],
+);
+
+/**
+ * Écrans ouverts, pour le suivi du pilote : une ligne par jour, écran et personne (« a ouvert cet écran ce
+ * jour-là »). Ne s'affiche qu'en nombres agrégés (personnes distinctes par écran), jamais par personne.
+ */
+export const consultations = pgTable(
+  "consultations",
+  {
+    jour: date().notNull(),
+    ecran: text().notNull(),
+    personneId: uuid("personne_id").notNull().references(() => personnes.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.jour, t.ecran, t.personneId] })],
 );
 
 export type Personne = typeof personnes.$inferSelect;

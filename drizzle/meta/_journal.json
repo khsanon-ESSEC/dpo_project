@@ -50,6 +50,13 @@
       "when": 1793154201971,
       "tag": "0006_connexion-google",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793181177218,
+      "tag": "0007_actions-courriels-pilote",
+      "breakpoints": true
     }
   ]
 }

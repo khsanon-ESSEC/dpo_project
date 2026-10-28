@@ -8,6 +8,8 @@ import { CaseTache } from "@/components/CaseTache";
 import { Icone } from "@/components/Icone";
 import { LienPersonne } from "@/components/Liens";
 import { ONGLETS_SEMAINE, SousOnglets } from "@/components/SousOnglets";
+import { BarreCommande } from "@/components/BarreCommande";
+import { donneesBarre } from "@/lib/donnees/saisie";
 
 export const metadata: Metadata = { title: "À faire" };
 
@@ -15,7 +17,7 @@ export const metadata: Metadata = { title: "À faire" };
 export default async function PageAFaire() {
   const u = await exigerUtilisateur();
   const jour = aujourdhui();
-  const [taches, confiees] = await Promise.all([tachesDe([u.id]), confieesHorsDivision(u.id)]);
+  const [taches, confiees, barre] = await Promise.all([tachesDe([u.id]), confieesHorsDivision(u.id), donneesBarre(u)]);
   const c = compter(taches, jour);
   const liste = trier(taches, jour);
 
@@ -42,6 +44,7 @@ export default async function PageAFaire() {
       </Bandeau>
       <div className="page">
         <SousOnglets onglets={ONGLETS_SEMAINE} courant="/a-faire" label="Ma semaine" />
+        <BarreCommande mode="tache" retour="/a-faire" {...barre} />
         <div className="colonnes">
           <section className="carte carte--liste colonne-large" aria-labelledby="t-afaire" style={{ gap: 0 }}>
             <div className="carte__entete">

@@ -4,11 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { acces, exigerTacheVisible } from "@/lib/acces";
+import { acces, exigerTacheVisible, idsProjetsVisibles } from "@/lib/acces";
 import { annulerTache, creerTacheGeree, modifierDefinitionTache, retablirTache, supprimerTache } from "@/lib/donnees/gestion";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
 import { retourValide } from "@/lib/retour";
+import { aujourdhui } from "@/lib/dates";
+import { tousLesProjetsActifs } from "@/lib/donnees/projets";
+import { analyserSaisie } from "@/lib/saisie-rapide";
 // Constante prise dans un module partagé : un module « use client » ne s'importe pas dans une action serveur.
 import { NOUVELLE_PERSONNE } from "@/lib/projets";
 
@@ -125,6 +128,32 @@ export async function creerTache(_: EtatNouvelleTache, form: FormData): Promise<
   if ("erreur" in r) return { message: r.erreur };
   revalidatePath("/", "layout");
   redirect(retourValide(form.get("retour")) ?? "/semaine");
+}
+
+export type EtatSaisieRapide = { message: string | null; ok?: boolean; n?: number; id?: string };
+
+/**
+ * « Ajouter une tâche en une ligne » : la saisie est analysée de nouveau ici (l'aperçu de la page n'est
+ * qu'une aide) ; la tâche est pour soi, et seulement sur un projet qu'on voit déjà.
+ */
+export async function ajouterTacheRapide(etat: EtatSaisieRapide, form: FormData): Promise<EtatSaisieRapide> {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const visibles = await idsProjetsVisibles(a);
+  const projets = (await tousLesProjetsActifs()).filter((p) => visibles === "tous" || visibles.has(p.id));
+  const r = analyserSaisie(String(form.get("saisie") ?? ""), aujourdhui(), projets);
+  if (!r.titre) return { message: "Écrivez ce qu'il y a à faire.", n: etat.n };
+  // Projet choisi dans la liste (« / ») : seulement parmi ceux qu'on voit ; sinon le code reconnu dans le texte.
+  const choisi = String(form.get("projetId") ?? "");
+  const projet = choisi ? projets.find((p) => p.id === choisi) : r.projet;
+  if (choisi && !projet) return { message: "Projet introuvable.", n: etat.n };
+  // Personne choisie dans la liste (« @ ») : les règles d'assignation s'appliquent (creerTacheGeree).
+  const pour = String(form.get("assigneId") ?? "");
+  const assigneId = /^[0-9a-f-]{36}$/.test(pour) ? pour : u.id;
+  const c = await creerTacheGeree(a, { titre: r.titre, description: "", projetId: projet?.id ?? null, assigneId, echeance: r.echeance, debut: null, estimationHeures: r.heures });
+  if ("erreur" in c) return { message: c.erreur, n: etat.n };
+  revalidatePath("/", "layout");
+  return { message: `Ajoutée : « ${r.titre} »${assigneId !== u.id ? ", la personne est prévenue" : ""}.`, ok: true, n: (etat.n ?? 0) + 1, id: c.id };
 }
 
 /** Titre, description, projet et personne d'une tâche. */
