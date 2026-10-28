@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { analyserSaisie } from "@/lib/saisie-rapide";
+import { analyserMiseAJour, analyserSaisie } from "@/lib/saisie-rapide";
 
 // Mercredi 28 octobre 2026
 const AUJ = "2026-10-28";
@@ -56,5 +56,35 @@ describe("ajouter une tâche en une ligne", () => {
   });
   it("montre ce qui a été compris", () => {
     expect(a("Relire maquettes UR vendredi 2h").morceaux.map((m) => m.type)).toEqual(["projet", "echeance", "heures"]);
+  });
+});
+
+const m = (s: string) => analyserMiseAJour(s, AUJ);
+
+describe("mettre à jour une tâche choisie avec « # »", () => {
+  it("l'état s'écrit en premier", () => {
+    expect(m("faite")).toMatchObject({ statut: "faite", note: "" });
+    expect(m("Terminée, envoyée au client")).toMatchObject({ statut: "faite", note: "envoyée au client" });
+    expect(m("en cours")).toMatchObject({ statut: "en_cours" });
+    expect(m("à faire")).toMatchObject({ statut: "a_faire" });
+    expect(m("rouvrir")).toMatchObject({ statut: "a_faire" });
+  });
+  it("un mot d'état au milieu d'une note ne change rien", () => {
+    expect(m("Appel fait avec la DTI")).toMatchObject({ statut: null, note: "Appel fait avec la DTI" });
+    expect(m("faites-le savoir")).toMatchObject({ statut: null });
+  });
+  it("bloquée : le reste dit ce qui bloque, sans y chercher de date", () => {
+    expect(m("bloquée : attente de la DTI vendredi")).toMatchObject({ statut: "bloquee", blocage: "Attente de la DTI vendredi", echeance: null });
+    expect(m("bloqué par la validation du budget")).toMatchObject({ statut: "bloquee", blocage: "La validation du budget" });
+    expect(m("En attente de la signature")).toMatchObject({ statut: "bloquee", blocage: "En attente de la signature" });
+    expect(m("bloquée")).toMatchObject({ statut: "bloquee", blocage: null });
+  });
+  it("date, durée et note se combinent avec l'état", () => {
+    expect(m("en cours pour vendredi 3h reste les tests")).toMatchObject({ statut: "en_cours", echeance: "2026-10-30", heures: 3, note: "reste les tests" });
+    expect(m("12/11")).toMatchObject({ statut: null, echeance: "2026-11-12", note: "" });
+    expect(m("Relancé Patrick ce matin")).toMatchObject({ statut: null, echeance: null, note: "Relancé Patrick ce matin" });
+  });
+  it("montre ce qui a été compris", () => {
+    expect(m("faite 2h").morceaux.map((x) => x.texte)).toEqual(["Faite", "2 h de travail"]);
   });
 });

@@ -87,12 +87,42 @@ const REGLES: Regle[] = [
 
 const HEURES = new RegExp(`${D}(?:en\\s+|environ\\s+|~)?(\\d{1,3})\\s?h(?:eures?)?${F}`, "i");
 
+/** Retire un passage reconnu du texte (remplacé par une espace). */
+function sans(texte: string, m: RegExpExecArray): string {
+  return `${texte.slice(0, m.index)} ${texte.slice(m.index + m[0].length)}`;
+}
+
+/** Première échéance reconnue dans le texte : la date et le texte sans elle. */
+function extraireEcheance(texte: string, aujourdhui: string): { echeance: string | null; reste: string } {
+  for (const r of REGLES) {
+    const m = r.motif.exec(texte);
+    const d = m ? r.date(m, aujourdhui) : null;
+    if (m && d) return { echeance: d, reste: sans(texte, m) };
+  }
+  return { echeance: null, reste: texte };
+}
+
+/** Estimation reconnue (« 2h », « 3 h », « en 4 heures », de 1 à 400 heures) et le texte sans elle. */
+function extraireHeures(texte: string): { heures: number | null; reste: string } {
+  const h = HEURES.exec(texte);
+  if (h && Number(h[1]) >= 1 && Number(h[1]) <= 400) return { heures: Number(h[1]), reste: sans(texte, h) };
+  return { heures: null, reste: texte };
+}
+
+/** Texte restant, sans espaces doubles ni petits mots qui traînent à la fin. */
+function nettoyer(texte: string, longueur: number): string {
+  return texte
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/(?:\s+(?:pour|avant|le|sur|en|-|–|—|,|:))+$/i, "")
+    .replace(/^[-–—,:;.]\s*/, "")
+    .trim()
+    .slice(0, longueur);
+}
+
 export function analyserSaisie(saisie: string, aujourdhui: string, projets: ProjetSaisie[]): Analyse {
   let texte = ` ${String(saisie ?? "").replace(/\s+/g, " ").trim().slice(0, 300)} `;
   const morceaux: Morceau[] = [];
-  const retirer = (m: RegExpExecArray) => {
-    texte = `${texte.slice(0, m.index)} ${texte.slice(m.index + m[0].length)}`;
-  };
 
   // Projet : le code tel quel, en majuscules (« UR »). Dans la barre, « / » ouvre aussi la liste des projets.
   let projet: ProjetSaisie | null = null;
@@ -101,40 +131,73 @@ export function analyserSaisie(saisie: string, aujourdhui: string, projets: Proj
   for (let m = nu.exec(texte); m; m = nu.exec(texte)) {
     if (/[A-Z]/.test(m[1]) && parCode.has(m[1])) {
       projet = parCode.get(m[1])!;
-      retirer(m);
+      texte = sans(texte, m);
       break;
     }
   }
   if (projet) morceaux.push({ type: "projet", texte: `${projet.code} · ${projet.titre}` });
 
-  // Échéance : la première règle qui reconnaît une date valide.
-  let echeance: string | null = null;
-  for (const r of REGLES) {
-    const m = r.motif.exec(texte);
-    const d = m ? r.date(m, aujourdhui) : null;
-    if (m && d) {
-      echeance = d;
-      retirer(m);
-      morceaux.push({ type: "echeance", texte: jourComplet(d) });
+  const e = extraireEcheance(texte, aujourdhui);
+  texte = e.reste;
+  if (e.echeance) morceaux.push({ type: "echeance", texte: jourComplet(e.echeance) });
+
+  const h = extraireHeures(texte);
+  texte = h.reste;
+  if (h.heures) morceaux.push({ type: "heures", texte: `${h.heures} h de travail` });
+
+  return { titre: nettoyer(texte, 200), projet, echeance: e.echeance, heures: h.heures, morceaux };
+}
+
+// ---------------------------------------------------------------------------
+// Mettre à jour une tâche choisie avec « # » : « faite », « bloquée attente de la DTI », « en cours vendredi 3h »
+// ---------------------------------------------------------------------------
+
+export type StatutTache = "a_faire" | "en_cours" | "bloquee" | "faite";
+export type MorceauMaj = { type: "statut" | "echeance" | "heures" | "note"; texte: string };
+export type MiseAJour = { statut: StatutTache | null; blocage: string | null; echeance: string | null; heures: number | null; note: string; morceaux: MorceauMaj[] };
+
+export const LIBELLES_STATUT: Record<StatutTache, string> = { a_faire: "À faire", en_cours: "En cours", bloquee: "Bloquée", faite: "Faite" };
+
+// L'état s'écrit en premier : « faite », « en cours… », « bloquée… », « à faire » (un « fait » au milieu d'une
+// note ne change rien). « en attente de… » vaut « bloquée », et la phrase entière dit ce qui bloque.
+const ETATS: { motif: RegExp; statut: StatutTache; garder?: boolean }[] = [
+  { motif: /^(?:c['’]est\s+)?(?:faite?s?|termin[ée]e?s?|finie?s?|achev[ée]e?s?|boucl[ée]e?s?)(?=$|[\s,.;:!])/i, statut: "faite" },
+  { motif: /^(?:en\s+cours|commenc[ée]e?|d[ée]marr[ée]e?|reprise?)(?=$|[\s,.;:!])/i, statut: "en_cours" },
+  { motif: /^(?:bloqu[ée]e?s?|bloque)(?=$|[\s,.;:!])/i, statut: "bloquee" },
+  { motif: /^en\s+attente(?=$|[\s,.;:!])/i, statut: "bloquee", garder: true },
+  { motif: /^(?:[àa]\s+faire|rouvrir|rouverte?|pas\s+(?:encore\s+)?commenc[ée]e?)(?=$|[\s,.;:!])/i, statut: "a_faire" },
+];
+
+export function analyserMiseAJour(saisie: string, aujourdhui: string): MiseAJour {
+  let texte = String(saisie ?? "").replace(/\s+/g, " ").trim().slice(0, 600);
+  const morceaux: MorceauMaj[] = [];
+  let statut: StatutTache | null = null;
+  let garder = false;
+  for (const e of ETATS) {
+    const m = e.motif.exec(texte);
+    if (m) {
+      statut = e.statut;
+      garder = !!e.garder;
+      if (!garder) texte = texte.slice(m[0].length);
       break;
     }
   }
-
-  // Estimation : « 2h », « 3 h », « en 4 heures » (de 1 à 400 heures).
-  let heures: number | null = null;
-  const h = HEURES.exec(texte);
-  if (h && Number(h[1]) >= 1 && Number(h[1]) <= 400) {
-    heures = Number(h[1]);
-    retirer(h);
-    morceaux.push({ type: "heures", texte: `${heures} h de travail` });
+  // Bloquée : tout le reste dit ce qui bloque (une date ou une durée y restent telles quelles).
+  if (statut === "bloquee") {
+    const blocage = nettoyer(garder ? texte : texte.replace(/^[\s:,.;–—-]*(?:(?:par|car|parce\s+que|à\s+cause\s+de|:)\s+)?/i, ""), 1000) || null;
+    const b = blocage ? blocage.charAt(0).toUpperCase() + blocage.slice(1) : null;
+    morceaux.push({ type: "statut", texte: b ? `Bloquée : ${b}` : "Bloquée" });
+    return { statut, blocage: b, echeance: null, heures: null, note: "", morceaux };
   }
-
-  const titre = texte
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/(?:\s+(?:pour|avant|le|sur|en|-|–|—|,|:))+$/i, "")
-    .replace(/^[-–—,:]\s*/, "")
-    .trim()
-    .slice(0, 200);
-  return { titre, projet, echeance, heures, morceaux };
+  if (statut) morceaux.push({ type: "statut", texte: LIBELLES_STATUT[statut] });
+  texte = ` ${texte} `;
+  const e = extraireEcheance(texte, aujourdhui);
+  texte = e.reste;
+  if (e.echeance) morceaux.push({ type: "echeance", texte: `Échéance : ${jourComplet(e.echeance)}` });
+  const h = extraireHeures(texte);
+  texte = h.reste;
+  if (h.heures) morceaux.push({ type: "heures", texte: `${h.heures} h de travail` });
+  const note = nettoyer(texte, 500);
+  if (note) morceaux.push({ type: "note", texte: `Note : ${note}` });
+  return { statut, blocage: null, echeance: e.echeance, heures: h.heures, note, morceaux };
 }

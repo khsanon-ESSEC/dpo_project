@@ -4,14 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { acces, exigerTacheVisible, idsProjetsVisibles } from "@/lib/acces";
+import { acces, exigerTacheVisible, idsProjetsVisibles, peutModifierTache } from "@/lib/acces";
 import { annulerTache, creerTacheGeree, modifierDefinitionTache, retablirTache, supprimerTache } from "@/lib/donnees/gestion";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
 import { retourValide } from "@/lib/retour";
-import { aujourdhui } from "@/lib/dates";
+import { aujourdhui, dateCourte } from "@/lib/dates";
 import { tousLesProjetsActifs } from "@/lib/donnees/projets";
-import { analyserSaisie } from "@/lib/saisie-rapide";
+import { analyserMiseAJour, analyserSaisie, LIBELLES_STATUT } from "@/lib/saisie-rapide";
 // Constante prise dans un module partagé : un module « use client » ne s'importe pas dans une action serveur.
 import { NOUVELLE_PERSONNE } from "@/lib/projets";
 
@@ -154,6 +154,52 @@ export async function ajouterTacheRapide(etat: EtatSaisieRapide, form: FormData)
   if ("erreur" in c) return { message: c.erreur, n: etat.n };
   revalidatePath("/", "layout");
   return { message: `Ajoutée : « ${r.titre} »${assigneId !== u.id ? ", la personne est prévenue" : ""}.`, ok: true, n: (etat.n ?? 0) + 1, id: c.id };
+}
+
+/**
+ * Mettre à jour une tâche depuis la barre (« # » puis « faite », « bloquée … », une date, une durée, une note,
+ * « @ » une personne, « / » un projet). Mêmes règles que la fiche : qui voit la tâche la met à jour ; la
+ * confier à quelqu'un d'autre ou la changer de projet suit la règle d'assignation (modifierDefinitionTache).
+ */
+export async function mettreAJourTacheRapide(etat: EtatSaisieRapide, form: FormData): Promise<EtatSaisieRapide> {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const tacheId = String(form.get("tacheId") ?? "");
+  if (!/^[0-9a-f-]{36}$/.test(tacheId)) return { message: "Tâche introuvable.", n: etat.n };
+  const [t] = await db.select().from(schema.taches).where(eq(schema.taches.id, tacheId)).limit(1);
+  if (!t || !peutModifierTache(a, t)) return { message: "Tâche introuvable.", n: etat.n };
+  if (t.annuleeLe) return { message: "Cette tâche est annulée : rétablissez-la d'abord depuis sa fiche.", n: etat.n };
+  const r = analyserMiseAJour(String(form.get("saisie") ?? ""), aujourdhui());
+  const pour = String(form.get("assigneId") ?? "");
+  const assigneId = /^[0-9a-f-]{36}$/.test(pour) ? pour : t.assigneId;
+  const versProjet = String(form.get("projetId") ?? "");
+  const projetId = /^[0-9a-f-]{36}$/.test(versProjet) ? versProjet : t.projetId;
+  const confier = assigneId !== t.assigneId || projetId !== t.projetId;
+  if (!r.statut && !r.echeance && !r.heures && !r.note && !confier) return { message: "Rien à changer : écrivez « faite », « bloquée … », une date, une durée, une note, ou @ une personne.", n: etat.n };
+  if (r.statut === "bloquee" && !r.blocage && !t.blocage) return { message: "Dites ce qui bloque : « bloquée attente de la DTI ».", n: etat.n };
+  if (r.echeance && t.debut && r.echeance < t.debut) return { message: `L'échéance (${dateCourte(r.echeance)}) précède le début de la tâche (${dateCourte(t.debut)}) : changez le début sur sa fiche.`, n: etat.n };
+
+  // D'abord ce qui peut être refusé (la règle d'assignation), puis le reste.
+  if (confier) {
+    const d = await modifierDefinitionTache(a, t, { titre: t.titre, description: t.description, projetId, assigneId });
+    if ("erreur" in d) return { message: d.erreur, n: etat.n };
+  }
+  if (r.statut) await changerStatut(t.id, r.statut, u.id, r.blocage);
+  if (r.echeance && r.echeance !== t.echeance) {
+    await db.update(schema.taches).set({ echeance: r.echeance, majLe: new Date() }).where(eq(schema.taches.id, t.id));
+    await db.insert(schema.evenementsTache).values({ tacheId: t.id, auteurId: u.id, type: "echeance", avant: t.echeance, apres: r.echeance });
+  }
+  if (r.heures && r.heures !== t.estimationHeures) await db.update(schema.taches).set({ estimationHeures: r.heures, majLe: new Date() }).where(eq(schema.taches.id, t.id));
+  if (r.note) await db.insert(schema.evenementsTache).values({ tacheId: t.id, auteurId: u.id, type: "note", note: r.note });
+  // Bloquée : le chef du projet est prévenu (comme la case cochée par défaut sur la fiche).
+  if (r.statut === "bloquee" && t.statut !== "bloquee" && t.projetId) {
+    const [p] = await db.select({ chef: sql<string | null>`coalesce(${schema.projets.referentId}, ${schema.projets.chefProjetId})` }).from(schema.projets).where(eq(schema.projets.id, t.projetId));
+    if (p?.chef && p.chef !== u.id) await db.insert(schema.notifications).values({ personneId: p.chef, type: "blocage", texte: `${u.prenom} ${u.nom} est bloqué(e) sur « ${t.titre} »`, lien: `/taches/${t.id}` });
+  }
+  await noter(u.id, "tache_modifiee", t.id, { statut: r.statut ?? t.statut, barre: true });
+  revalidatePath("/", "layout");
+  const fait = [r.statut ? LIBELLES_STATUT[r.statut].toLowerCase() : null, confier && assigneId !== t.assigneId ? "confiée, la personne est prévenue" : null, confier && projetId !== t.projetId ? "changée de projet" : null, r.echeance ? "échéance changée" : null, r.heures ? "estimation changée" : null, r.note ? "note ajoutée" : null].filter(Boolean);
+  return { message: `« ${t.titre} » : ${fait.join(", ")}.`, ok: true, n: (etat.n ?? 0) + 1, id: t.id };
 }
 
 /** Titre, description, projet et personne d'une tâche. */

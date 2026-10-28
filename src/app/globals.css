@@ -3995,3 +3995,39 @@ a.puce:hover {
   font-family: inherit;
   font-size: 12px;
 }
+
+/* Tâche choisie avec « # » : une étiquette au début de la barre (cliquer la retire). */
+.saisie-rapide__tache {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  max-width: 45%;
+  min-height: 32px;
+  padding: 2px 8px;
+  border: 1px solid var(--filet-fort);
+  background: var(--relief);
+  color: var(--relief-encre);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.saisie-rapide__tache .mono {
+  flex: none;
+}
+.saisie-rapide__tache-titre {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 599px) {
+  .saisie-rapide__tache {
+    max-width: 38%;
+  }
+}
+.saisie-rapide__erreur {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+}
