@@ -4,12 +4,14 @@
 //
 // Usage : npm run local            (Ctrl+C pour arrêter)
 //         npm run local -- --vraie-date   pour ne pas figer la date au vendredi 30 octobre 2026
+//         npm run local -- --reseau       pour l'ouvrir aussi aux appareils du même Wi-Fi (téléphone)
 //
 // Paramètres facultatifs dans .env.local (même format que .env.example), par exemple IA_FOURNISSEUR.
 // Jamais en production : voir README.md, « Installation ».
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, cpSync, statSync } from "node:fs";
 import { createServer } from "node:net";
+import { networkInterfaces } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import EmbeddedPostgres from "embedded-postgres";
@@ -39,13 +41,13 @@ function lireEnvLocal() {
   return vals;
 }
 
-function portLibre(depart) {
+function portLibre(depart, hote = "127.0.0.1") {
   return new Promise((resolve) => {
     const essayer = (p) => {
       const s = createServer();
       s.once("error", () => essayer(p + 1));
       s.once("listening", () => s.close(() => resolve(p)));
-      s.listen(p, "127.0.0.1");
+      s.listen(p, hote);
     };
     essayer(depart);
   });
@@ -53,9 +55,23 @@ function portLibre(depart) {
 
 const envLocal = lireEnvLocal();
 const vraieDate = process.argv.includes("--vraie-date");
+// --reseau : l'application écoute aussi sur le réseau local (téléphone sur le même Wi-Fi). La base reste locale.
+const reseau = process.argv.includes("--reseau");
+
+/** Adresse IPv4 du poste sur le réseau local (Wi-Fi d'abord), ou null. */
+function adresseLocale() {
+  const interfaces = networkInterfaces();
+  const noms = Object.keys(interfaces).sort((a, b) => Number(b === "en0") - Number(a === "en0"));
+  for (const nom of noms) {
+    for (const i of interfaces[nom] ?? []) {
+      if (i.family === "IPv4" && !i.internal && !i.address.startsWith("169.254.")) return i.address;
+    }
+  }
+  return null;
+}
 // Ports libres : on part des valeurs par défaut et on avance si un autre programme les occupe déjà.
 const portBase = await portLibre(Number(envLocal.PORT_BASE_LOCALE || 54329));
-const portApp = await portLibre(Number(envLocal.PORT || 3000));
+const portApp = await portLibre(Number(envLocal.PORT || 3000), reseau ? "0.0.0.0" : "127.0.0.1");
 const MOT_DE_PASSE_BASE = "dpo-local";
 const DATABASE_URL = `postgres://dpo:${MOT_DE_PASSE_BASE}@127.0.0.1:${portBase}/dpo`;
 const DATE_DEMO = vraieDate ? "" : envLocal.DATE_DEMO ?? "2026-10-30";
@@ -113,6 +129,21 @@ if (!existsSync(path.join(dossierBase, "PG_VERSION"))) {
     console.error(derniersMessagesPg());
     echouer(`La base locale n'a pas pu être créée${e?.message ? ` : ${e.message}` : ""}.`);
   }
+}
+// Une seule application à la fois sur cette base : si elle tourne déjà dans une autre fenêtre, le dire.
+const fichierPid = path.join(dossierBase, "postmaster.pid");
+if (existsSync(fichierPid)) {
+  const pid = Number(readFileSync(fichierPid, "utf8").split("\n")[0]);
+  let vivant = false;
+  try {
+    if (pid > 0) {
+      process.kill(pid, 0);
+      vivant = true;
+    }
+  } catch {
+    /* processus disparu : PostgreSQL reprendra la base */
+  }
+  if (vivant) echouer("L'application tourne déjà dans une autre fenêtre du Terminal. Fermez cette fenêtre (bouton rouge, puis « Terminer »), puis relancez.");
 }
 dire(`Démarrage de PostgreSQL sur le port ${portBase}…`);
 try {
@@ -186,6 +217,9 @@ cpSync(path.join(racine, "public"), path.join(standalone, "public"), { recursive
 cpSync(path.join(racine, ".next", "static"), path.join(standalone, ".next", "static"), { recursive: true });
 
 const adresse = `http://localhost:${portApp}`;
+const ipLocale = reseau ? adresseLocale() : null;
+const adresseReseau = ipLocale ? `http://${ipLocale}:${portApp}` : null;
+if (reseau && !ipLocale) dire("Aucun réseau local trouvé (Wi-Fi coupé ?) : l'application ne sera ouverte que sur ce poste.");
 dire(`Démarrage de l'application sur ${adresse}…`);
 serveur = spawn(process.execPath, [path.join(standalone, "server.js")], {
   cwd: standalone,
@@ -198,8 +232,8 @@ serveur = spawn(process.execPath, [path.join(standalone, "server.js")], {
     DATABASE_URL,
     DATE_DEMO,
     PORT: String(portApp),
-    HOSTNAME: "127.0.0.1",
-    APP_URL: adresse,
+    HOSTNAME: adresseReseau ? "0.0.0.0" : "127.0.0.1",
+    APP_URL: adresseReseau ?? adresse,
     COOKIE_SECURISE: "0",
     APP_TZ: envLocal.APP_TZ || "America/Port-au-Prince",
   },
@@ -233,6 +267,15 @@ ${DATE_DEMO ? `  Date figée au ${DATE_DEMO} (démonstration). Pour la vraie dat
   Pour arrêter : Ctrl+C dans cette fenêtre (ou fermez-la).
   Pour repartir de zéro : supprimez le dossier .local/postgres, puis relancez.
 `);
+if (adresseReseau) {
+  console.log(`\x1b[32m✓ Sur votre téléphone, connecté au même Wi-Fi : ${adresseReseau}\x1b[0m
+
+  Si le Mac demande d'accepter les connexions entrantes pour « node », répondez « Autoriser ».
+  Attention : tant que cette fenêtre est ouverte, toute personne sur ce Wi-Fi peut ouvrir la page
+  de connexion, et les comptes de démonstration ont le même mot de passe. À faire chez soi, pas
+  sur le Wi-Fi de la banque ni un Wi-Fi public ; fermez la fenêtre quand vous avez fini.
+`);
+}
 
 if (process.platform === "darwin" && !process.argv.includes("--sans-navigateur")) spawn("open", [adresse], { stdio: "ignore", detached: true }).unref();
 else if (process.platform === "win32" && !process.argv.includes("--sans-navigateur")) spawn("cmd", ["/c", "start", "", adresse], { stdio: "ignore", detached: true }).unref();

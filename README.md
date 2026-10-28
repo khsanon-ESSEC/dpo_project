@@ -199,7 +199,8 @@ Choisir le fournisseur avec la Direction des risques et la conformité : les don
 Pour essayer l'application sur un ordinateur, avec les données de démonstration :
 
 - **Mac** : double-cliquer sur `lancer-sur-mac.command` dans le Finder. La première fois, il installe Node.js 22 si besoin (via nvm s'il est présent, sinon une copie rangée dans le dossier), les dépendances et une base PostgreSQL embarquée, compile l'application (quelques minutes) puis l'ouvre dans le navigateur. Les fois suivantes, il démarre en quelques secondes.
-- **Autre système**, avec Node.js 22 : `npm ci` puis `npm run local`.
+- **Sur le téléphone** : double-cliquer plutôt sur `lancer-sur-mac-telephone.command`. L'application s'ouvre aussi aux appareils du même Wi-Fi, et la fenêtre affiche l'adresse à taper sur le téléphone (par exemple `http://192.168.1.23:3000`). Le Mac peut demander d'autoriser les connexions entrantes pour « node ». Tant que la fenêtre est ouverte, toute personne sur ce Wi-Fi peut ouvrir la page de connexion : à faire chez soi, pas sur un Wi-Fi partagé. Une seule fenêtre à la fois : fermer d'abord l'autre.
+- **Autre système**, avec Node.js 22 : `npm ci` puis `npm run local` (ou `npm run local -- --reseau` pour le téléphone).
 
 Tout reste dans le dossier `.local/` du projet : la base, le journal du lancement (`.local/lancement.log`). Ctrl+C dans la fenêtre arrête l'application et la base. Pour repartir de données neuves : supprimer `.local/postgres` et relancer. La date est figée au vendredi 30 octobre 2026 pour que la démonstration ait du sens ; `npm run local -- --vraie-date` utilise la date du jour. Pour essayer l'assistant, mettre les paramètres `IA_…` dans un fichier `.env.local`.
 
