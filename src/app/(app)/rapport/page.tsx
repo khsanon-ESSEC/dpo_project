@@ -45,8 +45,8 @@ export const metadata: Metadata = { title: "Mon rapport" };
 
 const LIBELLE_RUBRIQUE_COURT: Record<string, string> = { fait: "Fait", en_cours: "En cours", bloque: "Bloqué", prochaine: "La semaine prochaine", decision: "Décision attendue", autre: "Autre" };
 
-export default async function PageRapport({ searchParams }: { searchParams: Promise<{ envoi?: string; piece?: string; champ?: string; apercu?: string }> }) {
-  const { envoi, piece, champ: champPiece, apercu } = await searchParams;
+export default async function PageRapport({ searchParams }: { searchParams: Promise<{ envoi?: string; piece?: string; champ?: string; apercu?: string; repris?: string }> }) {
+  const { envoi, piece, champ: champPiece, apercu, repris } = await searchParams;
   const u = await exigerInterne();
   // Les exécutifs ne rédigent pas de rapport : ils lisent ceux de tout le monde.
   if (!redigeUnRapport(u)) redirect("/equipe/rapports");
@@ -283,6 +283,11 @@ export default async function PageRapport({ searchParams }: { searchParams: Prom
       </Bandeau>
       <div className="page">
         <SousOnglets onglets={ONGLETS_RAPPORT} courant="/rapport" label="Rapports" />
+        {repris === "1" ? (
+          <p className="succes" role="status" style={{ margin: 0 }}>
+            Votre rapport est redevenu un brouillon{sup ? ` : ${sup.prenom} le recevra à votre nouvel envoi` : ""}. Complétez-le ou corrigez-le, puis renvoyez-le.
+          </p>
+        ) : null}
         <div className="colonnes saisie-rapport">
           <div className="colonne-large saisie-rapport__corps">
             {parties.length > 1 ? (

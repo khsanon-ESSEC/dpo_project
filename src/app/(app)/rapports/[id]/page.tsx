@@ -4,7 +4,8 @@ import { notFound, redirect } from "next/navigation";
 import { acces, idsProjetsVisibles, suitPersonne } from "@/lib/acces";
 import { exigerInterne } from "@/lib/auth/session";
 import { ajouterJours, dateCourte, dateLocale, heure } from "@/lib/dates";
-import { envoyeALHeure, lireRapport, messagesDuRapport, noterLecture, peutEchanger, rapportPrecedentLisible, rapportsDeLEquipe, rapportsVoisins } from "@/lib/donnees/rapport";
+import { envoyeALHeure, lireRapport, messagesDuRapport, noterLecture, peutEchanger, rapportPrecedentLisible, rapportsDeLEquipe, rapportsVoisins, repriseDuRapport } from "@/lib/donnees/rapport";
+import { reprendreMonRapport } from "@/app/(app)/rapport/actions";
 import { piecesDuRapport } from "@/lib/donnees/pieces";
 import { changementsDepuis, resumerRapport } from "@/lib/lecture-rapport";
 import { chargerOrganisation } from "@/lib/organisation";
@@ -19,8 +20,9 @@ import { BoutonImprimer, Repondre } from "./Repondre";
 
 export const metadata: Metadata = { title: "Rapport de la semaine" };
 
-export default async function PageRapportRecu({ params }: { params: Promise<{ id: string }> }) {
+export default async function PageRapportRecu({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ reprise?: string }> }) {
   const { id } = await params;
+  const { reprise: erreurReprise } = await searchParams;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerInterne();
   const a = await acces(u);
@@ -32,7 +34,7 @@ export default async function PageRapportRecu({ params }: { params: Promise<{ id
   if (moi && rapport.statut === "brouillon") redirect("/rapport");
   // « Lu par » : la première ouverture par son destinataire.
   await noterLecture(a, rapport);
-  const [voisins, org, visibles, actifs, precedent, aLHeure, messages] = await Promise.all([
+  const [voisins, org, visibles, actifs, precedent, aLHeure, messages, reprise] = await Promise.all([
     complet ? rapportsVoisins(a, rapport) : { precedent: null, suivant: null },
     chargerOrganisation(),
     idsProjetsVisibles(a),
@@ -40,6 +42,7 @@ export default async function PageRapportRecu({ params }: { params: Promise<{ id
     complet ? rapportPrecedentLisible(a, rapport) : null,
     envoyeALHeure(rapport),
     peutEchanger(lecteur) ? messagesDuRapport(rapport.id) : [],
+    moi ? repriseDuRapport(rapport, u.id) : null,
   ]);
   // Le rapport suivant de la même semaine, pour qui lit ceux de son équipe à la suite.
   const equipe = complet && !moi ? (await rapportsDeLEquipe(a, rapport.semaine)).filter((p) => p.rapport) : [];
@@ -103,6 +106,11 @@ export default async function PageRapportRecu({ params }: { params: Promise<{ id
           ) : moi && !rapport.luLe && destinataire ? (
             <span>Pas encore lu par {nomComplet(destinataire)}</span>
           ) : null}
+          {reprise?.possible ? (
+            <a href="#reprendre" className="lien-nom" style={{ textDecorationColor: "rgba(255,255,255,0.35)" }}>
+              Le reprendre pour le compléter
+            </a>
+          ) : null}
           {version ? (
             <span>
               Modèle « {version.nom} » v{version.numero}
@@ -147,6 +155,40 @@ export default async function PageRapportRecu({ params }: { params: Promise<{ id
           complet={complet}
           cote={
             peutEchanger(lecteur) && rapport.statut === "envoye" ? (
+              <>
+                {reprise ? (
+                  <section className="carte reprendre" id="reprendre" aria-labelledby="reprendre-t" style={{ scrollMarginTop: 80 }}>
+                    <h2 id="reprendre-t" className="carte__titre">
+                      Compléter mon rapport
+                    </h2>
+                    {erreurReprise ? (
+                      <p className="erreur" role="alert" style={{ margin: 0 }}>
+                        {erreurReprise.slice(0, 300)}
+                      </p>
+                    ) : null}
+                    {reprise.possible ? (
+                      <>
+                        <p className="note" style={{ margin: 0 }}>
+                          {destinataire ? `${destinataire.prenom} ne l'a pas encore ouvert` : "Personne ne l'a encore ouvert"} : vous pouvez le reprendre pour le compléter ou le corriger, puis le renvoyer.
+                        </p>
+                        <form action={reprendreMonRapport.bind(null, rapport.id)}>
+                          <button type="submit" className="bouton-contour">
+                            <Icone nom="modifier" taille={16} /> Reprendre mon rapport
+                          </button>
+                        </form>
+                      </>
+                    ) : (
+                      <p className="note" style={{ margin: 0 }}>
+                        {reprise.raison === "lu"
+                          ? `${reprise.qui ?? "Votre supérieur"} l'a ouvert : il ne se modifie plus.`
+                          : reprise.raison === "echange"
+                            ? "Un échange a commencé dessous : il ne se modifie plus."
+                            : `${reprise.qui ?? "Votre supérieur"} a déjà envoyé son rapport, qui reprend le vôtre : il ne se modifie plus.`}{" "}
+                        Écrivez ci-dessous ce que vous voulez ajouter.
+                      </p>
+                    )}
+                  </section>
+                ) : null}
               <section className="carte reponses" id="reponses" aria-labelledby="reponses-t">
                 <h2 id="reponses-t" className="carte__titre">
                   {messages.length ? "Échanges" : "Répondre"}
@@ -174,6 +216,7 @@ export default async function PageRapportRecu({ params }: { params: Promise<{ id
                   exemple={moi ? "Par exemple : la DTI a répondu, je relance mardi." : "Par exemple : licence validée, la validation métier peut commencer."}
                 />
               </section>
+              </>
             ) : complet ? (
               <BoutonImprimer />
             ) : null

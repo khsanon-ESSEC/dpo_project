@@ -816,6 +816,89 @@ export async function envoyeALHeure(rapport: typeof schema.rapportsHebdo.$inferS
   return `${m.jour} ${String(m.minutes).padStart(4, "0")}` < limite;
 }
 
+export type RepriseDuRapport = { possible: true } | { possible: false; raison: "lu" | "echange" | "repris_plus_haut"; qui: string | null };
+
+/**
+ * « Reprendre mon rapport » (décidé le 29 octobre 2026) : tant que son destinataire ne l'a pas ouvert, l'auteur peut
+ * reprendre le rapport de la semaine en cours ; il redevient un brouillon, qu'on complète ou corrige avant de le renvoyer.
+ * Il reste figé une fois ouvert par le destinataire, quand un échange a commencé dessous (« Répondre »), ou quand le
+ * destinataire a déjà envoyé son propre rapport de la semaine (qui reprend celui-ci). Null : la question ne se pose pas
+ * (pas l'auteur, pas envoyé, ou une autre semaine que celle en cours).
+ */
+export async function repriseDuRapport(r: typeof schema.rapportsHebdo.$inferSelect, moiId: string, semaine = semaineCourante()): Promise<RepriseDuRapport | null> {
+  if (r.auteurId !== moiId || r.statut !== "envoye" || r.semaine !== semaine) return null;
+  const org = await chargerOrganisation();
+  const nom = (id: string | null) => (id && org.personnes.get(id) ? nomComplet(org.personnes.get(id)!) : null);
+  if (r.luLe) return { possible: false, raison: "lu", qui: nom(r.luPar) };
+  const [mot] = await db
+    .select({ auteurId: schema.messagesRapport.auteurId })
+    .from(schema.messagesRapport)
+    .where(and(eq(schema.messagesRapport.rapportId, r.id), ne(schema.messagesRapport.auteurId, r.auteurId)))
+    .limit(1);
+  if (mot) return { possible: false, raison: "echange", qui: nom(mot.auteurId) };
+  if (r.destinataireId) {
+    const [plusHaut] = await db
+      .select({ id: schema.rapportsHebdo.id })
+      .from(schema.rapportsHebdo)
+      .where(and(eq(schema.rapportsHebdo.auteurId, r.destinataireId), eq(schema.rapportsHebdo.semaine, r.semaine), eq(schema.rapportsHebdo.statut, "envoye")))
+      .limit(1);
+    if (plusHaut) return { possible: false, raison: "repris_plus_haut", qui: nom(r.destinataireId) };
+  }
+  return { possible: true };
+}
+
+/**
+ * Reprendre mon rapport envoyé (voir repriseDuRapport) : il redevient un brouillon ; l'alerte « rapport reçu » est
+ * retirée à ceux qui l'avaient (le lien ne mènerait plus à rien) ; dans les brouillons de rapport qui en avaient
+ * repris des lignes (celui du chef), ces lignes s'en vont : elles reviendront, à jour, au nouvel envoi.
+ */
+export async function reprendreRapport(rapportId: string, auteurId: string, semaine = semaineCourante()): Promise<{ ok: true } | { erreur: string }> {
+  const [r] = await db.select().from(schema.rapportsHebdo).where(eq(schema.rapportsHebdo.id, rapportId));
+  if (!r) return { erreur: "Rapport introuvable." };
+  const reprise = await repriseDuRapport(r, auteurId, semaine);
+  if (!reprise) return { erreur: "Seul le rapport envoyé de la semaine en cours se reprend, par son auteur." };
+  if (!reprise.possible)
+    return {
+      erreur:
+        reprise.raison === "lu"
+          ? `${reprise.qui ?? "Votre supérieur"} l'a déjà ouvert : il ne se reprend plus. Écrivez sous le rapport ce que vous voulez ajouter.`
+          : reprise.raison === "echange"
+            ? "Un échange a commencé sous ce rapport : il ne se reprend plus. Écrivez-y ce que vous voulez ajouter."
+            : `${reprise.qui ?? "Votre supérieur"} a déjà envoyé son rapport, qui reprend le vôtre : il ne se reprend plus. Écrivez sous le rapport ce que vous voulez ajouter.`,
+    };
+  const [lignes, reponses] = await Promise.all([
+    db.select({ id: schema.lignesRapport.id }).from(schema.lignesRapport).where(eq(schema.lignesRapport.rapportId, r.id)),
+    db.select({ id: schema.reponsesRapport.id }).from(schema.reponsesRapport).where(eq(schema.reponsesRapport.rapportId, r.id)),
+  ]);
+  const origines = [...lignes.map((l) => `l:${l.id}`), ...reponses.map((x) => `r:${x.id}`)];
+  const fait = await db.transaction(async (tx) => {
+    const [repris] = await tx
+      .update(schema.rapportsHebdo)
+      .set({ statut: "brouillon", envoyeLe: null, majLe: new Date() })
+      .where(and(eq(schema.rapportsHebdo.id, r.id), eq(schema.rapportsHebdo.statut, "envoye"), isNull(schema.rapportsHebdo.luLe)))
+      .returning({ id: schema.rapportsHebdo.id });
+    if (!repris) return false;
+    await tx.delete(schema.notifications).where(and(eq(schema.notifications.type, "rapport_recu"), eq(schema.notifications.lien, `/rapports/${r.id}`)));
+    if (origines.length) {
+      const miennes = new Set(origines);
+      const touchees = await tx
+        .select({ id: schema.lignesRapport.id, origines: schema.lignesRapport.origines })
+        .from(schema.lignesRapport)
+        .innerJoin(schema.rapportsHebdo, eq(schema.rapportsHebdo.id, schema.lignesRapport.rapportId))
+        .where(and(eq(schema.rapportsHebdo.statut, "brouillon"), sql`${schema.lignesRapport.origines} && ARRAY[${sql.join(origines.map((o) => sql`${o}`), sql`, `)}]::text[]`));
+      for (const l of touchees) {
+        const reste = l.origines.filter((o) => !miennes.has(o));
+        if (reste.length) await tx.update(schema.lignesRapport).set({ origines: reste }).where(eq(schema.lignesRapport.id, l.id));
+        else await tx.delete(schema.lignesRapport).where(eq(schema.lignesRapport.id, l.id));
+      }
+    }
+    return true;
+  });
+  if (!fait) return { erreur: "Ce rapport vient d'être ouvert par son destinataire : il ne se reprend plus." };
+  await noter(auteurId, "rapport_repris", r.id);
+  return { ok: true };
+}
+
 /** « Lu par » : la première ouverture du rapport par son destinataire est notée. */
 export async function noterLecture(a: Acces, rapport: typeof schema.rapportsHebdo.$inferSelect) {
   if (rapport.statut !== "envoye" || rapport.luLe || !rapport.destinataireId || rapport.destinataireId !== a.moi.id) return;

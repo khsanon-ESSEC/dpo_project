@@ -5174,6 +5174,16 @@ a.lien-projet:focus-visible {
   flex-direction: column;
   gap: 12px;
 }
+/* « Reprendre mon rapport » : au-dessus des échanges, pour l'auteur (29 octobre 2026). */
+.reprendre {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.reprendre .carte__titre {
+  margin: 0;
+}
 .reponses .carte__titre {
   margin: 0;
 }

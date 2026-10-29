@@ -16,6 +16,7 @@ import {
   RUBRIQUES_RECONDUITES,
   envoyerRapport,
   formulaireDe,
+  reprendreRapport,
   matierePourSynthese,
   ordreSuivant,
   suggestionsPourDecision,
@@ -157,6 +158,15 @@ export async function envoyer(rapportId: string) {
   const r = await envoyerRapport(rapportId, u.id);
   if (r && !r.ok) redirect("/rapport?envoi=incomplet#envoi");
   revalidatePath("/", "layout");
+}
+
+/** « Reprendre mon rapport » envoyé, tant que son destinataire ne l'a pas ouvert (29 octobre 2026). */
+export async function reprendreMonRapport(rapportId: string) {
+  const u = await exigerInterne();
+  const r = await reprendreRapport(rapportId, u.id);
+  if ("erreur" in r) redirect(`/rapports/${rapportId}?reprise=${encodeURIComponent(r.erreur)}#reprendre`);
+  revalidatePath("/", "layout");
+  redirect("/rapport?repris=1");
 }
 
 /**
