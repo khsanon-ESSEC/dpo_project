@@ -49,11 +49,12 @@ export const ONGLETS_ORGANISATION: SousOnglet[] = [
 
 /**
  * Les onglets d'Organisation que la personne peut ouvrir : tout pour un administrateur ; pour un exécutif qui
- * n'administre pas, les personnes et équipes (en lecture), les listes des projets et le suivi du pilote.
+ * n'administre pas, les personnes et équipes (en lecture), les listes des projets, l'import des projets et des tâches,
+ * et le suivi du pilote.
  */
 export function ongletsOrganisation(u: { administrateur: boolean; executif: boolean; externe?: boolean }, toutVoir: boolean): SousOnglet[] {
   if (u.administrateur && !u.externe) return ONGLETS_ORGANISATION;
-  return ONGLETS_ORGANISATION.filter((o) => (toutVoir && (o.href === "/organisation" || o.href === "/organisation/listes")) || (o.href === "/pilote" && u.executif));
+  return ONGLETS_ORGANISATION.filter((o) => (toutVoir && (o.href === "/organisation" || o.href === "/organisation/listes" || o.href === "/organisation/importer")) || (o.href === "/pilote" && u.executif));
 }
 
 /** Section Conseil : le rapport mensuel, et les rapports ponctuels faits à tout moment. */

@@ -8300,3 +8300,11 @@ a.livrable__lien:focus-visible {
   font-weight: 500;
   color: var(--encre);
 }
+
+/* Import en vrac : modèle, fichier, aperçu (29 octobre 2026). */
+.import-depot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+}

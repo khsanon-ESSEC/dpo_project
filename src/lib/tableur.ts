@@ -152,6 +152,16 @@ export function lireCsv(texte: string): string[][] {
 
 /** Un classeur .xlsx d'une feuille : la première ligne en gras, colonnes élargies. */
 export function ecrireXlsx(lignes: string[][], nomFeuille = "Organisation", largeurs: number[] = []): Uint8Array {
+  return ecrireClasseur([{ nom: nomFeuille, lignes, largeurs }]);
+}
+
+export type Feuille = { nom: string; lignes: string[][]; largeurs?: number[] };
+
+/**
+ * Un classeur .xlsx de plusieurs feuilles (la première ligne de chacune en gras, figée). La lecture (lireXlsx) ne
+ * prend que la première feuille : un modèle met ses données en premier et son mode d'emploi ensuite.
+ */
+export function ecrireClasseur(feuilles: Feuille[]): Uint8Array {
   const ref = (i: number, j: number) => {
     let n = j + 1;
     let l = "";
@@ -161,31 +171,33 @@ export function ecrireXlsx(lignes: string[][], nomFeuille = "Organisation", larg
     }
     return `${l}${i + 1}`;
   };
-  const cols = largeurs.length ? `<cols>${largeurs.map((w, j) => `<col min="${j + 1}" max="${j + 1}" width="${w}" customWidth="1"/>`).join("")}</cols>` : "";
-  const feuille = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  const xmlFeuille = ({ lignes, largeurs = [] }: Feuille) => {
+    const cols = largeurs.length ? `<cols>${largeurs.map((w, j) => `<col min="${j + 1}" max="${j + 1}" width="${w}" customWidth="1"/>`).join("")}</cols>` : "";
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>${cols}<sheetData>${lignes
-    .map((l, i) => `<row r="${i + 1}">${l.map((v, j) => `<c r="${ref(i, j)}" t="inlineStr"${i === 0 ? ' s="1"' : ""}><is><t xml:space="preserve">${echapperXml(v ?? "")}</t></is></c>`).join("")}</row>`)
-    .join("")}</sheetData></worksheet>`;
-  const nom = echapperXml(nomFeuille.slice(0, 31).replace(/[\\/?*[\]:]/g, " "));
-  return zipSync(
-    {
-      "[Content_Types].xml": strToU8(
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
-      ),
-      "_rels/.rels": strToU8(
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
-      ),
-      "xl/workbook.xml": strToU8(
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${nom}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
-      ),
-      "xl/_rels/workbook.xml.rels": strToU8(
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
-      ),
-      "xl/styles.xml": strToU8(
-        `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`,
-      ),
-      "xl/worksheets/sheet1.xml": strToU8(feuille),
-    },
-    { level: 6 },
-  );
+      .map((l, i) => `<row r="${i + 1}">${l.map((v, j) => `<c r="${ref(i, j)}" t="inlineStr"${i === 0 ? ' s="1"' : ""}><is><t xml:space="preserve">${echapperXml(v ?? "")}</t></is></c>`).join("")}</row>`)
+      .join("")}</sheetData></worksheet>`;
+  };
+  const noms = feuilles.map((f, k) => echapperXml(f.nom.slice(0, 31).replace(/[\\/?*[\]:]/g, " ") || `Feuille ${k + 1}`));
+  const fichiers: Record<string, Uint8Array> = {
+    "[Content_Types].xml": strToU8(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${feuilles.map((_, k) => `<Override PartName="/xl/worksheets/sheet${k + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+    ),
+    "_rels/.rels": strToU8(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    ),
+    "xl/workbook.xml": strToU8(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${noms.map((nom, k) => `<sheet name="${nom}" sheetId="${k + 1}" r:id="rId${k + 1}"/>`).join("")}</sheets></workbook>`,
+    ),
+    "xl/_rels/workbook.xml.rels": strToU8(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${feuilles.map((_, k) => `<Relationship Id="rId${k + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${k + 1}.xml"/>`).join("")}<Relationship Id="rId${feuilles.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    ),
+    "xl/styles.xml": strToU8(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`,
+    ),
+  };
+  feuilles.forEach((f, k) => {
+    fichiers[`xl/worksheets/sheet${k + 1}.xml`] = strToU8(xmlFeuille(f));
+  });
+  return zipSync(fichiers, { level: 6 });
 }

@@ -292,6 +292,17 @@ Demandée avant la mise en service : « que les documents soient gérés de mani
 
 Restent à décider **[à confirmer]** : un projet clôturé (« finalisé ») accepte encore le dépôt et le retrait de documents (le bilan de clôture peut en avoir besoin) ; Next.js lit tout l'envoi (12 Mo au plus) avant que l'action vérifie les droits (comportement du cadre, borné par la limite de taille).
 
+## Ajouts du 29 octobre 2026 (suite)
+
+**[vérifié par tests]** sauf mention (`tests/listes-base.test.ts`, `tests/import-projets*.test.ts`, `tests/reunions-base.test.ts`, `tests/comparaison-conseil.test.ts`, `tests/recurrence-reunion.test.ts`) :
+
+- **Listes de référence** : gérées par les administrateurs et les exécutifs ; une valeur hors liste est refusée par le serveur à la création, à la décision et à la modification d'un projet (la valeur que le projet porte déjà reste acceptée).
+- **Import des projets et des tâches** : réservé aux exécutifs (ils voient et gèrent déjà tous les projets). Un administrateur qui n'est pas exécutif n'importe que les personnes : il n'obtient ainsi ni projet ni tâche des autres. Le fichier est lu sans formule ni macro (même lecteur que l'import de l'organisation, mêmes bornes : 2 Mo, 2 000 lignes). L'aperçu et l'import refont tous les contrôles (personnes actives, codes libres, règle d'assignation, projet ouvert et géré par qui importe) ; les lignes renvoyées par la page sont reprises champ par champ. Journal : `import_projets`, `import_taches`.
+- **Comparer deux rapports** : seulement les rapports que la personne lit déjà (un projet visible ou créé par elle), et seulement les lignes des projets qu'elle voit ; lecture seule (un brouillon n'est pas mis à jour par la comparaison).
+- **Réunions récurrentes** : mêmes règles qu'une réunion (projet visible, participants actifs, contacts seulement pour une personne hors division) ; seule la personne qui a noté la série la modifie ou la supprime ; une alerte par participant pour toute la série.
+- **Page d'un livrable** : mêmes droits que la fiche du projet ; les actions passent par les mêmes contrôles (l'adresse de retour est fixe). **[déduction]**
+- **Fiche d'une personne, par projet** : montrée seulement pour soi et pour qui suit la personne ; un projet que le lecteur ne voit pas est compté dans « Autres projets », sans son nom. **[déduction]**
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.
