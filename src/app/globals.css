@@ -8308,3 +8308,34 @@ a.livrable__lien:focus-visible {
   align-items: flex-end;
   gap: 12px 16px;
 }
+
+/* Équipe du projet : « Rôle » et « Retirer » restent ensemble ; le formulaire du rôle s'ouvre sous la ligne. */
+.membre-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+}
+.membre-actions:has(.membre-role[open]) {
+  flex: 1 1 100%;
+  justify-content: flex-start;
+}
+/* Pendant qu'on change le rôle, « Retirer » s'efface : une seule action à la fois. */
+.membre-actions:has(.membre-role[open]) > form {
+  display: none;
+}
+.membre-role {
+  order: -1;
+}
+.membre-role[open] {
+  order: 1;
+  flex: 1 1 100%;
+}
+.membre-role[open] > summary {
+  width: max-content;
+}
+.membre-role__champ {
+  flex: 1 1 220px;
+  min-width: 0;
+}

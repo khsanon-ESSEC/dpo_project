@@ -12,7 +12,7 @@ import { LigneMiseAJour } from "@/components/LigneMiseAJour";
 import { DocumentsProjet } from "./Documents";
 import { documentsDuProjet, peutDeposerDocument, peutLireDocuments } from "@/lib/donnees/documents";
 import { LIBELLE_ETAT_LIVRABLE, LIBELLE_STATUT_PROJET, peutDeciderDemande, peutDeclarerPret, peutGererProjet, peutModifierDecision, peutNoterDecision, STATUTS_ACCEPTES } from "@/lib/projets";
-import { ajouter, archiver, decider, retirer } from "../gestion-actions";
+import { ajouter, archiver, decider, retirer, role as changerRole } from "../gestion-actions";
 import { lignesDuProjetCetteSemaine } from "@/lib/donnees/rapport";
 import { Anneau, Bandeau, LienChiffre } from "@/components/Bandeau";
 import { CocheSeule } from "@/components/CaseTache";
@@ -1346,18 +1346,33 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                       )}
                     </span>
                     {peutModifier && actif ? (
-                      <form action={retirer.bind(null, p.id, m.id)}>
-                        <button type="submit" className="bouton-mini" aria-label={`Retirer ${m.nom} de l'équipe`}>
-                          Retirer
-                        </button>
-                      </form>
+                      <span className="membre-actions">
+                        <form action={retirer.bind(null, p.id, m.id)}>
+                          <button type="submit" className="bouton-mini" aria-label={`Retirer ${m.nom} de l'équipe`}>
+                            Retirer
+                          </button>
+                        </form>
+                        {/* Le rôle se change sans retirer la personne de l'équipe. */}
+                        <details className="livrable__renvoi membre-role">
+                          <summary className="bouton-mini" aria-label={`Changer le rôle de ${m.nom}`}>
+                            Rôle
+                          </summary>
+                          <form action={changerRole.bind(null, p.id, m.id)} className="livrable__renvoi-form">
+                            <label htmlFor={`m-role-${m.id}`}>Rôle de {m.nom} dans le projet</label>
+                            <ListeFiltrable id={`m-role-${m.id}`} name="role" libre defaultValue={m.role} options={roles.map((r) => ({ value: r, label: r }))} maxLength={80} placeholder="Ex. : analyste" nouveau="Nouveau rôle" className="membre-role__champ" />
+                            <button type="submit" className="bouton-contour">
+                              Enregistrer
+                            </button>
+                          </form>
+                        </details>
+                      </span>
                     ) : null}
                   </li>
                 ))}
                 {!membres.length && !p.chefProjetId ? <li className="vide">Personne pour l&apos;instant.</li> : null}
               </ul>
               {peutModifier && actif ? (
-                <form action={ajouter.bind(null, p.id)} style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
+                <form key={`ajout-${membres.length}`} action={ajouter.bind(null, p.id)} style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
                   <ChoixPersonne
                     id="m-personne"
                     name="personneId"
