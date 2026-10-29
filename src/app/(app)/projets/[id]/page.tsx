@@ -20,7 +20,11 @@ import { LienPersonne } from "@/components/Liens";
 import { ChoixPersonne } from "@/components/ChoixPersonne";
 import { changerIndicateur, mettreAJourProjet } from "./actions";
 import { OngletsVues } from "./commun";
-import { avancementDuProjet } from "@/lib/donnees/graphiques";
+import { avancementParPeriode } from "@/lib/donnees/graphiques";
+import { ecart, moisDebutExercice, planBilan } from "@/lib/bilan";
+import { aLa, etiquettesAxe, nomsDesPeriodes } from "@/lib/bilan-libelles";
+import { periodePreferee } from "@/lib/periode-preferee";
+import { ChoixPeriode } from "@/components/ChoixPeriode";
 import { reportsFinDe } from "@/lib/donnees/reports-fin";
 import { Courbes } from "@/components/Courbes";
 import { FriseReports } from "@/components/Graphiques";
@@ -34,9 +38,9 @@ const SANTE = {
 } as const;
 const ETAT_IND = { atteint: "Atteint", en_cours: "En cours", a_venir: "À venir" } as const;
 
-export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string }> }) {
+export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string }> }) {
   const { id } = await params;
-  const { propose, erreur, doc, docOk, docRetire } = await searchParams;
+  const { propose, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement } = await searchParams;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
   const a = await acces(u);
@@ -69,7 +73,14 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const rapports = auteurs ? await lignesDuProjetCetteSemaine(id, auteurs) : null;
   const jour = aujourdhui();
   const atteints = f.indicateurs.filter((i) => i.etat === "atteint").length;
-  const [avancement, reports] = await Promise.all([avancementDuProjet(id, jour), reportsFinDe(id)]);
+  // Avancement sur la période choisie (le même sélecteur que le bilan), comparé à la période d'avant.
+  const debutExercice = moisDebutExercice(process.env.EXERCICE_DEBUT_MOIS);
+  const planAv = planBilan(vueAvancement ?? (await periodePreferee("semaine")), pAvancement, jour, debutExercice);
+  const [avancement, reports] = await Promise.all([avancementParPeriode(id, [planAv.actuel, planAv.precedent, ...planAv.serie], jour), reportsFinDe(id)]);
+  const nomsAv = nomsDesPeriodes(planAv, debutExercice);
+  const etiquettesAv = etiquettesAxe(planAv);
+  const pointsAv = avancement.slice(2);
+  const comparerAv = !avancement[1].avant;
   const ancienne = f.dernier?.dateFinPrevue ?? null;
   const glissement = ancienne && p.dateFinPrevue ? Math.round(ecartJours(ancienne, p.dateFinPrevue) / 7) : 0;
 
@@ -347,28 +358,30 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
               </ol>
             </section>
 
-            {avancement.length >= 2 ? (
-              <section className="carte" aria-labelledby="p-avancement">
+            {pointsAv.some((x) => !x.avant) ? (
+              <section className="carte" aria-labelledby="p-avancement" id="avancement" style={{ scrollMarginTop: 80 }}>
                 <h2 id="p-avancement" className="carte__titre" style={{ marginBottom: 4 }}>
                   Avancement
                 </h2>
+                <ChoixPeriode plan={planAv} noms={nomsAv} lien={(v, pp) => `/projets/${id}?vue=${v}${pp ? `&p=${pp}` : ""}#avancement`} comparer={comparerAv} />
                 <p className="note" style={{ margin: "0 0 12px" }}>
-                  {avancement.at(-1)!.faites} tâche{avancement.at(-1)!.faites > 1 ? "s" : ""} terminée{avancement.at(-1)!.faites > 1 ? "s" : ""} sur {avancement.at(-1)!.total}, semaine après semaine : quand les deux courbes
-                  s&apos;écartent, le travail s&apos;ajoute plus vite qu&apos;il ne se termine.
+                  {avancement[0].terminees} tâche{avancement[0].terminees > 1 ? "s" : ""} terminée{avancement[0].terminees > 1 ? "s" : ""} {nomsAv.actuel.charAt(0).toLowerCase() + nomsAv.actuel.slice(1)}
+                  {comparerAv ? ` (${ecart(avancement[0].terminees, avancement[1].terminees) ?? "—"} par rapport ${aLa(nomsAv.avantCourt)})` : ""} ; {avancement[0].faites} sur {avancement[0].total} depuis le début. Quand les
+                  deux courbes s&apos;écartent, le travail s&apos;ajoute plus vite qu&apos;il ne se termine.
                 </p>
                 <Courbes
-                  titre="Avancement du projet, semaine par semaine"
+                  titre={`Avancement du projet, ${planAv.vue === "semaine" ? "semaine par semaine" : "mois par mois"}`}
                   unite="nombre"
                   nomActuel="Tâches terminées"
                   nomAvant="Tâches au total"
-                  points={avancement.map((w) => ({
-                    cle: w.lundi,
-                    libelle: `semaine du ${dateCourte(w.lundi)}`,
-                    court: dateCourte(w.lundi),
-                    actuel: w.faites,
-                    avant: w.total,
+                  points={planAv.axe.map((cle, k) => ({
+                    cle,
+                    libelle: etiquettesAv[k].libelle,
+                    court: etiquettesAv[k].court,
+                    actuel: !pointsAv[k] || pointsAv[k].avant ? null : pointsAv[k].faites,
+                    avant: !pointsAv[k] || pointsAv[k].avant ? null : pointsAv[k].total,
                     libelleAvant: "au total",
-                    enCours: w.enCours,
+                    enCours: !!planAv.serie[k] && planAv.serie[k].fin >= jour,
                   }))}
                 />
               </section>

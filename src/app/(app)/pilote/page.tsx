@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { exigerInterne } from "@/lib/auth/session";
-import { ajouterJours, dateCourte } from "@/lib/dates";
-import { suiviPilote } from "@/lib/donnees/pilote";
+import { aujourdhui, dateCourte } from "@/lib/dates";
+import { piloteParPeriode, suiviPilote } from "@/lib/donnees/pilote";
 import { courrielActif } from "@/lib/courriel";
 import { bilanCourriels } from "@/lib/donnees/courriels";
 import { semaineCourante } from "@/lib/donnees/rapport";
@@ -10,6 +10,10 @@ import { Bandeau } from "@/components/Bandeau";
 import { ONGLETS_ORGANISATION, SousOnglets } from "@/components/SousOnglets";
 import { Courbes, valeurTexte } from "@/components/Courbes";
 import { debutDesDonnees } from "@/lib/donnees/bilan";
+import { ecart, moisDebutExercice, planBilan } from "@/lib/bilan";
+import { aLa, etiquettesAxe, nomsDesPeriodes } from "@/lib/bilan-libelles";
+import { periodePreferee } from "@/lib/periode-preferee";
+import { ChoixPeriode } from "@/components/ChoixPeriode";
 
 export const metadata: Metadata = { title: "Suivi du pilote" };
 
@@ -19,15 +23,18 @@ const pct = (n: number, d: number) => (d ? Math.round((n / d) * 100) : null);
  * Suivi du pilote, pour les administrateurs et les exécutifs : l'application est-elle utilisée ?
  * Des nombres agrégés seulement : personne n'est suivi individuellement ici.
  */
-export default async function PagePilote() {
+export default async function PagePilote({ searchParams }: { searchParams: Promise<{ vue?: string; p?: string }> }) {
   const u = await exigerInterne();
   if (!u.administrateur && !u.executif) notFound();
+  const { vue, p: periode } = await searchParams;
+  const debutExercice = moisDebutExercice(process.env.EXERCICE_DEBUT_MOIS);
+  const plan = planBilan(vue ?? (await periodePreferee("semaine")), periode, aujourdhui(), debutExercice);
   const [s, debuts] = await Promise.all([suiviPilote(), debutDesDonnees()]);
-  // Avant que l'application serve (premier rapport, première donnée), une semaine n'a pas de valeur, pas un zéro.
-  const servait = (w: { lundi: string }, depuis: string | null) => !!depuis && ajouterJours(w.lundi, 6) >= depuis;
-  // Les mises à jour et les ouvertures ne sont enregistrées que par l'application : avant la première, pas de valeur.
-  const premiereVue = s.semaines.find((w) => w.actifs > 0)?.lundi ?? null;
-  const premiereMaj = s.semaines.find((w) => w.tachesAJour > 0)?.lundi ?? null;
+  const valeurs = await piloteParPeriode([plan.actuel, plan.precedent, ...plan.serie, ...(plan.serieAvant ?? [])], debuts.rapports);
+  const nomsPeriode = nomsDesPeriodes(plan, debutExercice);
+  const etiquettes = etiquettesAxe(plan);
+  const comparer = Object.values(valeurs[1]).some((v) => v !== null);
+  const deuxSeries = !!plan.serieAvant && comparer;
   const courriel = courrielActif() ? await bilanCourriels(semaineCourante()) : null;
   const derniere = [...s.semaines].reverse().find((w) => w.attendu);
 
@@ -74,33 +81,44 @@ export default async function PagePilote() {
       </Bandeau>
       <div className="page" style={{ maxWidth: 980 }}>
         <SousOnglets onglets={u.administrateur ? ONGLETS_ORGANISATION : ONGLETS_ORGANISATION.filter((o) => o.href === "/organisation" || o.href === "/pilote")} courant="/pilote" label="Organisation" />
-        <section aria-labelledby="p-tendances">
+        <section aria-labelledby="p-tendances" id="tendances" style={{ scrollMarginTop: 80 }}>
           <h2 id="p-tendances" className="carte__titre" style={{ marginBottom: 12 }}>
-            Douze semaines
+            Adoption
           </h2>
+          <ChoixPeriode plan={plan} noms={nomsPeriode} lien={(v, pp) => `/pilote?vue=${v}${pp ? `&p=${pp}` : ""}#tendances`} comparer={comparer} />
           <div className="bilan-graphes">
             {[
-              { titre: "Rapports envoyés", valeur: (w: (typeof s.semaines)[number]) => (w.attendu && servait(w, debuts.rapports) ? pct(w.envoyes, w.redacteurs) : null) },
-              { titre: "Rapports à l'heure", valeur: (w: (typeof s.semaines)[number]) => (w.attendu && servait(w, debuts.rapports) ? pct(w.aLheure, w.redacteurs) : null) },
-              { titre: "Tâches mises à jour avant vendredi", valeur: (w: (typeof s.semaines)[number]) => (premiereMaj && w.lundi >= premiereMaj ? pct(w.tachesAJour, w.redacteurs) : null) },
-              { titre: "Personnes qui ont ouvert l'application", valeur: (w: (typeof s.semaines)[number]) => (premiereVue && w.lundi >= premiereVue ? pct(w.actifs, s.utilisateurs) : null) },
+              { titre: "Rapports envoyés", cle: "envoyes" as const },
+              { titre: "Rapports à l'heure", cle: "aLheure" as const },
+              { titre: "Tâches mises à jour avant vendredi", cle: "tachesAJour" as const },
+              { titre: "Personnes qui ont ouvert l'application", cle: "ouverts" as const },
             ].map((m) => {
-              const derniere = [...s.semaines].reverse().find((w) => m.valeur(w) !== null);
+              const actuel = valeurs[0][m.cle];
+              const avant = valeurs[1][m.cle];
               return (
                 <article key={m.titre} className="carte graphe-carte">
                   <header className="graphe-carte__tete">
                     <h3 className="graphe-carte__titre">{m.titre}</h3>
                     <p className="graphe-carte__valeur">
-                      {valeurTexte(derniere ? m.valeur(derniere) : null, "pourcent")}
-                      <span className="graphe-carte__ecart">{derniere ? `semaine du ${dateCourte(derniere.lundi)}` : "pas encore de semaine complète"}</span>
+                      {valeurTexte(actuel, "pourcent")}
+                      <span className="graphe-carte__ecart">{comparer && avant !== null ? `${ecart(actuel, avant, " pts") ?? "—"} par rapport ${aLa(nomsPeriode.avantCourt)}` : nomsPeriode.actuel}</span>
                     </p>
                   </header>
                   <Courbes
-                    titre={`${m.titre}, semaine par semaine`}
+                    titre={`${m.titre}, ${plan.vue === "semaine" ? "semaine par semaine" : "mois par mois"}`}
                     unite="pourcent"
-                    nomActuel={m.titre}
+                    nomActuel={nomsPeriode.actuel}
+                    nomAvant={deuxSeries ? nomsPeriode.avant : undefined}
                     hauteur={100}
-                    points={s.semaines.map((w) => ({ cle: w.lundi, libelle: `semaine du ${dateCourte(w.lundi)}`, court: dateCourte(w.lundi), actuel: m.valeur(w), avant: null, enCours: w.courante }))}
+                    points={plan.axe.map((cle, k) => ({
+                      cle,
+                      libelle: etiquettes[k].libelle,
+                      court: etiquettes[k].court,
+                      actuel: k < plan.serie.length ? valeurs[2 + k][m.cle] : null,
+                      avant: deuxSeries ? valeurs[2 + plan.serie.length + k][m.cle] : null,
+                      libelleAvant: etiquettes[k].libelleAvant,
+                      enCours: !!plan.serie[k] && plan.serie[k].fin >= aujourdhui(),
+                    }))}
                   />
                 </article>
               );

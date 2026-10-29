@@ -17,18 +17,19 @@ import { ChoixParticipants } from "./ChoixParticipants";
 import { VerifierCreneau } from "./VerifierCreneau";
 import { ActionsReunion } from "./ActionsReunion";
 import { assignables } from "@/lib/donnees/gestion";
-import { reunionsEnChiffres } from "@/lib/donnees/graphiques";
-import { Colonnes } from "@/components/Colonnes";
+import { minutesReunionParPeriode, reunionsEnChiffres } from "@/lib/donnees/graphiques";
+import { Courbes } from "@/components/Courbes";
+import { ChoixPeriode } from "@/components/ChoixPeriode";
+import { ecart, etatComparaison, moisDebutExercice, planBilan, type PlanBilan } from "@/lib/bilan";
+import { aLa, etiquettesAxe, nomsDesPeriodes } from "@/lib/bilan-libelles";
+import { debutDesDonnees } from "@/lib/donnees/bilan";
+import { periodePreferee } from "@/lib/periode-preferee";
 import { BarresListe, type Barre } from "@/components/Graphiques";
 
-/** Les huit semaines qui finissent par celle-ci : une colonne par semaine, et les heures par projet. */
-async function enChiffres(ids: string[], semaine: string, projets: Map<string, { code: string; titre: string }>) {
-  const lundis = Array.from({ length: 8 }, (_, i) => ajouterJours(semaine, -7 * (7 - i)));
-  const { parSemaine, parProjet } = await reunionsEnChiffres(ids, lundis[0], ajouterJours(semaine, 6));
-  const colonnes = lundis.map((l) => {
-    const m = parSemaine.get(l) ?? 0;
-    return { cle: l, libelle: dateCourte(l), libelleCourt: `${Number(l.slice(8))}/${Number(l.slice(5, 7))}`, valeur: m / 60, texte: m ? dureeTexte(m) : "0 h" };
-  });
+/** Le temps en réunion sur la période choisie, point par point, comparé à la période d'avant ; et par projet. */
+async function enChiffres(ids: string[], plan: PlanBilan, projets: Map<string, { code: string; titre: string }>) {
+  const serieAvant = plan.serieAvant ?? [];
+  const [minutes, { parProjet }] = await Promise.all([minutesReunionParPeriode(ids, [plan.actuel, plan.precedent, ...plan.serie, ...serieAvant]), reunionsEnChiffres(ids, plan.actuel.debut, plan.actuel.fin)]);
   // Par projet : ceux qu'on voit ; les autres ensemble ; au-delà de six, « autres projets ».
   const visibles: Barre[] = [];
   let autres = 0;
@@ -41,15 +42,15 @@ async function enChiffres(ids: string[], semaine: string, projets: Map<string, {
   visibles.sort((a, b) => b.valeur - a.valeur);
   for (const b of visibles.splice(6)) autres += b.valeur;
   const barres = [...visibles, ...(autres ? [{ cle: "autres", libelle: "Autres projets", valeur: autres, texte: dureeTexte(autres) }] : []), ...(sans ? [{ cle: "sans", libelle: "Sans projet", valeur: sans, texte: dureeTexte(sans) }] : [])];
-  return { colonnes, barres, total: [...parSemaine.values()].reduce((s, m) => s + m, 0) };
+  return { total: minutes[0], avant: minutes[1], serie: (k: number) => minutes[2 + k], serieAvant: (k: number) => minutes[2 + plan.serie.length + k], barres };
 }
 
 export const metadata: Metadata = { title: "Réunions" };
 
 const JOUR = /^\d{4}-\d{2}-\d{2}$/;
 
-export default async function PageReunions({ searchParams }: { searchParams: Promise<{ semaine?: string; modifier?: string; erreur?: string; notee?: string; info?: string }> }) {
-  const { semaine: s0, modifier: idModif, erreur, notee, info } = await searchParams;
+export default async function PageReunions({ searchParams }: { searchParams: Promise<{ semaine?: string; modifier?: string; erreur?: string; notee?: string; info?: string; vue?: string; p?: string }> }) {
+  const { semaine: s0, modifier: idModif, erreur, notee, info, vue: vueChiffres, p: pChiffres } = await searchParams;
   const u = await exigerUtilisateur();
   const a = await acces(u);
   const jour = aujourdhui();
@@ -83,12 +84,22 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
   // En chiffres : vous, et l'équipe que vous suivez (heures-personnes : chaque participant compte).
   const projetsVus = new Map(projets.map((p) => [p.id, { code: p.code, titre: p.titre }]));
   const equipe = u.externe ? [] : a.suivis === "toutes" ? [...org.personnes.values()].filter((p) => p.actif && !p.externe).map((p) => p.id) : [...a.suivis];
+  const debutExercice = moisDebutExercice(process.env.EXERCICE_DEBUT_MOIS);
+  const plan = planBilan(vueChiffres ?? (await periodePreferee("semaine")), pChiffres, jour, debutExercice);
+  const [debuts, ...groupesCalcules] = await Promise.all([
+    debutDesDonnees(),
+    enChiffres([u.id], plan, projetsVus),
+    ...(equipe.length > 1 ? [enChiffres(equipe, plan, projetsVus)] : []),
+  ]);
   const groupesChiffres = [
-    { titre: "Vous", sous: "en réunion sur ces huit semaines", ...(await enChiffres([u.id], semaine, projetsVus)) },
-    ...(equipe.length > 1
-      ? [{ titre: a.toutVoir ? "Toute la division" : a.directeur ? "Votre direction" : "Votre équipe", sous: `heures-personnes, ${equipe.length} personnes`, ...(await enChiffres(equipe, semaine, projetsVus)) }]
-      : []),
+    { titre: "Vous", sous: "en réunion", ...groupesCalcules[0] },
+    ...(groupesCalcules[1] ? [{ titre: a.toutVoir ? "Toute la division" : a.directeur ? "Votre direction" : "Votre équipe", sous: `heures-personnes, ${equipe.length} personnes`, ...groupesCalcules[1] }] : []),
   ];
+  const etat = etatComparaison(plan, debuts.activite);
+  const nomsPeriode = nomsDesPeriodes(plan, debutExercice);
+  const etiquettes = etiquettesAxe(plan);
+  const lienChiffres = (v: string, pp?: string) => `/reunions?${semaine !== courante ? `semaine=${semaine}&` : ""}vue=${v}${pp ? `&p=${pp}` : ""}#r-chiffres`;
+  const heures = (m: number) => Math.round((m / 60) * 10) / 10;
 
   return (
     <>
@@ -317,10 +328,11 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
             </form>
           </section>
         </div>
-        <section aria-labelledby="r-chiffres">
-          <h2 id="r-chiffres" className="carte__titre" style={{ marginBottom: 12 }}>
-            Les huit semaines jusqu&apos;à celle-ci
+        <section aria-labelledby="r-chiffres-titre" id="r-chiffres" style={{ scrollMarginTop: 80 }}>
+          <h2 id="r-chiffres-titre" className="carte__titre" style={{ marginBottom: 12 }}>
+            Le temps en réunion
           </h2>
+          <ChoixPeriode plan={plan} noms={nomsPeriode} lien={lienChiffres} comparer={etat.comparer} />
           <div className="bilan-graphes">
             {groupesChiffres.map((g) => (
               <article key={g.titre} className="carte graphe-carte">
@@ -328,12 +340,30 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
                   <h3 className="graphe-carte__titre">{g.titre}</h3>
                   <p className="graphe-carte__valeur">
                     {g.total ? dureeTexte(g.total) : "0 h"}
-                    <span className="graphe-carte__ecart">{g.sous}</span>
+                    <span className="graphe-carte__ecart">
+                      {g.sous}
+                      {etat.comparer ? ` · ${ecart(heures(g.total), heures(g.avant), " h") ?? "—"} par rapport ${aLa(nomsPeriode.avantCourt)}` : ""}
+                    </span>
                   </p>
                 </header>
-                <Colonnes titre="Par semaine" colonnes={g.colonnes} choisie={semaine} />
+                <Courbes
+                  titre={`${g.titre} : heures de réunion, ${plan.vue === "semaine" ? "semaine par semaine" : "mois par mois"}`}
+                  unite="heures"
+                  nomActuel={nomsPeriode.actuel}
+                  nomAvant={etat.deuxSeries ? nomsPeriode.avant : undefined}
+                  hauteur={100}
+                  points={plan.axe.map((cle, k) => ({
+                    cle,
+                    libelle: etiquettes[k].libelle,
+                    court: etiquettes[k].court,
+                    actuel: plan.serie[k] && etat.avecDonnees(plan.serie[k]) ? heures(g.serie(k)) : null,
+                    avant: etat.deuxSeries && plan.serieAvant && etat.avecDonnees(plan.serieAvant[k]) ? heures(g.serieAvant(k)) : null,
+                    libelleAvant: etiquettes[k].libelleAvant,
+                    enCours: !!plan.serie[k] && plan.serie[k].fin >= jour,
+                  }))}
+                />
                 <h4 className="colonnes-graphe__titre" style={{ margin: "12px 0 0" }}>
-                  Par projet
+                  Par projet, {nomsPeriode.actuel.charAt(0).toLowerCase() + nomsPeriode.actuel.slice(1)}
                 </h4>
                 <BarresListe titre={`${g.titre} : heures de réunion par projet`} barres={g.barres} />
               </article>

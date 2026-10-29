@@ -3,7 +3,12 @@ import { notFound } from "next/navigation";
 import { acces } from "@/lib/acces";
 import { exigerInterne } from "@/lib/auth/session";
 import { dateCourte } from "@/lib/dates";
-import { chargeDesPersonnes, type LigneCharge } from "@/lib/donnees/charge";
+import { capacites, chargeDesPersonnes, noterChargesPrevues, type LigneCharge } from "@/lib/donnees/charge";
+import { planBilan, vueValide } from "@/lib/bilan";
+import { aujourdhui } from "@/lib/dates";
+import { initiales, nomComplet } from "@/lib/regles";
+import { ChoixPeriode } from "@/components/ChoixPeriode";
+import { ChargePassee } from "./ChargePassee";
 import { chargerOrganisation } from "@/lib/organisation";
 import { Bandeau } from "@/components/Bandeau";
 import { Jauge, LegendeCharge } from "@/components/Charge";
@@ -19,8 +24,8 @@ const RANG = { surchargee: 3, chargee: 2, normale: 1, libre: 0 } as const;
  * disponibles de chacun. Ouvert aux personnes qui suivent d'autres personnes (chefs d'équipe,
  * directeurs, exécutifs) ; chacun ne voit que les personnes qu'il suit.
  */
-export default async function PageCharge({ searchParams }: { searchParams: Promise<{ equipe?: string; vue?: string }> }) {
-  const { equipe, vue: v } = await searchParams;
+export default async function PageCharge({ searchParams }: { searchParams: Promise<{ equipe?: string; vue?: string; periode?: string; p?: string }> }) {
+  const { equipe, vue: v, periode, p: param } = await searchParams;
   // Carte de chaleur (huit semaines, d'un coup d'œil) ou détail (heures, jauges, ce qui est à signaler).
   const vue = v === "detail" ? "detail" : "carte";
   const u = await exigerInterne();
@@ -28,6 +33,20 @@ export default async function PageCharge({ searchParams }: { searchParams: Promi
   if (!a.toutVoir && !a.directeur && a.equipeDirecte.length === 0) notFound();
   const org = await chargerOrganisation();
   const ids = a.suivis === "toutes" ? [...org.personnes.values()].filter((p) => p.actif && !p.externe).map((p) => p.id) : [...a.suivis];
+  // La charge prévue de la semaine est notée au premier passage (la tournée du serveur le fait aussi chaque heure).
+  await noterChargesPrevues().catch(() => 0);
+
+  // Une période passée ou en cours : la charge réalisée (et prévue, quand elle a été notée).
+  const passe = vueValide(periode);
+  if (passe) {
+    const caps = await capacites(ids);
+    const personnes = ids
+      .map((id) => org.personnes.get(id))
+      .filter((p): p is NonNullable<typeof p> => !!p && p.actif && !p.externe)
+      .map((p) => ({ id: p.id, nom: nomComplet(p), initiales: initiales(p), equipeId: p.equipeId, equipe: p.equipeId ? (org.equipes.get(p.equipeId)?.nom ?? "") : "Sans équipe", capacite: caps.get(p.id) ?? 40 }));
+    const equipesPassees = [...new Map(personnes.map((l) => [l.equipeId ?? "aucune", l.equipe])).entries()].sort((x, y) => (x[0] === "aucune" ? 1 : y[0] === "aucune" ? -1 : x[1].localeCompare(y[1], "fr")));
+    return <ChargePassee vue={passe} param={param} personnes={personnes} equipe={equipe} equipes={equipesPassees} moi={u.id} />;
+  }
   const { semaines, lignes: toutes } = await chargeDesPersonnes(ids, vue === "carte" ? 8 : undefined);
 
   const equipes = [...new Map(toutes.map((l) => [l.equipeId ?? "aucune", l.equipe])).entries()].sort((x, y) => (x[0] === "aucune" ? 1 : y[0] === "aucune" ? -1 : x[1].localeCompare(y[1], "fr")));
@@ -72,6 +91,18 @@ export default async function PageCharge({ searchParams }: { searchParams: Promi
       </Bandeau>
       <div className="page">
         <SousOnglets onglets={ONGLETS_EQUIPE} courant="/charge" label="Équipe" />
+        <ChoixPeriode
+          plan={planBilan("semaine", undefined, aujourdhui(), 10)}
+          noms={{ actuel: "", avantCourt: "" }}
+          lien={(pv, pp) => `/charge?periode=${pv}${pp ? `&p=${pp}` : ""}${equipe ? `&equipe=${equipe}` : ""}`}
+          comparer={false}
+          active={false}
+          avant={
+            <a href={`/charge${equipe ? `?equipe=${equipe}` : ""}`} aria-current="true" title="Les semaines à venir">
+              À venir
+            </a>
+          }
+        />
         <div className="ligne-actions">
           {equipes.length > 1 ? (
             <nav className="filtres" aria-label="Filtrer par équipe">

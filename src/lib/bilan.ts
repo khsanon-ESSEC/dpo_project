@@ -27,12 +27,35 @@ export type Mesures = {
   partReunion: number | null;
   rapportsEnvoyes: number;
   rapportsAttendus: number;
+  /** Charge réalisée : heures des tâches terminées, réparties de leur début à leur fin, tombées dans la période. */
+  heuresRealisees: number;
+  /** Heures disponibles pour les tâches : heures de travail moins les réunions. */
+  capaciteNette: number;
+  /** Charge réalisée en % des heures disponibles ; null si aucune heure disponible. */
+  tauxCharge: number | null;
+  /** Charge prévue, notée chaque lundi (semaines de la période où elle l'a été). */
+  prevuHeures: number;
+  prevuCapacite: number;
+  /** Charge prévue en % ; null si rien n'a été noté sur la période. */
+  tauxPrevu: number | null;
 };
+
+export type ChargePrevue = { semaine: string; heures: number; capacite: number };
 
 /** Mesures d'une personne sur une période. `jusqua` borne les jours comptés (aujourd'hui, pour la période en cours). */
 export function mesurer(
   p: Periode,
-  d: { terminees: TacheTerminee[]; minutesReunion: number; capaciteHebdo: number; rapportsEnvoyes: number; rapportsAttendus: number },
+  d: {
+    terminees: TacheTerminee[];
+    minutesReunion: number;
+    capaciteHebdo: number;
+    rapportsEnvoyes: number;
+    rapportsAttendus: number;
+    /** Heures réalisées, jour par jour (repartitionRealisee de chaque tâche terminée). */
+    reparties?: { jour: string; heures: number }[];
+    /** Charges prévues notées chaque lundi. */
+    prevues?: ChargePrevue[];
+  },
   jusqua: string,
 ): Mesures {
   const dans = d.terminees.filter((t) => t.termineeLe >= p.debut && t.termineeLe <= p.fin);
@@ -41,6 +64,11 @@ export function mesurer(
   const fin = p.fin < jusqua ? p.fin : jusqua;
   const jours = fin < p.debut ? 0 : joursOuvres(p.debut, fin).length;
   const capaciteHeures = arrondir((d.capaciteHebdo * jours) / 5);
+  const heuresRealisees = arrondir((d.reparties ?? []).filter((r) => r.jour >= p.debut && r.jour <= fin).reduce((s, r) => s + r.heures, 0));
+  const capaciteNette = arrondir(Math.max(0, capaciteHeures - d.minutesReunion / 60));
+  const prevues = (d.prevues ?? []).filter((x) => x.semaine >= p.debut && x.semaine <= fin);
+  const prevuHeures = arrondir(prevues.reduce((s, x) => s + x.heures, 0));
+  const prevuCapacite = arrondir(prevues.reduce((s, x) => s + x.capacite, 0));
   return {
     taches: dans.length,
     heures: arrondir(dans.reduce((s, t) => s + (t.estimationHeures && t.estimationHeures > 0 ? t.estimationHeures : ESTIMATION_PAR_DEFAUT), 0)),
@@ -51,6 +79,12 @@ export function mesurer(
     partReunion: capaciteHeures > 0 ? Math.round((d.minutesReunion / 60 / capaciteHeures) * 100) : null,
     rapportsEnvoyes: d.rapportsEnvoyes,
     rapportsAttendus: d.rapportsAttendus,
+    heuresRealisees,
+    capaciteNette,
+    tauxCharge: capaciteNette > 0 ? Math.round((heuresRealisees / capaciteNette) * 100) : null,
+    prevuHeures,
+    prevuCapacite,
+    tauxPrevu: prevues.length && prevuCapacite > 0 ? Math.round((prevuHeures / prevuCapacite) * 100) : null,
   };
 }
 
@@ -71,6 +105,12 @@ export function additionner(liste: Mesures[]): Mesures {
     partReunion: capaciteHeures > 0 ? Math.round((minutesReunion / 60 / capaciteHeures) * 100) : null,
     rapportsEnvoyes: s((m) => m.rapportsEnvoyes),
     rapportsAttendus: s((m) => m.rapportsAttendus),
+    heuresRealisees: arrondir(s((m) => m.heuresRealisees)),
+    capaciteNette: arrondir(s((m) => m.capaciteNette)),
+    tauxCharge: s((m) => m.capaciteNette) > 0 ? Math.round((s((m) => m.heuresRealisees) / s((m) => m.capaciteNette)) * 100) : null,
+    prevuHeures: arrondir(s((m) => m.prevuHeures)),
+    prevuCapacite: arrondir(s((m) => m.prevuCapacite)),
+    tauxPrevu: liste.some((m) => m.tauxPrevu !== null) && s((m) => m.prevuCapacite) > 0 ? Math.round((s((m) => m.prevuHeures) / s((m) => m.prevuCapacite)) * 100) : null,
   };
 }
 
@@ -121,8 +161,10 @@ export function semainesDeRapport(p: Periode, jour: string): string[] {
 // Périodes du bilan d'équipe : un mois, les 3 ou 6 derniers mois, un exercice
 // ---------------------------------------------------------------------------
 
-export type VueBilan = "mois" | "3m" | "6m" | "exercice";
+export type VueBilan = "semaine" | "mois" | "3m" | "6m" | "exercice";
+/** Les périodes proposées partout où l'application montre de l'activité : le même sélecteur sur chaque page. */
 export const VUES_BILAN: { id: VueBilan; libelle: string }[] = [
+  { id: "semaine", libelle: "Semaine" },
   { id: "mois", libelle: "Mois" },
   { id: "3m", libelle: "3 mois" },
   { id: "6m", libelle: "6 mois" },
@@ -169,7 +211,7 @@ export function nomExercice(annee: number, debutMois: number): string {
 }
 
 export type PlanBilan = {
-  vue: VueBilan | "semaines";
+  vue: VueBilan;
   /** La période étudiée, arrêtée à aujourd'hui si elle est en cours. */
   actuel: Periode;
   /** La période comparée, de même durée : juste avant, ou l'an dernier pour un exercice ; arrêtée à la même date. */
@@ -178,7 +220,7 @@ export type PlanBilan = {
   serie: Periode[];
   /** Les mois (ou semaines) correspondants de la période comparée, alignés sur `axe` ; null : pas de comparaison pas à pas. */
   serieAvant: Periode[] | null;
-  /** Les mois portés par l'axe des courbes (un exercice en a douze, même en cours) ; les lundis pour « semaines ». */
+  /** Les mois portés par l'axe des courbes (un exercice en a douze, même en cours) ; les lundis pour « semaine ». */
   axe: string[];
   enCours: boolean;
   /** Paramètres pour aller à la période d'avant ou d'après (null : rien après). */
@@ -188,8 +230,15 @@ export type PlanBilan = {
   cle: string;
 };
 
+/** Une vue lue dans l'adresse ou dans la préférence gardée ; null si elle n'en est pas une. */
+export function vueValide(v: string | undefined | null): VueBilan | null {
+  return v === "semaine" || v === "mois" || v === "3m" || v === "6m" || v === "exercice" ? v : null;
+}
+
 /**
  * Ce que montre le bilan pour une vue et un paramètre lus dans l'adresse (vérifiés ici).
+ * - semaine : la semaine choisie (un lundi), comparée à la semaine d'avant à la même date ; courbe des huit
+ *   semaines qui y mènent ;
  * - mois : le mois choisi, comparé au mois d'avant à la même date ; courbe des six mois qui y mènent ;
  * - 3m / 6m : la fenêtre qui finit au mois choisi, comparée à la fenêtre d'avant, mois par mois ;
  * - exercice : l'exercice choisi, comparé au précédent à la même date ; courbes sur les douze mois.
@@ -197,7 +246,28 @@ export type PlanBilan = {
 export function planBilan(vue: string | undefined, param: string | undefined, jour: string, debutExercice: number): PlanBilan {
   const moisCourant = jour.slice(0, 7);
   const borne = (fin: string) => (fin < jour ? fin : jour);
-  const v: VueBilan = vue === "3m" || vue === "6m" || vue === "exercice" ? vue : "mois";
+  const v: VueBilan = vueValide(vue) ?? "mois";
+
+  if (v === "semaine") {
+    const courante = lundiDe(jour);
+    const lu = param && /^\d{4}-\d{2}-\d{2}$/.test(param) && !Number.isNaN(Date.parse(param)) ? lundiDe(param) : courante;
+    const cle = lu <= courante ? lu : courante;
+    const avant = ajouterJours(cle, -7);
+    const fin = borne(ajouterJours(cle, 6));
+    const serie = semainesJusqua(cle, 8);
+    return {
+      vue: v,
+      actuel: { cle, debut: cle, fin },
+      precedent: { cle: avant, debut: avant, fin: ajouterJours(fin, -7) },
+      serie,
+      serieAvant: null,
+      axe: serie.map((p) => p.cle),
+      enCours: cle === courante,
+      avant,
+      apres: cle < courante ? ajouterJours(cle, 7) : null,
+      cle,
+    };
+  }
 
   if (v === "exercice") {
     const courant = exerciceDe(jour, debutExercice);
@@ -261,28 +331,12 @@ export function planBilan(vue: string | undefined, param: string | undefined, jo
 }
 
 /**
- * Les n semaines qui finissent par la semaine choisie (un lundi, pas après la semaine en cours), comparées aux
- * n semaines d'avant, arrêtées à la même date ; une courbe semaine par semaine. Pour la fiche d'une personne.
+ * Ce qui se compare : avant les premières données de l'application, il n'y a rien (ni zéro, ni comparaison).
+ * Une période d'avant entamée par ce début ne se compare pas en totaux, seulement point par point.
  */
-export function planSemaines(param: string | undefined, jour: string, n = 8): PlanBilan {
-  const courante = lundiDe(jour);
-  const valide = param && /^\d{4}-\d{2}-\d{2}$/.test(param) && !Number.isNaN(Date.parse(param)) ? lundiDe(param) : courante;
-  const cle = valide <= courante ? valide : courante;
-  const serie = semainesJusqua(cle, n);
-  const decale = (iso: string) => ajouterJours(iso, -7 * n);
-  const finSerie = serie[n - 1].fin;
-  const fin = finSerie < jour ? finSerie : jour;
-  const apres = ajouterJours(cle, 7 * n);
-  return {
-    vue: "semaines",
-    actuel: { cle, debut: serie[0].debut, fin },
-    precedent: { cle: decale(cle), debut: decale(serie[0].debut), fin: decale(fin) },
-    serie,
-    serieAvant: serie.map((p) => ({ cle: decale(p.cle), debut: decale(p.debut), fin: decale(p.fin) })),
-    axe: serie.map((p) => p.cle),
-    enCours: finSerie >= jour,
-    avant: decale(cle),
-    apres: cle < courante ? (apres < courante ? apres : courante) : null,
-    cle,
-  };
+export function etatComparaison(plan: PlanBilan, debutDonnees: string | null) {
+  const avecDonnees = (per: Periode) => !!debutDonnees && per.fin >= debutDonnees;
+  const pasAvant = avecDonnees(plan.precedent);
+  const partielle = pasAvant && plan.precedent.debut < debutDonnees!;
+  return { avecDonnees, pasAvant, partielle, comparer: pasAvant && !partielle, deuxSeries: !!plan.serieAvant && pasAvant };
 }

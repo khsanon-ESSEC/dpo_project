@@ -25,12 +25,11 @@ export function plage(p: Periode): string {
 
 /** Les noms des deux périodes, pour la légende, le bandeau et la navigation. */
 export function nomsDesPeriodes(plan: PlanBilan, debutExercice: number): { actuel: string; avant: string; avantCourt: string } {
-  if (plan.vue === "semaines") {
-    const n = plan.serie.length;
+  if (plan.vue === "semaine") {
     return {
-      actuel: plan.enCours ? `Ces ${n} semaines` : `${n} semaines jusqu'au ${dateCourte(plan.serie[n - 1].fin)}`,
-      avant: `Les ${n} semaines d'avant`,
-      avantCourt: `les ${n} semaines d'avant`,
+      actuel: plan.enCours ? "Cette semaine" : `Semaine du ${dateCourte(plan.cle)}`,
+      avant: `Semaine du ${dateCourte(plan.avant)}`,
+      avantCourt: plan.enCours ? "la semaine dernière" : `la semaine du ${dateCourte(plan.avant)}`,
     };
   }
   if (plan.vue === "exercice") {
@@ -40,4 +39,24 @@ export function nomsDesPeriodes(plan: PlanBilan, debutExercice: number): { actue
   if (plan.vue === "mois") return { actuel: majuscule(plage(plan.actuel)), avant: majuscule(plage(plan.precedent)), avantCourt: moisSeul.format(versDate(plan.precedent.debut)) };
   const n = plan.vue === "3m" ? 3 : 6;
   return { actuel: majuscule(plage({ ...plan.actuel, fin: `${plan.cle}-01` })), avant: `Les ${n} mois d'avant`, avantCourt: plage({ ...plan.precedent, fin: `${plan.precedent.cle}-01` }) };
+}
+
+const moisCourt = new Intl.DateTimeFormat("fr-FR", { month: "short", timeZone: "UTC" });
+
+/** Les libellés de chaque point de l'axe (« semaine du 7 sept. » / « 7 sept. », « septembre 2026 » / « sept. »). */
+export function etiquettesAxe(plan: PlanBilan): { libelle: string; court: string; libelleAvant?: string }[] {
+  const semaine = plan.vue === "semaine";
+  return plan.axe.map((cle, k) => {
+    const av = plan.serieAvant?.[k];
+    return {
+      libelle: semaine ? `semaine du ${dateCourte(cle)}` : moisAnnee(`${cle}-01`),
+      court: semaine ? dateCourte(cle) : moisCourt.format(versDate(`${cle}-01`)),
+      libelleAvant: av ? moisAnnee(av.debut) : undefined,
+    };
+  });
+}
+
+/** Libellé d'une ligne de tableau : « Sem. du 7 sept. » ou « Septembre 2026 ». */
+export function libelleLigne(plan: PlanBilan, cle: string): string {
+  return plan.vue === "semaine" ? `Sem. du ${dateCourte(cle)}` : majuscule(moisAnnee(`${cle}-01`));
 }

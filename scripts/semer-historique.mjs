@@ -1,5 +1,5 @@
-// Données de DÉMONSTRATION seulement : ajoute un an d'activité passée (tâches terminées, réunions notées)
-// avant les données d'exemple, pour que le bilan sur 6 mois ou sur un exercice ait quelque chose à montrer.
+// Données de DÉMONSTRATION seulement : ajoute un an d'activité passée (tâches terminées, réunions notées, charge
+// prévue de chaque semaine) avant les données d'exemple, pour que le bilan sur 6 mois ou sur un exercice ait quelque chose à montrer.
 // Usage : DATABASE_URL=... node scripts/semer-historique.mjs
 // Ne fait rien sur une base qui n'est pas celle de démonstration, ni deux fois. Exclu de l'image Docker.
 import postgres from "postgres";
@@ -161,6 +161,40 @@ async function reports() {
   messages.push(`Reports de date de fin : ${lignes.length}, sur ${projets.length} projets.`);
 }
 
+// Charge prévue de chaque semaine passée (une fois) : dans l'application, elle est notée chaque lundi. Pour la
+// démonstration, elle est tirée autour de ce qui a été réalisé (parfois sous-estimée, parfois sur-estimée).
+async function prevues() {
+  const [{ n }] = await sql`select count(*)::int as n from charges_prevues`;
+  if (n) return;
+  const auj = process.env.DATE_DEMO || new Date().toISOString().slice(0, 10);
+  const courante = lundi(auj);
+  const gens = await sql`select id, capacite_heures as cap from personnes where actif and not externe and courriel like '%@demo.dpo.local'`;
+  const taches = await sql`
+    select assigne_id as id, date_trunc('week', (terminee_le at time zone 'America/Port-au-Prince'))::date::text as semaine,
+           sum(coalesce(nullif(estimation_heures, 0), 4))::float as heures
+    from taches where statut = 'faite' and annulee_le is null and terminee_le is not null group by 1, 2`;
+  const reunions = await sql`
+    select pr.personne_id as id, date_trunc('week', r.jour)::date::text as semaine, sum(r.duree_minutes)::float / 60 as heures
+    from participants_reunion pr join reunions r on r.id = pr.reunion_id group by 1, 2`;
+  const cle = (id, s) => `${id}|${s}`;
+  const parTache = new Map(taches.map((t) => [cle(t.id, t.semaine), t.heures]));
+  const parReunion = new Map(reunions.map((r) => [cle(r.id, r.semaine), r.heures]));
+  const semaines = [...new Set(taches.map((t) => t.semaine))].filter((x) => x < courante).sort();
+  if (!semaines.length) return;
+  const lignes = [];
+  for (let l = semaines[0]; l < courante; l = jour(l, 7)) {
+    for (const p of gens) {
+      const realise = parTache.get(cle(p.id, l)) ?? 0;
+      const enReunion = Math.min(parReunion.get(cle(p.id, l)) ?? 0, p.cap);
+      const facteur = 0.75 + hasard() * 0.55;
+      lignes.push({ personne_id: p.id, semaine: l, heures: Math.round((realise * facteur + entre(0, 4)) * 10) / 10, capacite: Math.round((p.cap - enReunion) * 10) / 10, reunions: Math.round(enReunion * 10) / 10, jours: 5, note_le: `${l}T12:00:00Z` });
+    }
+  }
+  for (let i = 0; i < lignes.length; i += 1000) await sql`insert into charges_prevues ${sql(lignes.slice(i, i + 1000))} on conflict do nothing`;
+  messages.push(`Charges prévues de démonstration : ${lignes.length} (personnes × semaines).`);
+}
+
 if (!deja) await activite();
 await reports();
+await prevues();
 await fin(messages.join("\n"));

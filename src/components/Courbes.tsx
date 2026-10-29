@@ -87,7 +87,7 @@ export function Courbes({
   const court = n >= 6;
 
   return (
-    <figure className="courbes" aria-labelledby={idT}>
+    <figure className={`courbes${dernier && dessous && y(dernier.p.actuel!) > 78 ? " courbes--fin-bas" : ""}`} aria-labelledby={idT}>
       <figcaption id={idT} className="visuellement-cache">
         {titre}
       </figcaption>

@@ -188,3 +188,17 @@ export function heuresTexte(h: number): string {
 export function dureeJours(debut: string, fin: string): number {
   return ecartJours(debut, fin) + 1;
 }
+
+/**
+ * Charge réalisée : les heures d'une tâche terminée, réparties à parts égales sur les jours ouvrés de son début à
+ * sa fin. Sans début saisi (ou un début après la fin), elle a commencé assez tôt pour tenir à HEURES_PAR_JOUR
+ * heures par jour, comme pour la charge à venir. Une estimation de la tâche, pas un relevé du temps passé.
+ */
+export function repartitionRealisee(t: { debut: string | null; termineeLe: string; estimationHeures: number | null }): { jour: string; heures: number }[] {
+  const h = heuresDe(t);
+  const fin = reculerJoursOuvres(t.termineeLe, 0);
+  const debut = t.debut && t.debut <= t.termineeLe ? t.debut : reculerJoursOuvres(fin, Math.max(1, Math.ceil(h / HEURES_PAR_JOUR)) - 1);
+  let jours = joursOuvres(debut, fin);
+  if (!jours.length) jours = [fin];
+  return jours.map((d) => ({ jour: d, heures: h / jours.length }));
+}

@@ -5607,6 +5607,10 @@ a.lien-projet:focus-visible {
   white-space: nowrap;
   pointer-events: none;
 }
+/* Valeur finale sous un point tout en bas : on écarte les mois de l'axe pour qu'elle ne les chevauche pas. */
+.courbes--fin-bas .courbes__cadre {
+  margin-bottom: 18px;
+}
 .courbes__fin--gauche {
   transform: translate(calc(-100% + 4px), -150%);
 }
@@ -6284,4 +6288,25 @@ a.barres__ligne:hover .barres__libelle {
 #pf-taches,
 #pf-reunions {
   scroll-margin-top: 80px;
+}
+
+/* Sélecteur de période sur téléphone : toute la largeur, segments égaux, rien de coupé. */
+@media (max-width: 599px) {
+  .bilan-periode .zoom {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .bilan-periode .zoom a {
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 0 6px;
+    font-size: 12.5px;
+    white-space: nowrap;
+  }
+}
+.bilan-periode + .bilan-graphes {
+  margin-top: 16px;
 }

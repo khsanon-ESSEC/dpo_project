@@ -1,10 +1,17 @@
 /**
- * Au démarrage du serveur : la tournée des rappels du vendredi par courriel, toutes les cinq minutes, si le
+ * Au démarrage du serveur : la charge prévue de la semaine, notée chaque heure si elle manque ; et la tournée des
+ * rappels du vendredi par courriel, toutes les cinq minutes, si le
  * courriel est configuré (SMTP_HOTE, SMTP_EXPEDITEUR, APP_URL). Rien à installer chez l'informatique : pas de
  * tâche planifiée séparée. Plusieurs copies de l'application peuvent tourner : chaque envoi est réservé en base.
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
+  // Charge prévue de la semaine, notée une fois par semaine (le lundi ou au premier passage) : toutes les heures.
+  const { noterChargesPrevues } = await import("@/lib/donnees/charge");
+  const noter = () => noterChargesPrevues().catch((e) => console.error("charge prévue :", (e as Error).message));
+  setTimeout(noter, 60_000).unref();
+  setInterval(noter, 60 * 60_000).unref();
+
   const { courrielActif } = await import("@/lib/courriel");
   if (!courrielActif()) return;
   const { tourneeRappels } = await import("@/lib/donnees/courriels");

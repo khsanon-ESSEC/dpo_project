@@ -65,13 +65,15 @@ export function libelleEcran(e: string): string {
   return L[e] ?? e;
 }
 
-export async function suiviPilote(semaines = 12) {
+/** Suivi semaine par semaine : les `semaines` dernières, ou depuis le lundi donné. */
+export async function suiviPilote(semaines: number | string = 12) {
   const jour = aujourdhui();
   const org = await chargerOrganisation();
   // Rédacteurs : personnes actives de la division qui envoient un rapport (ni exécutifs, ni hors division).
   const redacteurs = [...org.personnes.values()].filter((p) => p.actif && redigeUnRapport(p)).map((p) => p.id);
   const courante = lundiDe(jour);
-  const lundis = Array.from({ length: semaines }, (_, i) => ajouterJours(courante, -7 * (semaines - 1 - i)));
+  const nb = typeof semaines === "number" ? semaines : Math.max(1, Math.round((Date.parse(courante) - Date.parse(lundiDe(semaines))) / (7 * 86400000)) + 1);
+  const lundis = Array.from({ length: nb }, (_, i) => ajouterJours(courante, -7 * (nb - 1 - i)));
 
   const rapports = redacteurs.length
     ? await db
@@ -139,4 +141,35 @@ export async function noterConsultation(personneId: string, chemin: string) {
   const ecran = ecranDe(chemin);
   if (!ecran) return;
   await db.insert(schema.consultations).values({ jour: aujourdhui(), ecran, personneId }).onConflictDoNothing();
+}
+
+/**
+ * Les mêmes mesures sur des périodes choisies (semaine, mois, exercice…) : parts des rapports envoyés et à l'heure
+ * (sur les semaines où un rapport était attendu), des rédacteurs qui ont mis à jour une tâche avant vendredi, et des
+ * utilisateurs qui ont ouvert l'application. Une période d'avant les premières données de chaque mesure : null.
+ */
+export async function piloteParPeriode(periodes: { debut: string; fin: string }[], debutRapports: string | null) {
+  const jour = aujourdhui();
+  const depuis = lundiDe(periodes.reduce((m, p) => (p.debut < m ? p.debut : m), periodes[0].debut));
+  const [s, vues] = await Promise.all([
+    suiviPilote(depuis),
+    db.selectDistinct({ jour: schema.consultations.jour, personneId: schema.consultations.personneId }).from(schema.consultations).where(gte(schema.consultations.jour, depuis)),
+  ]);
+  const premiereMaj = s.semaines.find((w) => w.tachesAJour > 0)?.lundi ?? null;
+  const premiereVue = vues.reduce<string | null>((m, v) => (!m || v.jour < m ? v.jour : m), null);
+  const part = (a: number, b: number) => (b ? Math.round((a / b) * 100) : null);
+  return periodes.map((p) => {
+    const ws = s.semaines.filter((w) => w.lundi >= p.debut && w.lundi <= p.fin);
+    const attendues = ws.filter((w) => w.attendu && !!debutRapports && ajouterJours(w.lundi, 6) >= debutRapports);
+    const maj = ws.filter((w) => !!premiereMaj && w.lundi >= premiereMaj && ajouterJours(w.lundi, 4) <= jour);
+    const fin = p.fin < jour ? p.fin : jour;
+    const ouverts = new Set(vues.filter((v) => v.jour >= p.debut && v.jour <= fin).map((v) => v.personneId)).size;
+    const redacteurs = (l: typeof ws) => l.reduce((t, w) => t + w.redacteurs, 0);
+    return {
+      envoyes: attendues.length ? part(attendues.reduce((t, w) => t + w.envoyes, 0), redacteurs(attendues)) : null,
+      aLheure: attendues.length ? part(attendues.reduce((t, w) => t + w.aLheure, 0), redacteurs(attendues)) : null,
+      tachesAJour: maj.length ? part(maj.reduce((t, w) => t + w.tachesAJour, 0), redacteurs(maj)) : null,
+      ouverts: premiereVue && fin >= premiereVue ? part(ouverts, s.utilisateurs) : null,
+    };
+  });
 }

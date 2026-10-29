@@ -85,6 +85,13 @@
       "when": 1793223165930,
       "tag": "0011_reports-fin-projet",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793234504923,
+      "tag": "0012_charges-prevues",
+      "breakpoints": true
     }
   ]
 }

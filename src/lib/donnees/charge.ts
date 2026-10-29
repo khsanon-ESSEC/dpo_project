@@ -1,10 +1,10 @@
 import "server-only";
-import { and, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, ne } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { ajouterJours, aujourdhui } from "@/lib/dates";
+import { ajouterJours, aujourdhui, lundiDe } from "@/lib/dates";
 import { reunionsParJour } from "./reunions";
 import { chargerOrganisation } from "@/lib/organisation";
-import { chargeDUnePersonne, CAPACITE_PAR_DEFAUT, semainesAVenir, type ChargePersonne, type TacheCharge } from "@/lib/charge";
+import { chargeDUnePersonne, CAPACITE_PAR_DEFAUT, estJourOuvre, joursOuvres, semainesAVenir, type ChargePersonne, type TacheCharge } from "@/lib/charge";
 import { initiales, nomComplet } from "@/lib/regles";
 
 export const NB_SEMAINES = 6;
@@ -112,4 +112,36 @@ export async function indicationsDeCharge(ids: string[]) {
   return Object.fromEntries(
     lignes.map((l) => [l.id, { capacite: l.capacite, semaines: l.charge.semaines.map((s) => ({ semaine: s.semaine, heures: s.heures, capacite: s.capacite, niveau: s.niveau })) }]),
   ) as Record<string, { capacite: number; semaines: { semaine: string; heures: number | null; capacite: number; niveau: string }[] }>;
+}
+
+/**
+ * Note la charge prévue de la semaine en cours pour chaque personne de la division qui ne l'a pas encore
+ * (une fois par semaine : le lundi, ou au premier passage de la semaine). Appelée par la tournée du serveur,
+ * toutes les heures, et à l'ouverture de la page Charge. Rien le week-end : la semaine est finie.
+ */
+export async function noterChargesPrevues(): Promise<number> {
+  const jour = aujourdhui();
+  if (!estJourOuvre(jour)) return 0;
+  const lundi = lundiDe(jour);
+  const org = await chargerOrganisation();
+  const ids = [...org.personnes.values()].filter((p) => p.actif && !p.externe).map((p) => p.id);
+  if (!ids.length) return 0;
+  const deja = new Set((await db.select({ id: schema.chargesPrevues.personneId }).from(schema.chargesPrevues).where(eq(schema.chargesPrevues.semaine, lundi))).map((x) => x.id));
+  const manquants = ids.filter((id) => !deja.has(id));
+  if (!manquants.length) return 0;
+  const { lignes } = await chargeDesPersonnes(manquants, 1);
+  const jours = joursOuvres(jour, ajouterJours(lundi, 4)).length;
+  const valeurs = lignes.map((l) => ({ personneId: l.id, semaine: lundi, heures: l.charge.semaines[0].heures, capacite: l.charge.semaines[0].capacite, reunions: l.charge.semaines[0].reunions, jours }));
+  if (!valeurs.length) return 0;
+  const r = await db.insert(schema.chargesPrevues).values(valeurs).onConflictDoNothing().returning({ id: schema.chargesPrevues.personneId });
+  return r.length;
+}
+
+/** Charges prévues notées pour ces personnes, de la semaine de debut à fin. */
+export async function chargesPrevuesDe(ids: string[], debut: string, fin: string) {
+  if (!ids.length) return [];
+  return db
+    .select({ personneId: schema.chargesPrevues.personneId, semaine: schema.chargesPrevues.semaine, heures: schema.chargesPrevues.heures, capacite: schema.chargesPrevues.capacite })
+    .from(schema.chargesPrevues)
+    .where(and(inArray(schema.chargesPrevues.personneId, ids), gte(schema.chargesPrevues.semaine, debut), lte(schema.chargesPrevues.semaine, fin)));
 }

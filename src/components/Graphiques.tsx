@@ -28,6 +28,9 @@ export type CaseChaleur = {
   capacite: number;
   niveau: Niveau;
   lien?: string;
+  /** Texte de la case et étiquette au survol, quand ce n'est pas la charge prévue (charge réalisée). */
+  texte?: string;
+  etiquette?: string;
 };
 export type LigneChaleur = {
   id: string;
@@ -77,8 +80,8 @@ export function Chaleur({ semaines, groupes }: { semaines: { cle: string; libell
                 </th>
                 {l.cases.map((c, i) => {
                   const taux = c.capacite > 0 ? Math.round((c.heures / c.capacite) * 100) : null;
-                  const etiquette = `${l.nom}, ${semaines[i]?.libelle.toLowerCase() ?? ""} : ${heuresTexte(c.heures)} prévues sur ${heuresTexte(c.capacite)} disponibles (${LIBELLE_NIVEAU[c.niveau].toLowerCase()})`;
-                  const contenu = c.heures > 0 ? `${taux ?? "—"} %` : "—";
+                  const etiquette = c.etiquette ?? `${l.nom}, ${semaines[i]?.libelle.toLowerCase() ?? ""} : ${heuresTexte(c.heures)} prévues sur ${heuresTexte(c.capacite)} disponibles (${LIBELLE_NIVEAU[c.niveau].toLowerCase()})`;
+                  const contenu = c.texte ?? (c.heures > 0 ? `${taux ?? "—"} %` : "—");
                   return (
                     <td key={c.semaine}>
                       {c.lien ? (

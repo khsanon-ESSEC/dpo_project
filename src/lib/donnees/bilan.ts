@@ -5,10 +5,11 @@
 import "server-only";
 import { and, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { mesurer, semainesDeRapport, type Mesures, type Periode, type TacheTerminee } from "@/lib/bilan";
+import { additionner, mesurer, semainesDeRapport, type Mesures, type Periode, type PlanBilan, type TacheTerminee } from "@/lib/bilan";
 import { aujourdhui, dateLocale } from "@/lib/dates";
 import { chargerOrganisation } from "@/lib/organisation";
-import { capacites } from "./charge";
+import { capacites, chargesPrevuesDe } from "./charge";
+import { repartitionRealisee } from "@/lib/charge";
 import { minutesDeReunion } from "./reunions";
 
 /**
@@ -36,12 +37,14 @@ export async function bilans(personneIds: string[], periodes: Periode[]): Promis
   // Un jour de marge de chaque côté : la date de fin est convertie à l'heure locale ensuite.
   const debutLarge = new Date(`${debut}T00:00:00Z`);
   debutLarge.setUTCDate(debutLarge.getUTCDate() - 1);
+  // Les tâches terminées après la période comptent aussi dans sa charge réalisée si elles y avaient commencé :
+  // jusqu'à 120 jours après sa fin.
   const finLarge = new Date(`${fin}T23:59:59Z`);
-  finLarge.setUTCDate(finLarge.getUTCDate() + 1);
-  const [debuts, faites, caps, rapports, ...reunions] = await Promise.all([
+  finLarge.setUTCDate(finLarge.getUTCDate() + 121);
+  const [debuts, faites, caps, rapports, prevues, ...reunions] = await Promise.all([
     debutDesDonnees(),
     db
-      .select({ assigneId: schema.taches.assigneId, estimationHeures: schema.taches.estimationHeures, echeance: schema.taches.echeance, termineeLe: schema.taches.termineeLe })
+      .select({ assigneId: schema.taches.assigneId, estimationHeures: schema.taches.estimationHeures, echeance: schema.taches.echeance, debut: schema.taches.debut, termineeLe: schema.taches.termineeLe })
       .from(schema.taches)
       .where(and(inArray(schema.taches.assigneId, personneIds), eq(schema.taches.statut, "faite"), isNull(schema.taches.annuleeLe), gte(schema.taches.termineeLe, debutLarge), lte(schema.taches.termineeLe, finLarge))),
     capacites(personneIds),
@@ -49,15 +52,17 @@ export async function bilans(personneIds: string[], periodes: Periode[]): Promis
       .select({ auteurId: schema.rapportsHebdo.auteurId, semaine: schema.rapportsHebdo.semaine })
       .from(schema.rapportsHebdo)
       .where(and(inArray(schema.rapportsHebdo.auteurId, personneIds), eq(schema.rapportsHebdo.statut, "envoye"), gte(schema.rapportsHebdo.semaine, debut), lte(schema.rapportsHebdo.semaine, fin))),
+    chargesPrevuesDe(personneIds, debut, fin),
     ...periodes.map((p) => minutesDeReunion(personneIds, p.debut, p.fin)),
   ]);
   for (const id of personneIds) {
     const p = org.personnes.get(id);
     // Les exécutifs n'envoient pas de rapport : rien n'est attendu d'eux.
     const redige = !!p && !p.executif;
-    const terminees: TacheTerminee[] = faites
-      .filter((t) => t.assigneId === id && t.termineeLe)
-      .map((t) => ({ estimationHeures: t.estimationHeures, echeance: t.echeance, termineeLe: dateLocale(t.termineeLe!) }));
+    const siennes = faites.filter((t) => t.assigneId === id && t.termineeLe).map((t) => ({ ...t, termineeLe: dateLocale(t.termineeLe!) }));
+    const terminees: TacheTerminee[] = siennes.map((t) => ({ estimationHeures: t.estimationHeures, echeance: t.echeance, termineeLe: t.termineeLe }));
+    const reparties = siennes.flatMap((t) => repartitionRealisee(t));
+    const sesPrevues = prevues.filter((x) => x.personneId === id);
     const envoyes = new Set(rapports.filter((x) => x.auteurId === id).map((x) => x.semaine));
     r.set(
       id,
@@ -72,6 +77,8 @@ export async function bilans(personneIds: string[], periodes: Periode[]): Promis
             capaciteHebdo: caps.get(id) ?? 40,
             rapportsEnvoyes: attendues.filter((l) => envoyes.has(l)).length,
             rapportsAttendus: attendues.length,
+            reparties,
+            prevues: sesPrevues,
           },
           jour,
         );
@@ -79,4 +86,16 @@ export async function bilans(personneIds: string[], periodes: Periode[]): Promis
     );
   }
   return r;
+}
+
+/**
+ * L'activité de ces personnes sur une période et ses points de courbe : mesures de chacun (`de`) et totaux
+ * (`total`) pour la période (indice 0), la période d'avant (1), chaque point de la série et de la série d'avant.
+ */
+export async function activite(ids: string[], plan: PlanBilan) {
+  const serieAvant = plan.serieAvant ?? [];
+  const [mesures, debuts] = await Promise.all([bilans(ids, [plan.actuel, plan.precedent, ...plan.serie, ...serieAvant]), debutDesDonnees()]);
+  const de = (id: string, i: number) => mesures.get(id)![i];
+  const total = (i: number, qui = ids) => additionner(qui.map((id) => de(id, i)));
+  return { debuts, de, total, iSerie: (k: number) => 2 + k, iSerieAvant: (k: number) => 2 + plan.serie.length + k };
 }

@@ -1,42 +1,11 @@
 /**
- * Données des graphiques : avancement d'un projet semaine par semaine, réunions par semaine et par projet.
+ * Données des graphiques : avancement d'un projet par période, réunions par période et par projet.
  * Ce que chacun peut voir est filtré par l'appelant (projet visible, personnes suivies).
  */
 import "server-only";
 import { and, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { ajouterJours, dateLocale, lundiDe } from "@/lib/dates";
-
-/**
- * Avancement d'un projet : à la fin de chaque semaine, les tâches créées jusque-là et celles terminées.
- * Les tâches annulées n'y sont pas. Au plus `nb` semaines, à partir de la première tâche.
- */
-export async function avancementDuProjet(projetId: string, jour: string, nb = 12) {
-  const taches = await db
-    .select({
-      creeLe: schema.taches.creeLe,
-      statut: schema.taches.statut,
-      termineeLe: schema.taches.termineeLe,
-    })
-    .from(schema.taches)
-    .where(and(eq(schema.taches.projetId, projetId), isNull(schema.taches.annuleeLe)));
-  if (!taches.length) return [];
-  const creees = taches.map((t) => dateLocale(t.creeLe)).sort();
-  const faites = taches.filter((t) => t.statut === "faite" && t.termineeLe).map((t) => dateLocale(t.termineeLe!));
-  const courante = lundiDe(jour);
-  const premiere = lundiDe(creees[0]);
-  const lundis: string[] = [];
-  for (let l = courante; l >= premiere && lundis.length < nb; l = ajouterJours(l, -7)) lundis.unshift(l);
-  return lundis.map((l) => {
-    const fin = ajouterJours(l, 6) < jour ? ajouterJours(l, 6) : jour;
-    return {
-      lundi: l,
-      total: creees.filter((d) => d <= fin).length,
-      faites: faites.filter((d) => d <= fin).length,
-      enCours: l === courante,
-    };
-  });
-}
+import { dateLocale, lundiDe } from "@/lib/dates";
 
 /**
  * Réunions de ces personnes entre deux dates : minutes par semaine, et par projet. Une réunion compte pour
@@ -66,4 +35,41 @@ export async function reunionsEnChiffres(personneIds: string[], debut: string, f
     parProjet.set(l.projetId, (parProjet.get(l.projetId) ?? 0) + l.minutes);
   }
   return { parSemaine, parProjet };
+}
+
+/** Minutes de réunion de ces personnes (heures-personnes) dans chaque période, en une seule lecture. */
+export async function minutesReunionParPeriode(personneIds: string[], periodes: { debut: string; fin: string }[]): Promise<number[]> {
+  if (!personneIds.length || !periodes.length) return periodes.map(() => 0);
+  const debut = periodes.reduce((m, p) => (p.debut < m ? p.debut : m), periodes[0].debut);
+  const fin = periodes.reduce((m, p) => (p.fin > m ? p.fin : m), periodes[0].fin);
+  const lignes = await db
+    .select({ jour: schema.reunions.jour, minutes: schema.reunions.dureeMinutes })
+    .from(schema.participantsReunion)
+    .innerJoin(schema.reunions, eq(schema.reunions.id, schema.participantsReunion.reunionId))
+    .where(and(inArray(schema.participantsReunion.personneId, personneIds), gte(schema.reunions.jour, debut), lte(schema.reunions.jour, fin)));
+  return periodes.map((p) => lignes.filter((l) => l.jour >= p.debut && l.jour <= p.fin).reduce((s, l) => s + l.minutes, 0));
+}
+
+/**
+ * Avancement d'un projet aux fins de chaque période (bornées à aujourd'hui) : tâches créées jusque-là et tâches
+ * terminées ; et le nombre de tâches terminées pendant chaque période. Les tâches annulées n'y sont pas.
+ */
+export async function avancementParPeriode(projetId: string, periodes: { debut: string; fin: string }[], jour: string) {
+  const taches = await db
+    .select({ creeLe: schema.taches.creeLe, statut: schema.taches.statut, termineeLe: schema.taches.termineeLe })
+    .from(schema.taches)
+    .where(and(eq(schema.taches.projetId, projetId), isNull(schema.taches.annuleeLe)));
+  const creees = taches.map((t) => dateLocale(t.creeLe));
+  const faites = taches.filter((t) => t.statut === "faite" && t.termineeLe).map((t) => dateLocale(t.termineeLe!));
+  const premiere = creees.length ? creees.reduce((m, d) => (d < m ? d : m)) : null;
+  return periodes.map((p) => {
+    const fin = p.fin < jour ? p.fin : jour;
+    return {
+      total: creees.filter((d) => d <= fin).length,
+      faites: faites.filter((d) => d <= fin).length,
+      terminees: faites.filter((d) => d >= p.debut && d <= fin).length,
+      /** Le projet n'avait encore aucune tâche à la fin de la période. */
+      avant: !premiere || premiere > fin,
+    };
+  });
 }

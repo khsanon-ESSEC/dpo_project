@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { additionner, decalerMois, ecart, exerciceDe, mesurer, mois, moisDebutExercice, moisEntre, moisPrecedent, moisSuivant, nomExercice, planBilan, planSemaines, semainesDeRapport, semainesJusqua } from "@/lib/bilan";
+import { additionner, decalerMois, ecart, exerciceDe, mesurer, mois, moisDebutExercice, moisEntre, moisPrecedent, moisSuivant, nomExercice, planBilan, semainesDeRapport, semainesJusqua, vueValide } from "@/lib/bilan";
 import { chargeDUnePersonne } from "@/lib/charge";
 import { lireReunions, nouveauChamp, validerChamps } from "@/lib/modeles";
 
@@ -149,32 +149,36 @@ describe("périodes du bilan d'équipe", () => {
   });
 });
 
-describe("huit semaines (fiche d'une personne)", () => {
-  it("les huit semaines jusqu'à celle en cours, comparées aux huit d'avant à la même date", () => {
-    const p = planSemaines(undefined, "2026-10-28");
-    expect(p.vue).toBe("semaines");
+describe("semaine (même sélecteur partout)", () => {
+  it("la semaine en cours, comparée à la précédente à la même date ; courbe des huit semaines", () => {
+    const p = planBilan("semaine", undefined, "2026-10-28", 10);
+    expect(p.vue).toBe("semaine");
+    expect(p.actuel).toEqual({ cle: "2026-10-26", debut: "2026-10-26", fin: "2026-10-28" });
+    expect(p.precedent).toEqual({ cle: "2026-10-19", debut: "2026-10-19", fin: "2026-10-21" });
     expect(p.axe).toHaveLength(8);
     expect(p.axe[0]).toBe("2026-09-07");
-    expect(p.axe[7]).toBe("2026-10-26");
-    expect(p.actuel).toEqual({ cle: "2026-10-26", debut: "2026-09-07", fin: "2026-10-28" });
-    expect(p.precedent).toEqual({ cle: "2026-08-31", debut: "2026-07-13", fin: "2026-09-02" });
-    expect(p.serieAvant![0]).toEqual({ cle: "2026-07-13", debut: "2026-07-13", fin: "2026-07-19" });
+    expect(p.serie[7]).toEqual({ cle: "2026-10-26", debut: "2026-10-26", fin: "2026-11-01" });
+    expect(p.serieAvant).toBeNull();
     expect(p.enCours).toBe(true);
-    expect(p.avant).toBe("2026-08-31");
+    expect(p.avant).toBe("2026-10-19");
     expect(p.apres).toBeNull();
   });
-  it("une semaine passée : la fenêtre entière, et la suivante sans dépasser la semaine en cours", () => {
-    const p = planSemaines("2026-09-16", "2026-10-28");
+  it("une semaine passée, un jour quelconque de la semaine, un paramètre invalide ou futur", () => {
+    const p = planBilan("semaine", "2026-09-16", "2026-10-28", 10);
     expect(p.cle).toBe("2026-09-14");
     expect(p.actuel.fin).toBe("2026-09-20");
+    expect(p.precedent.fin).toBe("2026-09-13");
     expect(p.enCours).toBe(false);
-    expect(p.apres).toBe("2026-10-26");
-    expect(planSemaines("2026-08-10", "2026-10-28").apres).toBe("2026-10-05");
+    expect(p.apres).toBe("2026-09-21");
+    expect(planBilan("semaine", "n'importe quoi", "2026-10-28", 10).cle).toBe("2026-10-26");
+    expect(planBilan("semaine", "2027-01-04", "2026-10-28", 10).cle).toBe("2026-10-26");
+    expect(planBilan("semaine", "2026-13-45", "2026-10-28", 10).cle).toBe("2026-10-26");
   });
-  it("un paramètre invalide ou futur revient à la semaine en cours", () => {
-    expect(planSemaines("n'importe quoi", "2026-10-28").cle).toBe("2026-10-26");
-    expect(planSemaines("2027-01-04", "2026-10-28").cle).toBe("2026-10-26");
-    expect(planSemaines("2026-13-45", "2026-10-28").cle).toBe("2026-10-26");
+  it("vueValide", () => {
+    expect(vueValide("semaine")).toBe("semaine");
+    expect(vueValide("exercice")).toBe("exercice");
+    expect(vueValide("semaines")).toBeNull();
+    expect(vueValide(undefined)).toBeNull();
   });
 });
 
@@ -184,9 +188,46 @@ describe("noms des périodes", () => {
     expect(aLa("les 8 semaines d'avant")).toBe("aux 8 semaines d'avant");
     expect(aLa("septembre")).toBe("à septembre");
     expect(aLa("l'exercice 2024-2025")).toBe("à l'exercice 2024-2025");
-    const n = nomsDesPeriodes(planSemaines(undefined, "2026-10-28"), 10);
-    expect(n).toEqual({ actuel: "Ces 8 semaines", avant: "Les 8 semaines d'avant", avantCourt: "les 8 semaines d'avant" });
-    expect(nomsDesPeriodes(planSemaines("2026-09-14", "2026-10-28"), 10).actuel).toBe("8 semaines jusqu'au 20 sept.");
+    expect(aLa("la semaine dernière")).toBe("à la semaine dernière");
+    expect(nomsDesPeriodes(planBilan("semaine", undefined, "2026-10-28", 10), 10)).toEqual({ actuel: "Cette semaine", avant: "Semaine du 19 oct.", avantCourt: "la semaine dernière" });
+    expect(nomsDesPeriodes(planBilan("semaine", "2026-09-14", "2026-10-28", 10), 10)).toEqual({ actuel: "Semaine du 14 sept.", avant: "Semaine du 7 sept.", avantCourt: "la semaine du 7 sept." });
     expect(nomsDesPeriodes(planBilan("mois", "2026-09", "2026-10-30", 10), 10).avantCourt).toBe("août");
+  });
+});
+
+describe("charge réalisée et charge prévue", () => {
+  it("répartit une tâche terminée de son début à sa fin, jours ouvrés seulement", async () => {
+    const { repartitionRealisee } = await import("@/lib/charge");
+    // Du jeudi au mardi suivant : quatre jours ouvrés, 3 h chacun.
+    expect(repartitionRealisee({ debut: "2026-10-22", termineeLe: "2026-10-27", estimationHeures: 12 })).toEqual([
+      { jour: "2026-10-22", heures: 3 },
+      { jour: "2026-10-23", heures: 3 },
+      { jour: "2026-10-26", heures: 3 },
+      { jour: "2026-10-27", heures: 3 },
+    ]);
+    // Sans début : commencée assez tôt pour tenir à 8 h par jour (12 h → deux jours), et 4 h sans estimation.
+    expect(repartitionRealisee({ debut: null, termineeLe: "2026-10-26", estimationHeures: 12 }).map((r) => r.jour)).toEqual(["2026-10-23", "2026-10-26"]);
+    expect(repartitionRealisee({ debut: null, termineeLe: "2026-10-21", estimationHeures: null })).toEqual([{ jour: "2026-10-21", heures: 4 }]);
+    // Terminée un dimanche : comptée au vendredi ; un début après la fin est ignoré.
+    expect(repartitionRealisee({ debut: "2026-10-30", termineeLe: "2026-10-25", estimationHeures: 6 })).toEqual([{ jour: "2026-10-23", heures: 6 }]);
+  });
+  it("taux réalisé sur les heures disponibles hors réunions, et taux prévu noté le lundi", () => {
+    const reparties = [
+      { jour: "2026-10-16", heures: 5 }, // semaine d'avant
+      { jour: "2026-10-20", heures: 10 },
+      { jour: "2026-10-22", heures: 14 },
+    ];
+    const m = mesurer(semaine, { ...vide, minutesReunion: 480, reparties, prevues: [{ semaine: "2026-10-19", heures: 30, capacite: 32 }, { semaine: "2026-10-12", heures: 9, capacite: 40 }] }, "2026-10-30");
+    expect(m.heuresRealisees).toBe(24);
+    expect(m.capaciteNette).toBe(32);
+    expect(m.tauxCharge).toBe(75);
+    expect(m.prevuHeures).toBe(30);
+    expect(m.tauxPrevu).toBe(94);
+    expect(mesurer(semaine, vide, "2026-10-30").tauxPrevu).toBeNull();
+    const t = additionner([m, mesurer(semaine, { ...vide, reparties: [{ jour: "2026-10-21", heures: 40 }] }, "2026-10-30")]);
+    expect(t.heuresRealisees).toBe(64);
+    expect(t.capaciteNette).toBe(72);
+    expect(t.tauxCharge).toBe(89);
+    expect(t.tauxPrevu).toBe(94);
   });
 });

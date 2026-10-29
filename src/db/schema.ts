@@ -25,6 +25,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   unique,
@@ -435,6 +436,28 @@ export const reportsFinProjet = pgTable(
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("reports_fin_projet_idx").on(t.projetId, t.creeLe)],
+);
+
+/**
+ * Charge prévue, notée une fois par semaine (le lundi, ou au premier passage de la semaine) pour chaque personne
+ * de la division : heures de tâches prévues sur les jours ouvrés qui restaient, heures disponibles hors réunions.
+ * Elle sert à comparer, après coup, la charge prévue à la charge réalisée.
+ */
+export const chargesPrevues = pgTable(
+  "charges_prevues",
+  {
+    personneId: uuid("personne_id")
+      .notNull()
+      .references(() => personnes.id, { onDelete: "cascade" }),
+    semaine: date().notNull(),
+    heures: real().notNull(),
+    capacite: real().notNull(),
+    reunions: real().notNull(),
+    /** Jours ouvrés comptés : 5 si notée le lundi, moins si elle l'a été plus tard dans la semaine. */
+    jours: integer().notNull(),
+    noteLe: timestamp("note_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.personneId, t.semaine] }), index("charges_prevues_semaine_idx").on(t.semaine)],
 );
 
 /**
