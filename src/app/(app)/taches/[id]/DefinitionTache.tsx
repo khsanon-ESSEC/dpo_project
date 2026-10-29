@@ -11,6 +11,9 @@ export function DefinitionTache({
   titre,
   description,
   projetId,
+  livrableId = "",
+  livrables = {},
+  parLivrable = {},
   assigneId,
   projets,
   personnes,
@@ -23,6 +26,9 @@ export function DefinitionTache({
   titre: string;
   description: string;
   projetId: string;
+  livrableId?: string;
+  livrables?: Record<string, { id: string; libelle: string; prevuLe: string | null }[]>;
+  parLivrable?: Record<string, string[]>;
   assigneId: string;
   projets: { id: string; code: string; titre: string }[];
   personnes: PersonneChoix[];
@@ -35,7 +41,10 @@ export function DefinitionTache({
   const [etat, action, enCours] = useActionState<EtatTache, FormData>(definirTache, { message: null });
   const [projet, setProjet] = useState(projetId);
   const [pour, setPour] = useState(assigneId);
-  const permis = new Set([...base, ...(parProjet[projet] ?? []), assigneId]);
+  const [livrable, setLivrable] = useState(livrableId);
+  const livrablesDuProjet = livrables[projet] ?? [];
+  const livrableValide = livrablesDuProjet.some((l) => l.id === livrable) ? livrable : "";
+  const permis = new Set([...base, ...(parProjet[projet] ?? []), ...(parLivrable[livrableValide] ?? []), assigneId]);
   const externesPermis = externesPermisPour(projet, parProjet, externesPartout, horsProjet);
   const choix = personnes.filter((p) => permis.has(p.id) || (p.externe && externesPermis));
   const pourValide = pour === NOUVELLE_PERSONNE && externesPermis ? pour : choix.some((p) => p.id === pour) ? pour : assigneId;
@@ -75,9 +84,24 @@ export function DefinitionTache({
           </select>
         </div>
       </div>
+      {livrablesDuProjet.length ? (
+        <div className="champ">
+          <label htmlFor="dt-livrable">Livrable</label>
+          <select id="dt-livrable" name="livrableId" value={livrableValide} onChange={(e) => setLivrable(e.target.value)}>
+            <option value="">Aucun (tâche hors livrable)</option>
+            {livrablesDuProjet.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.libelle}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        <input type="hidden" name="livrableId" value="" />
+      )}
       <ChoixPour id="dt-pour" libelle="Confiée à" personnes={personnes} permis={permis} externesPermis={externesPermis} valeur={pourValide} onChange={setPour} />
       <p className="note" style={{ margin: 0 }}>
-        Vous pouvez confier une tâche à vous-même, aux personnes que vous suivez, et, sur un projet que vous dirigez, aux membres de son équipe ; à une personne hors division (autre département, consultant), hors projet ou sur un projet que vous dirigez. Vous suivez alors la tâche pour elle.
+        Vous pouvez confier une tâche à vous-même, aux personnes que vous suivez, et, sur un projet que vous dirigez (ou pour un livrable dont vous êtes responsable), aux membres de son équipe ; à une personne hors division (autre département, consultant), hors projet ou sur un projet que vous dirigez. Vous suivez alors la tâche pour elle.
       </p>
       <div>
         <button type="submit" className="bouton-contour" disabled={enCours}>

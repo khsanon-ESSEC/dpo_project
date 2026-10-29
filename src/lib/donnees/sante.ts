@@ -10,6 +10,7 @@ import { aujourdhui, dateLocale } from "@/lib/dates";
 import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet } from "@/lib/regles";
 import { calculerSante, type DonneesSante } from "@/lib/sante";
+import { apresLeLivrable } from "@/lib/projets";
 
 export async function recalculerSante(projetIds?: string[]): Promise<number> {
   if (projetIds && !projetIds.length) return 0;
@@ -21,9 +22,9 @@ export async function recalculerSante(projetIds?: string[]): Promise<number> {
   if (!projets.length) return 0;
   const ids = projets.map((p) => p.id);
   const [jalons, taches, reports, org] = await Promise.all([
-    db.select({ projetId: schema.indicateurs.projetId, prevuLe: schema.indicateurs.prevuLe, etat: schema.indicateurs.etat }).from(schema.indicateurs).where(inArray(schema.indicateurs.projetId, ids)),
+    db.select({ id: schema.indicateurs.id, projetId: schema.indicateurs.projetId, prevuLe: schema.indicateurs.prevuLe, etat: schema.indicateurs.etat }).from(schema.indicateurs).where(inArray(schema.indicateurs.projetId, ids)),
     db
-      .select({ id: schema.taches.id, projetId: schema.taches.projetId, statut: schema.taches.statut, echeance: schema.taches.echeance, creeLe: schema.taches.creeLe, termineeLe: schema.taches.termineeLe, majLe: schema.taches.majLe })
+      .select({ id: schema.taches.id, projetId: schema.taches.projetId, statut: schema.taches.statut, echeance: schema.taches.echeance, creeLe: schema.taches.creeLe, termineeLe: schema.taches.termineeLe, majLe: schema.taches.majLe, livrableId: schema.taches.livrableId })
       .from(schema.taches)
       .where(and(inArray(schema.taches.projetId, ids), isNull(schema.taches.annuleeLe))),
     db.select({ projetId: schema.reportsFinProjet.projetId, avant: schema.reportsFinProjet.avant, apres: schema.reportsFinProjet.apres, creeLe: schema.reportsFinProjet.creeLe }).from(schema.reportsFinProjet).where(inArray(schema.reportsFinProjet.projetId, ids)),
@@ -50,7 +51,13 @@ export async function recalculerSante(projetIds?: string[]): Promise<number> {
     const d: DonneesSante = {
       statut: p.statut,
       dateFinPrevue: p.dateFinPrevue,
-      jalons: jalons.filter((j) => j.projetId === p.id).map((j) => ({ prevuLe: j.prevuLe, atteint: j.etat === "atteint" })),
+      livrables: jalons
+        .filter((j) => j.projetId === p.id)
+        .map((j) => ({
+          prevuLe: j.prevuLe,
+          atteint: j.etat === "atteint" || j.etat === "pret",
+          tachesApres: taches.filter((t) => t.livrableId === j.id && apresLeLivrable(t, j.prevuLe)).length,
+        })),
       taches: taches
         .filter((t) => t.projetId === p.id)
         .map((t) => ({

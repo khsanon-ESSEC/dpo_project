@@ -3,23 +3,27 @@ import { aujourdhui, dateCourte, echeanceRelative } from "@/lib/dates";
 import { heuresDe, heuresTexte } from "@/lib/charge";
 import { chargerVueProjet, cheminVue, EnTeteVue, LIBELLE_STATUT } from "../commun";
 import { LienPersonne } from "@/components/Liens";
+import { choixDeLivrables } from "@/lib/donnees/livrables";
 
 export const metadata: Metadata = { title: "Tâches du projet" };
 
 const ORDRE = ["en_cours", "a_faire", "bloquee", "faite"] as const;
 const TITRE_GROUPE: Record<string, string> = { en_cours: "En cours", a_faire: "À faire", bloquee: "Bloquées", faite: "Faites" };
-const TRIS = { echeance: "Échéance", personne: "Personne", estimation: "Temps estimé" } as const;
+const TRIS = { echeance: "Échéance", livrable: "Livrable", personne: "Personne", estimation: "Temps estimé" } as const;
 
-export default async function PageListe({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ pour?: string; tri?: string }> }) {
+export default async function PageListe({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ pour?: string; tri?: string; livrable?: string }> }) {
   const { id } = await params;
-  const { pour, tri: t0 } = await searchParams;
-  const tri = (t0 && t0 in TRIS ? t0 : "echeance") as keyof typeof TRIS;
+  const { pour, tri: t0, livrable } = await searchParams;
   const ctx = await chargerVueProjet(id);
+  const livrables = (await choixDeLivrables([id]))[id] ?? [];
+  const tri = (t0 && t0 in TRIS && (t0 !== "livrable" || livrables.length) ? t0 : "echeance") as keyof typeof TRIS;
+  // Filtre « livrable » : un livrable du projet, ou « aucun » (les tâches hors livrable).
+  const filtreLivrable = livrable === "aucun" || livrables.some((l) => l.id === livrable) ? livrable : undefined;
   const jour = aujourdhui();
   const base = cheminVue(id, "liste");
   const retour = encodeURIComponent(base);
   const personnes = [...new Map(ctx.taches.map((t) => [t.assigneId, t.personne])).entries()].sort((x, y) => x[1].localeCompare(y[1], "fr"));
-  const taches = (pour ? ctx.taches.filter((t) => t.assigneId === pour) : ctx.taches).slice();
+  const taches = ctx.taches.filter((t) => (!pour || t.assigneId === pour) && (!filtreLivrable || (filtreLivrable === "aucun" ? !t.livrableId : t.livrableId === filtreLivrable)));
   taches.sort((a, b) =>
     tri === "personne"
       ? a.personne.localeCompare(b.personne, "fr") || (a.echeance ?? "9").localeCompare(b.echeance ?? "9")
@@ -32,7 +36,11 @@ export default async function PageListe({ params, searchParams }: { params: Prom
   // par personne, ou une seule liste du plus long au plus court (temps estimé).
   type Groupe = { cle: string; titre: string; taches: typeof taches };
   const groupes: Groupe[] =
-    tri === "personne"
+    tri === "livrable"
+      ? [...livrables.map((l) => ({ cle: l.id, titre: `Livrable · ${l.libelle}`, taches: taches.filter((t) => t.livrableId === l.id) })), { cle: "aucun", titre: "Hors livrable", taches: taches.filter((t) => !t.livrableId) }]
+          .map((g) => ({ ...g, taches: g.taches.sort((a, b) => ORDRE.indexOf(a.statut) - ORDRE.indexOf(b.statut) || (a.echeance ?? "9").localeCompare(b.echeance ?? "9")) }))
+          .filter((g) => g.taches.length)
+      : tri === "personne"
       ? personnes
           .map(([pid, nom]) => ({
             cle: pid,
@@ -48,7 +56,7 @@ export default async function PageListe({ params, searchParams }: { params: Prom
         : ORDRE.map((statut) => ({ cle: statut, titre: TITRE_GROUPE[statut], taches: taches.filter((t) => t.statut === statut) })).filter((g) => g.taches.length);
   const heures = ouvertes.reduce((s, t) => s + heuresDe(t), 0);
   const lien = (q: Record<string, string | undefined>) => {
-    const p = new URLSearchParams(Object.entries({ pour, tri: tri === "echeance" ? undefined : tri, ...q }).filter(([, v]) => v) as [string, string][]);
+    const p = new URLSearchParams(Object.entries({ pour, tri: tri === "echeance" ? undefined : tri, livrable: filtreLivrable, ...q }).filter(([, v]) => v) as [string, string][]);
     const chaine = p.toString();
     return chaine ? `${base}?${chaine}` : base;
   };
@@ -87,13 +95,21 @@ export default async function PageListe({ params, searchParams }: { params: Prom
             ))}
           </nav>
           <nav className="zoom" aria-label="Trier et regrouper par">
-            {(Object.keys(TRIS) as (keyof typeof TRIS)[]).map((k) => (
+            {(Object.keys(TRIS) as (keyof typeof TRIS)[]).filter((k) => k !== "livrable" || livrables.length).map((k) => (
               <a key={k} href={lien({ tri: k === "echeance" ? undefined : k })} aria-current={tri === k ? "true" : undefined}>
                 {TRIS[k]}
               </a>
             ))}
           </nav>
         </div>
+        {filtreLivrable ? (
+          <p className="note" style={{ margin: 0 }}>
+            {filtreLivrable === "aucun" ? "Tâches hors livrable" : `Tâches du livrable « ${livrables.find((l) => l.id === filtreLivrable)?.libelle} »`} ·{" "}
+            <a href={lien({ livrable: undefined })} className="lien-discret">
+              voir toutes les tâches
+            </a>
+          </p>
+        ) : null}
         <section className="carte defile-x" aria-label="Tâches du projet">
           <table className="liste-taches">
             <thead>

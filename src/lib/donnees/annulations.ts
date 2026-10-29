@@ -215,9 +215,9 @@ async function defaire(a: Acces, d: Annulable): Promise<{ ok: true; message: str
       if (!p || !peutGererProjet({ moiId: a.moi.id, directeur: a.directeur, toutVoir: a.toutVoir, suivis: a.suivis }, p)) return { erreur: "Projet introuvable." };
       const [i] = await db.select({ etat: schema.indicateurs.etat }).from(schema.indicateurs).where(and(eq(schema.indicateurs.id, d.indicateurId), eq(schema.indicateurs.projetId, p.id)));
       if (!i) return { ok: true, message: "Déjà retiré." };
-      if (i.etat !== "a_venir") return { erreur: "Le jalon a changé depuis : retirez-le depuis la fiche du projet." };
+      if (i.etat !== "a_venir") return { erreur: "Le livrable a changé depuis : retirez-le depuis « Modifier le projet »." };
       await retirerIndicateur(p.id, d.indicateurId, a.moi.id);
-      return { ok: true, message: "Jalon retiré." };
+      return { ok: true, message: "Livrable retiré." };
     }
   }
 }

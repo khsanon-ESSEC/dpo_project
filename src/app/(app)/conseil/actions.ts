@@ -71,7 +71,7 @@ export async function redigerAvecAssistant(ligneId: string) {
   const ind = await db.select().from(schema.indicateurs).where(eq(schema.indicateurs.projetId, p.id)).orderBy(asc(schema.indicateurs.ordre));
   const donnees = [
     `Projet : ${p.titre}. ${p.description}`,
-    `Indicateurs vérifiables : ${ind.map((i) => `${i.libelle} (${i.etat === "atteint" ? "atteint" : i.etat === "en_cours" ? "en cours" : "à venir"})`).join(" ; ")}`,
+    `Livrables : ${ind.map((i) => `${i.libelle} (${i.etat === "atteint" ? "validé" : i.etat === "pret" ? "prêt à valider" : i.etat === "en_cours" ? "en cours" : "à venir"}${i.prevuLe ? `, prévu le ${dateLongue(i.prevuLe)}` : ""})`).join(" ; ")}`,
     `Fin prévue au dernier rapport : ${dateLongue(ligne.dateFinDernierRapport)} ; fin prévue aujourd'hui : ${dateLongue(ligne.nouvelleDateFin)}.`,
   ];
   if (rapport.genre === "ponctuel" && rapport.depuis) {

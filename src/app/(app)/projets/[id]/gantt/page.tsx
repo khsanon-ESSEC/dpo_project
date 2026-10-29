@@ -3,16 +3,26 @@ import { ajouterJours, aujourdhui, dateCourte, dateLocale, ecartJours } from "@/
 import { debutPrevu, heuresDe, heuresTexte } from "@/lib/charge";
 import { Gantt, LIBELLE_ZOOM, type BarreGantt, type LigneGantt, type Zoom } from "@/components/Gantt";
 import { chargerVueProjet, cheminVue, EnTeteVue, LIBELLE_STATUT } from "../commun";
+import { livrablesDuProjet } from "@/lib/donnees/livrables";
 
 export const metadata: Metadata = { title: "Gantt du projet" };
 
-export default async function PageGantt({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ zoom?: string }> }) {
+export default async function PageGantt({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ zoom?: string; par?: string }> }) {
   const { id } = await params;
-  const { zoom: z } = await searchParams;
+  const { zoom: z, par } = await searchParams;
   const zoom: Zoom = z === "jour" || z === "mois" ? z : "semaine";
   const ctx = await chargerVueProjet(id);
   const { projet, taches } = ctx;
   const jour = aujourdhui();
+  const { livrables } = await livrablesDuProjet(id, jour);
+  // Par livrable quand le projet en a (le plan du projet), sinon par personne.
+  const parLivrable = livrables.length > 0 && par !== "personne";
+  const lienVue = (zz: Zoom, pp: "livrable" | "personne") => {
+    const q = new URLSearchParams();
+    if (zz !== "semaine") q.set("zoom", zz);
+    if (pp === "personne" && livrables.length) q.set("par", "personne");
+    return `/projets/${id}/gantt${q.size ? `?${q}` : ""}`;
+  };
   const retour = encodeURIComponent(cheminVue(id, "gantt"));
 
   // Période de chaque tâche : début saisi (ou déduit de l'échéance et de l'estimation), jusqu'à l'échéance ;
@@ -25,7 +35,7 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
   const datees = periodes.filter((p) => p.debut && p.fin) as { t: (typeof taches)[number]; debut: string; fin: string }[];
 
   // Fenêtre affichée : les tâches et aujourd'hui ; en zoom « mois », toute la vie du projet (au plus deux ans).
-  const dates = [jour, ...datees.flatMap((p) => [p.debut, p.fin])];
+  const dates = [jour, ...datees.flatMap((p) => [p.debut, p.fin]), ...(parLivrable ? livrables.filter((l) => l.prevuLe).map((l) => l.prevuLe!) : [])];
   if (zoom === "mois") {
     if (projet.dateEntree && ecartJours(projet.dateEntree, jour) < 730) dates.push(projet.dateEntree);
     if (projet.dateFinPrevue) dates.push(projet.dateFinPrevue);
@@ -58,11 +68,63 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
     },
   ];
 
+  const ligneTache = (p: (typeof datees)[number], avecPersonne: boolean, prevuLivrable: string | null = null): LigneGantt => {
+    const t = p.t;
+    const apres = !!prevuLivrable && t.statut !== "faite" && p.fin > prevuLivrable;
+    const etat = t.retard ? "En retard" : LIBELLE_STATUT[t.statut];
+    const titre = `${t.titre} — ${t.personne} — du ${dateCourte(p.debut)} au ${dateCourte(p.fin)} — ${etat}${t.estimationHeures ? ` — ${t.estimationHeures} h` : ""}${apres ? " — après la date du livrable" : ""}`;
+    return {
+      id: t.id,
+      libelle: t.titre,
+      sous: avecPersonne ? `${t.personne}${apres ? " · après la date du livrable" : ""}` : undefined,
+      lien: t.ouvrable ? `/taches/${t.id}?retour=${retour}` : undefined,
+      barres: [
+        {
+          debut: p.debut,
+          fin: p.fin,
+          classe: `gantt__barre--${t.retard ? "retard" : t.statut}${apres ? " gantt__barre--apres" : ""}`,
+          texte: t.estimationHeures ? `${t.estimationHeures} h` : undefined,
+          titre,
+          lien: t.ouvrable ? `/taches/${t.id}?retour=${retour}` : undefined,
+        },
+      ],
+    };
+  };
+
+  if (parLivrable) {
+    // Une section par livrable : ses tâches, sa date (losange), du début de sa première tâche à la fin de la dernière.
+    const groupes = [...livrables.map((l) => ({ l, liste: datees.filter((p) => p.t.livrableId === l.id) })), { l: null, liste: datees.filter((p) => !p.t.livrableId) }];
+    for (const { l, liste } of groupes) {
+      // Sans tâche datée : seulement un livrable à venir qui a une date (son losange) ; un livrable validé sans tâche n'apporte rien ici.
+      if (!liste.length && (!l || !l.prevuLe || l.etat === "atteint")) continue;
+      const tri = [...liste].sort((x, y) => x.debut.localeCompare(y.debut));
+      const deb = tri.length ? tri.reduce((m, p) => (p.debut < m ? p.debut : m), tri[0].debut) : null;
+      const fn = tri.length ? tri.reduce((m, p) => (p.fin > m ? p.fin : m), tri[0].fin) : null;
+      lignes.push({
+        id: l ? `l-${l.id}` : "hors-livrable",
+        libelle: l ? l.libelle : "Hors livrable",
+        sous: l
+          ? [l.responsable ?? "sans responsable", `${l.compte.faites}/${l.compte.total} tâche${l.compte.total > 1 ? "s" : ""}`, l.prevuLe ? `prévu le ${dateCourte(l.prevuLe)}` : "sans date", l.affiche === "atteint" ? "validé" : l.affiche === "pret" ? "prêt à valider" : null]
+              .filter(Boolean)
+              .join(" · ")
+          : `${liste.length} tâche${liste.length > 1 ? "s" : ""} datée${liste.length > 1 ? "s" : ""}`,
+        groupe: true,
+        lien: l ? `/projets/${id}#livrable-${l.id}` : undefined,
+        barres: deb && fn ? [{ debut: deb, fin: fn, classe: `gantt__barre--livrable${l && l.prevuLe && fn > l.prevuLe && l.etat !== "atteint" ? " gantt__barre--livrable-depasse" : ""}`, titre: `${l ? l.libelle : "Hors livrable"} : du ${dateCourte(deb)} au ${dateCourte(fn)}` }] : [],
+        jalons:
+          l && l.prevuLe
+            ? [{ date: l.prevuLe, type: l.etat === "atteint" ? "livrable-valide" : l.enRetard ? "livrable-retard" : "livrable", titre: `${l.libelle} : prévu le ${dateCourte(l.prevuLe)}${l.etat === "atteint" ? ", validé" : l.enRetard ? ", en retard" : ""}` }]
+            : undefined,
+      });
+      for (const p of tri) lignes.push(ligneTache(p, true, l?.prevuLe ?? null));
+    }
+  }
+
   // Une section par personne, ses tâches dans l'ordre de début.
   const parPersonne = new Map<string, typeof datees>();
   for (const p of datees) parPersonne.set(p.t.assigneId, [...(parPersonne.get(p.t.assigneId) ?? []), p]);
   const personnes = [...parPersonne.entries()].sort((x, y) => x[1][0].t.personne.localeCompare(y[1][0].t.personne, "fr"));
-  for (const [pid, liste] of personnes) {
+  for (const [pid, liste] of parLivrable ? [] : personnes) {
     const ouvertes = liste.filter((p) => p.t.statut !== "faite");
     const heures = ouvertes.reduce((s, p) => s + heuresDe(p.t), 0);
     lignes.push({
@@ -73,26 +135,7 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
       barres: [],
       sous: `${ouvertes.length} tâche${ouvertes.length > 1 ? "s" : ""} ouverte${ouvertes.length > 1 ? "s" : ""} · ${heuresTexte(heures)}`,
     });
-    for (const p of liste.sort((x, y) => x.debut.localeCompare(y.debut))) {
-      const t = p.t;
-      const etat = t.retard ? "En retard" : LIBELLE_STATUT[t.statut];
-      const titre = `${t.titre} — ${t.personne} — du ${dateCourte(p.debut)} au ${dateCourte(p.fin)} — ${etat}${t.estimationHeures ? ` — ${t.estimationHeures} h` : ""}`;
-      lignes.push({
-        id: t.id,
-        libelle: t.titre,
-        lien: t.ouvrable ? `/taches/${t.id}?retour=${retour}` : undefined,
-        barres: [
-          {
-            debut: p.debut,
-            fin: p.fin,
-            classe: `gantt__barre--${t.retard ? "retard" : t.statut}`,
-            texte: t.estimationHeures ? `${t.estimationHeures} h` : undefined,
-            titre,
-            lien: t.ouvrable ? `/taches/${t.id}?retour=${retour}` : undefined,
-          },
-        ],
-      });
-    }
+    for (const p of liste.sort((x, y) => x.debut.localeCompare(y.debut))) lignes.push(ligneTache(p, false));
   }
   const sansDate = periodes.filter((p) => !p.debut || !p.fin).map((p) => p.t);
 
@@ -101,13 +144,25 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
       <EnTeteVue ctx={ctx} vue="gantt" />
       <div className="page">
         <div className="ligne-actions">
-          <nav className="zoom" aria-label="Échelle">
-            {(["jour", "semaine", "mois"] as Zoom[]).map((zz) => (
-              <a key={zz} href={`/projets/${id}/gantt${zz === "semaine" ? "" : `?zoom=${zz}`}`} aria-current={zoom === zz ? "true" : undefined}>
-                {LIBELLE_ZOOM[zz]}
-              </a>
-            ))}
-          </nav>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            {livrables.length ? (
+              <nav className="zoom" aria-label="Regrouper les tâches">
+                <a href={lienVue(zoom, "livrable")} aria-current={parLivrable ? "true" : undefined}>
+                  Par livrable
+                </a>
+                <a href={lienVue(zoom, "personne")} aria-current={!parLivrable ? "true" : undefined}>
+                  Par personne
+                </a>
+              </nav>
+            ) : null}
+            <nav className="zoom" aria-label="Échelle">
+              {(["jour", "semaine", "mois"] as Zoom[]).map((zz) => (
+                <a key={zz} href={lienVue(zz, parLivrable ? "livrable" : "personne")} aria-current={zoom === zz ? "true" : undefined}>
+                  {LIBELLE_ZOOM[zz]}
+                </a>
+              ))}
+            </nav>
+          </div>
           <div className="legende">
             <span>
               <i /> À faire
@@ -127,6 +182,11 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
             <span>
               <i style={{ width: 2, height: 14, border: 0, background: "#f4b22d" }} /> Aujourd&apos;hui
             </span>
+            {parLivrable ? (
+              <span>
+                <i className="gantt__cle-livrable" /> Date du livrable
+              </span>
+            ) : null}
           </div>
         </div>
         {datees.length ? (

@@ -22,6 +22,7 @@ const traces: Record<string, string> = {
   envoyer: "M4 12 20 4l-4 16-4-7zM12 13l8-9",
   telecharger: "M12 4v11M7 10.5l5 5 5-5M5 20h14",
   coche: "M5 12.5l4.5 4.5L19 7.5",
+  drapeau: "M5.5 21V4M5.5 4.5h12l-2.5 4 2.5 4h-12",
   horloge: "M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17zM12 7.5V12l3 2",
   sablier: "M7 3.5h10M7 20.5h10M8 3.5c0 4.5 8 5 8 8.5s-8 4-8 8.5M16 3.5c0 4.5-8 5-8 8.5s8 4 8 8.5",
   interdit: "M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17zM6 6l12 12",

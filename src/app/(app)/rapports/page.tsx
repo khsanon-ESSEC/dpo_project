@@ -5,7 +5,7 @@ import { moisAnnee } from "@/lib/dates";
 import { mesRapports, semaineCourante, serieDeRapports } from "@/lib/donnees/rapport";
 import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet, redigeUnRapport } from "@/lib/regles";
-import { Bandeau } from "@/components/Bandeau";
+import { Bandeau, LienChiffre } from "@/components/Bandeau";
 import { LigneResume, semaineTexte } from "@/components/ResumeRapport";
 import { ONGLETS_RAPPORT, SousOnglets } from "@/components/SousOnglets";
 
@@ -26,7 +26,11 @@ export default async function PageMesRapports() {
       <Bandeau surtitre="Rapport du vendredi" titre="Mes rapports">
         <dl className="chiffres">
           <div className="chiffre">
-            <dt>rapports envoyés</dt>
+            <dt>
+              <LienChiffre href="#rapports" detail="voir la liste des rapports">
+                rapports envoyés
+              </LienChiffre>
+            </dt>
             <dd>{envoyes.length}</dd>
           </div>
           <div className="chiffre">
@@ -41,6 +45,7 @@ export default async function PageMesRapports() {
       </Bandeau>
       <div className="page" style={{ maxWidth: 980 }}>
         <SousOnglets onglets={ONGLETS_RAPPORT} courant="/rapports" label="Rapports" />
+        <span id="rapports" style={{ display: "block", scrollMarginTop: 80 }} />
         {liste.length === 0 ? <p className="vide">Pas encore de rapport. Le premier se prépare tout seul à partir de vos tâches, dans l&apos;onglet « Cette semaine ».</p> : null}
         {mois.map((m) => (
           <section key={m} className="carte carte--liste" aria-labelledby={`m-${m}`}>

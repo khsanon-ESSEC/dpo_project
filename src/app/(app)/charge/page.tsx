@@ -10,7 +10,7 @@ import { initiales, nomComplet } from "@/lib/regles";
 import { ChoixPeriode } from "@/components/ChoixPeriode";
 import { ChargePassee } from "./ChargePassee";
 import { chargerOrganisation } from "@/lib/organisation";
-import { Bandeau } from "@/components/Bandeau";
+import { Bandeau, LienChiffre } from "@/components/Bandeau";
 import { Jauge, LegendeCharge } from "@/components/Charge";
 import { Chaleur } from "@/components/Graphiques";
 import { ONGLETS_EQUIPE, SousOnglets } from "@/components/SousOnglets";
@@ -24,8 +24,17 @@ const RANG = { surchargee: 3, chargee: 2, normale: 1, libre: 0 } as const;
  * disponibles de chacun. Ouvert aux personnes qui suivent d'autres personnes (chefs d'équipe,
  * directeurs, exécutifs) ; chacun ne voit que les personnes qu'il suit.
  */
-export default async function PageCharge({ searchParams }: { searchParams: Promise<{ equipe?: string; vue?: string; periode?: string; p?: string }> }) {
-  const { equipe, vue: v, periode, p: param } = await searchParams;
+const QUI = {
+  surchargees: "Surchargées cette semaine",
+  "surchargees-prochaine": "Surchargées la semaine prochaine",
+  chargees: "Chargées la semaine prochaine",
+  marge: "Avec de la marge la semaine prochaine",
+} as const;
+
+export default async function PageCharge({ searchParams }: { searchParams: Promise<{ equipe?: string; vue?: string; periode?: string; p?: string; qui?: string }> }) {
+  const { equipe, vue: v, periode, p: param, qui: q } = await searchParams;
+  // Le chiffre cliqué dans le bandeau : seulement ces personnes.
+  const qui = q && q in QUI ? (q as keyof typeof QUI) : null;
   // Carte de chaleur (huit semaines, d'un coup d'œil) ou détail (heures, jauges, ce qui est à signaler).
   const vue = v === "detail" ? "detail" : "carte";
   const u = await exigerInterne();
@@ -52,12 +61,16 @@ export default async function PageCharge({ searchParams }: { searchParams: Promi
   const equipes = [...new Map(toutes.map((l) => [l.equipeId ?? "aucune", l.equipe])).entries()].sort((x, y) => (x[0] === "aucune" ? 1 : y[0] === "aucune" ? -1 : x[1].localeCompare(y[1], "fr")));
   const lignes = equipe ? toutes.filter((l) => (l.equipeId ?? "aucune") === equipe) : toutes;
   const pire = (l: LigneCharge) => Math.max(RANG[l.charge.semaines[0].niveau], RANG[l.charge.semaines[1]?.niveau ?? "libre"]);
+  const aDeLaMarge = (l: LigneCharge) => l.charge.semaines[1]?.niveau === "libre" || (!!l.charge.semaines[1] && l.charge.semaines[1].heures < l.charge.semaines[1].capacite * 0.5);
+  const garde = (l: LigneCharge) =>
+    !qui ||
+    (qui === "surchargees" ? l.charge.semaines[0].niveau === "surchargee" : qui === "surchargees-prochaine" ? l.charge.semaines[1]?.niveau === "surchargee" : qui === "chargees" ? l.charge.semaines[1]?.niveau === "chargee" : aDeLaMarge(l));
   const groupes = equipes
     .filter(([eid]) => !equipe || eid === equipe)
     .map(([eid, nom]) => ({
       id: eid,
       nom,
-      lignes: lignes.filter((l) => (l.equipeId ?? "aucune") === eid).sort((x, y) => pire(y) - pire(x) || x.nom.localeCompare(y.nom, "fr")),
+      lignes: lignes.filter((l) => (l.equipeId ?? "aucune") === eid && garde(l)).sort((x, y) => pire(y) - pire(x) || x.nom.localeCompare(y.nom, "fr")),
     }))
     .filter((g) => g.lignes.length);
 
@@ -65,26 +78,43 @@ export default async function PageCharge({ searchParams }: { searchParams: Promi
   const surProchaine = lignes.filter((l) => l.charge.semaines[1]?.niveau === "surchargee").length;
   const chargees = lignes.filter((l) => l.charge.semaines[1]?.niveau === "chargee").length;
   const sansEstimation = lignes.reduce((s, l) => s + l.charge.sansEstimation, 0);
-  const libres = lignes.filter((l) => l.charge.semaines[1]?.niveau === "libre" || (l.charge.semaines[1] && l.charge.semaines[1].heures < l.charge.semaines[1].capacite * 0.5)).length;
+  const libres = lignes.filter(aDeLaMarge).length;
+  const lienQui = (k: keyof typeof QUI) => `/charge?qui=${k}${equipe ? `&equipe=${equipe}` : ""}${vue === "detail" ? "&vue=detail" : ""}#charge-liste`;
 
   return (
     <>
       <Bandeau surtitre="Équipe" titre="Charge de travail">
         <dl className="chiffres">
           <div className={`chiffre ${surCetteSemaine ? "chiffre--retard" : ""}`}>
-            <dt>surchargée{surCetteSemaine > 1 ? "s" : ""} cette semaine</dt>
+            <dt>
+              <LienChiffre href={lienQui("surchargees")} detail="voir ces personnes">
+                surchargée{surCetteSemaine > 1 ? "s" : ""} cette semaine
+              </LienChiffre>
+            </dt>
             <dd>{surCetteSemaine}</dd>
           </div>
           <div className={`chiffre ${surProchaine ? "chiffre--retard" : ""}`}>
-            <dt>surchargée{surProchaine > 1 ? "s" : ""} la semaine prochaine</dt>
+            <dt>
+              <LienChiffre href={lienQui("surchargees-prochaine")} detail="voir ces personnes">
+                surchargée{surProchaine > 1 ? "s" : ""} la semaine prochaine
+              </LienChiffre>
+            </dt>
             <dd>{surProchaine}</dd>
           </div>
           <div className={`chiffre ${chargees ? "chiffre--veille" : ""}`}>
-            <dt>chargée{chargees > 1 ? "s" : ""} la semaine prochaine</dt>
+            <dt>
+              <LienChiffre href={lienQui("chargees")} detail="voir ces personnes">
+                chargée{chargees > 1 ? "s" : ""} la semaine prochaine
+              </LienChiffre>
+            </dt>
             <dd>{chargees}</dd>
           </div>
           <div className="chiffre">
-            <dt>avec de la marge la semaine prochaine</dt>
+            <dt>
+              <LienChiffre href={lienQui("marge")} detail="voir ces personnes">
+                avec de la marge la semaine prochaine
+              </LienChiffre>
+            </dt>
             <dd>{libres}</dd>
           </div>
         </dl>
@@ -128,6 +158,16 @@ export default async function PageCharge({ searchParams }: { searchParams: Promi
           </nav>
           <LegendeCharge />
         </div>
+        <span id="charge-liste" style={{ display: "block", scrollMarginTop: 80 }} />
+        {qui ? (
+          <p className="note" style={{ margin: 0 }}>
+            Seulement : {QUI[qui].toLowerCase()} ·{" "}
+            <a href={`/charge${equipe ? `?equipe=${equipe}` : ""}${vue === "detail" ? `${equipe ? "&" : "?"}vue=detail` : ""}`} className="lien-discret">
+              voir tout le monde
+            </a>
+          </p>
+        ) : null}
+        {qui && groupes.length === 0 ? <p className="vide">Personne dans ce cas.</p> : null}
         {vue === "carte" ? (
           <section className="carte" aria-label="Carte de chaleur de la charge, par personne et par semaine">
             <Chaleur

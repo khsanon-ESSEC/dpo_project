@@ -77,14 +77,56 @@ export function responsableId(p: { chefProjetId: string | null; referentId?: str
   return p.referentId ?? p.chefProjetId;
 }
 
-/** Peut-on confier une tâche (de ce projet, ou hors projet) à cette personne ? */
-export function peutAssigner(a: Acteur, assigneId: string, projet: { id: string; chefProjetId: string | null; referentId?: string | null; membres: Set<string> } | null, externe = false): boolean {
+/**
+ * Peut-on confier une tâche (de ce projet, ou hors projet) à cette personne ?
+ * Livrables (décision du 28 octobre 2026) : le responsable d'un livrable en détermine les tâches et peut
+ * confier celles de son livrable à l'équipe du projet (chef, référent, membres, y compris hors division).
+ */
+export function peutAssigner(
+  a: Acteur,
+  assigneId: string,
+  projet: { id: string; chefProjetId: string | null; referentId?: string | null; membres: Set<string> } | null,
+  externe = false,
+  livrable: { projetId: string; responsableId: string | null } | null = null,
+): boolean {
+  const equipe = (p: NonNullable<typeof projet>) => assigneId === p.chefProjetId || assigneId === p.referentId || p.membres.has(assigneId);
+  if (projet && livrable && livrable.projetId === projet.id && livrable.responsableId === a.moiId && (assigneId === a.moiId || equipe(projet))) return true;
   // Hors division : seul le chef du projet (ou son référent DPO) lui confie une tâche, et sur ce projet.
   // Une personne hors division avec un accès limité se confie ses propres tâches.
   if (externe) return assigneId === a.moiId || (!!projet && a.projetsDiriges.has(projet.id));
   if (assigneId === a.moiId || suit(a, assigneId)) return true;
-  if (projet && a.projetsDiriges.has(projet.id)) return assigneId === projet.chefProjetId || assigneId === projet.referentId || projet.membres.has(assigneId);
+  if (projet && a.projetsDiriges.has(projet.id)) return equipe(projet);
   return false;
+}
+
+export const ETATS_LIVRABLE = ["a_venir", "en_cours", "pret", "atteint"] as const;
+export type EtatLivrable = (typeof ETATS_LIVRABLE)[number];
+
+export const LIBELLE_ETAT_LIVRABLE: Record<EtatLivrable, string> = {
+  a_venir: "À venir",
+  en_cours: "En cours",
+  pret: "Prêt à valider",
+  atteint: "Validé",
+};
+
+/** L'état montré : un livrable « à venir » dont une tâche a commencé (ou est faite) est en cours. */
+export function etatAffiche(etat: EtatLivrable, taches: { statut: string }[]): EtatLivrable {
+  if (etat === "a_venir" && taches.some((t) => t.statut !== "a_faire")) return "en_cours";
+  return etat;
+}
+
+/**
+ * Le responsable d'un livrable le déclare prêt à valider ; qui gère le projet le valide ou le renvoie.
+ * Qui gère le projet peut aussi le déclarer prêt (s'il fait le travail lui-même, ou en l'absence de responsable).
+ */
+export function peutDeclarerPret(moiId: string, livrable: { responsableId: string | null; etat: EtatLivrable }, gere: boolean): boolean {
+  if (livrable.etat === "pret" || livrable.etat === "atteint") return false;
+  return gere || livrable.responsableId === moiId;
+}
+
+/** Une tâche ouverte prévue après la date de son livrable le met en retard. */
+export function apresLeLivrable(t: { statut: string; echeance: string | null }, prevuLe: string | null): boolean {
+  return !!prevuLe && !!t.echeance && t.statut !== "faite" && t.echeance > prevuLe;
 }
 
 /**

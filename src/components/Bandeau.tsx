@@ -52,3 +52,17 @@ export function Anneau({
     </div>
   );
 }
+
+/**
+ * Le libellé d'un chiffre du bandeau, en lien vers ce qu'il compte : tout le bloc (le chiffre compris) est
+ * cliquable ; le libellé est souligné en pointillé pour le signaler. `detail` complète le nom du lien pour
+ * les lecteurs d'écran (« voir les 2 tâches »).
+ */
+export function LienChiffre({ href, children, detail }: { href: string; children: ReactNode; detail?: string }) {
+  return (
+    <a href={href} className="chiffre__lien">
+      {children}
+      {detail ? <span className="visuellement-cache"> : {detail}</span> : null}
+    </a>
+  );
+}

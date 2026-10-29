@@ -38,9 +38,13 @@ async function finAuDernierRapport(projetId: string, mois: string) {
 async function etatParRegles(projet: typeof schema.projets.$inferSelect, ancienneFin: string | null) {
   const ind = await db.select().from(schema.indicateurs).where(eq(schema.indicateurs.projetId, projet.id)).orderBy(asc(schema.indicateurs.ordre));
   const atteints = ind.filter((i) => i.etat === "atteint").length;
-  const enCours = ind.filter((i) => i.etat === "en_cours").map((i) => i.libelle.charAt(0).toLowerCase() + i.libelle.slice(1));
-  const phrases = [`${atteints} indicateur${atteints > 1 ? "s" : ""} vérifiable${atteints > 1 ? "s" : ""} atteint${atteints > 1 ? "s" : ""} sur ${ind.length}.`];
+  const minuscule = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
+  const enCours = ind.filter((i) => i.etat === "en_cours" || i.etat === "pret").map((i) => `${minuscule(i.libelle)}${i.etat === "pret" ? " (prêt à valider)" : ""}`);
+  const phrases = [`${atteints} livrable${atteints > 1 ? "s" : ""} validé${atteints > 1 ? "s" : ""} sur ${ind.length}.`];
   if (enCours.length) phrases.push(`En cours : ${enCours.join(" ; ")}.`);
+  // Le prochain livrable attendu, avec sa date.
+  const prochain = ind.filter((i) => i.etat !== "atteint" && i.prevuLe).sort((x, y) => x.prevuLe!.localeCompare(y.prevuLe!))[0];
+  if (prochain) phrases.push(`Prochain livrable : ${minuscule(prochain.libelle)}, prévu le ${dateLongue(prochain.prevuLe!)}.`);
   if (ancienneFin && projet.dateFinPrevue && ancienneFin !== projet.dateFinPrevue) {
     phrases.push(`La fin prévue passe du ${dateLongue(ancienneFin)} au ${dateLongue(projet.dateFinPrevue)}.`);
   }

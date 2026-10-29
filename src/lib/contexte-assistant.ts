@@ -84,7 +84,7 @@ export async function contexteAssistant(u: Utilisateur, ecran: string, chemin: s
     blocs.push(
       `Projet : ${f.projet.titre}${f.projet.strategique ? " (stratégique)" : ""}, ${SANTE[f.projet.sante]}. Chef de projet : ${f.chef?.nom ?? "aucun"}.\n` +
         `Fin prévue : ${dateLongue(f.projet.dateFinPrevue)} ; au dernier rapport au conseil : ${dateLongue(f.dernier?.dateFinPrevue)}.\n` +
-        `Indicateurs vérifiables :\n${f.indicateurs.map((i) => `- ${i.ordre}. ${i.libelle} : ${i.etat === "atteint" ? "atteint" : i.etat === "en_cours" ? "en cours" : "à venir"}`).join("\n")}\n` +
+        `Livrables :\n${f.indicateurs.map((i) => `- ${i.ordre}. ${i.libelle} : ${i.etat === "atteint" ? "validé" : i.etat === "pret" ? "prêt à valider" : i.etat === "en_cours" ? "en cours" : "à venir"}${i.prevuLe ? `, prévu le ${dateLongue(i.prevuLe)}` : ""}`).join("\n")}\n` +
         `Tâches : ${f.compte.faite} faites, ${f.compte.en_cours} en cours, ${f.compte.a_faire} à faire, ${f.compte.bloquee} bloquées.\n` +
         `Tâches à surveiller :\n${f.urgentes.map((t) => `- ${t.titre} (${STATUT[t.statut]}${t.echeance ? `, ${echeanceRelative(t.echeance, jour).texte}` : ""})`).join("\n")}`,
     );
@@ -102,7 +102,7 @@ export async function contexteAssistant(u: Utilisateur, ecran: string, chemin: s
         p
           .map(
             (x) =>
-              `- ${x.titre}${x.strategique ? " (stratégique)" : ""} : ${SANTE[x.sante]}, ${x.atteints}/${x.totalIndicateurs} indicateurs, fin prévue ${dateLongue(x.dateFinPrevue)}` +
+              `- ${x.titre}${x.strategique ? " (stratégique)" : ""} : ${SANTE[x.sante]}, ${x.atteints}/${x.totalIndicateurs} livrables validés, fin prévue ${dateLongue(x.dateFinPrevue)}` +
               (x.ancienneFin && x.ancienneFin !== x.dateFinPrevue ? ` (au dernier rapport : ${dateLongue(x.ancienneFin)})` : ""),
           )
           .join("\n"),

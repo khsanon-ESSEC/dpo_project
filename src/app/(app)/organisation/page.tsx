@@ -5,7 +5,7 @@ import { acces } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { vueOrganisation } from "@/lib/donnees/organisation";
 import { peutAdministrer } from "@/lib/regles";
-import { Bandeau } from "@/components/Bandeau";
+import { Bandeau, LienChiffre } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { ONGLETS_ORGANISATION, SousOnglets } from "@/components/SousOnglets";
 import { changerChefEquipe } from "./actions";
@@ -64,15 +64,27 @@ export default async function PageOrganisation({ searchParams }: { searchParams:
       <Bandeau surtitre="Division Projets Organisationnels" titre="Organisation">
         <dl className="chiffres">
           <div className="chiffre">
-            <dt>personnes</dt>
+            <dt>
+              <LienChiffre href="#equipes" detail="voir les équipes et leurs membres">
+                personnes
+              </LienChiffre>
+            </dt>
             <dd>{o.total}</dd>
           </div>
           <div className="chiffre">
-            <dt>équipes</dt>
+            <dt>
+              <LienChiffre href="#equipes" detail="voir les équipes">
+                équipes
+              </LienChiffre>
+            </dt>
             <dd>{o.equipes.length}</dd>
           </div>
           <div className={`chiffre ${o.vacants ? "chiffre--veille" : ""}`}>
-            <dt>poste{o.vacants > 1 ? "s" : ""} vacant{o.vacants > 1 ? "s" : ""}</dt>
+            <dt>
+              <LienChiffre href="#equipes" detail="voir les équipes, postes vacants compris">
+                poste{o.vacants > 1 ? "s" : ""} vacant{o.vacants > 1 ? "s" : ""}
+              </LienChiffre>
+            </dt>
             <dd>{o.vacants}</dd>
           </div>
           <div className="chiffre">
@@ -102,7 +114,7 @@ export default async function PageOrganisation({ searchParams }: { searchParams:
         )}
         <div className="colonnes">
           <div className="colonne-large" style={{ gap: 16 }}>
-            <div className="grille-projets" style={{ gap: 16 }}>
+            <div className="grille-projets" id="equipes" style={{ gap: 16, scrollMarginTop: 80 }}>
               {o.equipes.map((e, i) => (
                 <section key={e.id} className="carte carte--liste apparition survol" style={{ flex: "1 1 280px", padding: "20px 20px 8px", animationDelay: `${80 + i * 60}ms` }} aria-labelledby={`eq-${e.id}`}>
                   <h2 id={`eq-${e.id}`} className="carte__titre" style={{ marginBottom: 12 }}>

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { livrablesDuProjet } from "@/lib/donnees/livrables";
 import { ajouterJours, aujourdhui, jourComplet, lundiDe, deMois, moisAnnee, premierDuMois } from "@/lib/dates";
 import { Icone } from "@/components/Icone";
 import { chargerVueProjet, cheminVue, EnTeteVue, LIBELLE_STATUT } from "../commun";
@@ -20,7 +21,7 @@ export default async function PageCalendrier({ params, searchParams }: { params:
   const retour = encodeURIComponent(`${cheminVue(id, "calendrier")}`);
   const base = cheminVue(id, "calendrier");
 
-  // Ce qui tombe chaque jour : les échéances des tâches et les jalons du projet.
+  // Ce qui tombe chaque jour : les échéances des tâches, les livrables et les jalons du projet.
   const parJour = new Map<string, Element[]>();
   const ajouter = (d: string | null, e: Element) => {
     if (d && d >= debutGrille && d <= finGrille) parJour.set(d, [...(parJour.get(d) ?? []), e]);
@@ -33,6 +34,16 @@ export default async function PageCalendrier({ params, searchParams }: { params:
       titre: `${t.titre} — ${t.personne} — ${etat}${t.estimationHeures ? ` — ${t.estimationHeures} h` : ""}`,
       classe: t.statut === "faite" ? "puce--faite" : t.statut === "bloquee" ? "puce--bloquee" : t.retard ? "puce--retard" : "",
       lien: t.ouvrable ? `/taches/${t.id}?retour=${retour}` : null,
+    });
+  }
+  // Les livrables, à leur date prévue.
+  for (const l of (await livrablesDuProjet(id, jour)).livrables) {
+    ajouter(l.prevuLe, {
+      id: `livrable-${l.id}`,
+      texte: `Livrable · ${l.libelle}`,
+      titre: `Livrable « ${l.libelle} »${l.responsable ? ` — ${l.responsable}` : ""} — ${l.affiche === "atteint" ? "validé" : l.affiche === "pret" ? "prêt à valider" : l.enRetard ? "en retard" : `${l.compte.faites}/${l.compte.total} tâches faites`}`,
+      classe: `puce--jalon${l.enRetard ? " puce--retard" : ""}`,
+      lien: `/projets/${id}#livrable-${l.id}`,
     });
   }
   ajouter(projet.dateFinPrevue, { id: "fin", texte: "Fin prévue du projet", titre: "Fin prévue du projet", classe: "puce--jalon", lien: null });
@@ -85,7 +96,7 @@ export default async function PageCalendrier({ params, searchParams }: { params:
               <i style={{ width: 3, height: 14, border: 0, background: "var(--veille-point)" }} /> Bloquée
             </span>
             <span>
-              <i style={{ width: 3, height: 14, border: 0, background: "#f4b22d" }} /> Jalon du projet
+              <i style={{ width: 3, height: 14, border: 0, background: "#f4b22d" }} /> Livrable, fin ou lancement
             </span>
           </div>
         </div>

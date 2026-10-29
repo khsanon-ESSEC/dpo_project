@@ -122,7 +122,7 @@ await sql.begin(async (tx) => {
       k: "UR", titre: "Nouvelle version UNIBANKOnline Retail", strat: true, pm: "mv", sante: "en_retard",
       description: "La nouvelle plateforme propose une meilleure présentation des fonctionnalités et permettra aux clients d'accéder plus facilement aux services de banque en ligne.",
       entree: "2024-06-25", initiale: "2025-07-31", fin: "2026-11-26", lancement: "2026-12-10",
-      ind: [["Conception graphique réalisée", "atteint"], ["Modèle conceptuel validé", "atteint"], ["Consultant pour le développement sélectionné et contrat signé", "atteint"], ["Application développée", "atteint"], ["Planification de la stratégie commerciale", "atteint"], ["Audit de sécurité effectué et passé", "en_cours", -38], ["Plan de lancement finalisé et approuvé", "atteint"], ["Plan de communication approuvé", "atteint"], ["Application mise en ligne", "a_venir"]],
+      ind: [["Conception graphique réalisée", "atteint"], ["Modèle conceptuel validé", "atteint"], ["Consultant pour le développement sélectionné et contrat signé", "atteint"], ["Application développée", "atteint"], ["Planification de la stratégie commerciale", "atteint"], ["Audit de sécurité effectué et passé", "en_cours", -38], ["Plan de lancement finalisé et approuvé", "atteint"], ["Plan de communication approuvé", "atteint"], ["Application mise en ligne", "a_venir", 31]],
       dernier: { fin: "2026-10-29", lancement: "2026-11-12", etat: "Un déploiement en mode « Early adopter » a été effectué le 15 avril 2026. Plus de 2000 clients l'utilisent actuellement. Le déploiement a dû être suspendu afin de procéder à certains renforcements de la sécurité du système face aux nouvelles menaces de cyberattaques." },
     },
     {
@@ -136,7 +136,7 @@ await sql.begin(async (tx) => {
       k: "UC", titre: "Nouvelle version UNIBANKOnline Corporate", strat: true, pm: "ml", sante: "dans_les_temps",
       description: "La nouvelle version vise à offrir une meilleure expérience aux utilisateurs avec une interface plus conviviale et avec plus de fonctionnalités.",
       entree: "2024-12-19", initiale: "2025-12-19", fin: "2026-12-18", lancement: "2027-02-27",
-      ind: [["Maquettes graphiques validées", "atteint"], ["Architecture du système validée", "atteint"], ["Développeurs affectés", "atteint"], ["Développement terminé", "en_cours", 21], ["Tests utilisateurs réalisés", "a_venir"], ["Audit de sécurité passé", "a_venir"], ["Formation des chargés de clientèle", "a_venir"], ["Plan de communication approuvé", "a_venir"], ["Application mise en ligne", "a_venir"]],
+      ind: [["Maquettes graphiques validées", "pret"], ["Architecture du système validée", "atteint"], ["Développeurs affectés", "atteint"], ["Développement terminé", "en_cours", 21], ["Tests utilisateurs réalisés", "a_venir"], ["Audit de sécurité passé", "a_venir"], ["Formation des chargés de clientèle", "a_venir"], ["Plan de communication approuvé", "a_venir"], ["Application mise en ligne", "a_venir", 53]],
       dernier: { fin: "2026-12-18", lancement: "2027-02-27", etat: "Les phases de conception des maquettes graphiques, de l'architecture du système ainsi que le développement sont en cours." },
     },
     {
@@ -147,12 +147,12 @@ await sql.begin(async (tx) => {
     {
       k: "CR", titre: "Refonte Credos", strat: false, pm: "wb", sante: "dans_les_temps",
       description: "Nouvelle version de l'application de suivi des dossiers de crédit.", entree: "2025-06-02", initiale: "2026-12-04", fin: "2026-12-04", lancement: null,
-      ind: [["Besoins validés avec le Crédit", "atteint"], ["Maquettes validées", "atteint"], ["Développement terminé", "atteint"], ["Validation métier réalisée", "en_cours", 14], ["Mise en production", "a_venir"], ["Formation des utilisateurs", "a_venir"]],
+      ind: [["Besoins validés avec le Crédit", "atteint"], ["Maquettes validées", "atteint"], ["Développement terminé", "atteint"], ["Validation métier réalisée", "en_cours", 14], ["Mise en production", "a_venir", 32], ["Formation des utilisateurs", "a_venir", 39]],
     },
     {
       k: "PR", titre: "Plateforme de recrutement", strat: false, pm: "dj", sante: "dans_les_temps",
       description: "Plateforme de dépôt et de suivi des candidatures.", entree: "2026-05-04", initiale: "2027-01-29", fin: "2027-01-29", lancement: null,
-      ind: [["Cahier des charges validé", "en_cours", 7], ["Maquettes du formulaire de candidature", "atteint"], ["Choix de la solution", "atteint"], ["Développement terminé", "a_venir"], ["Tests avec la DRH", "a_venir"], ["Mise en ligne", "a_venir"]],
+      ind: [["Cahier des charges validé", "en_cours", 7], ["Maquettes du formulaire de candidature", "atteint"], ["Choix de la solution", "atteint"], ["Développement terminé", "a_venir", 25], ["Tests avec la DRH", "a_venir", 35], ["Mise en ligne", "a_venir"]],
     },
     {
       k: "AE", titre: "Système d'archivage électronique", strat: false, pm: "fm", sante: "dans_les_temps", statut: "continu",
@@ -277,6 +277,39 @@ await sql.begin(async (tx) => {
   await tache("sc", "OC", "Parcours d'ouverture de compte : maquettes", "en_cours", jour(8), [[2, "statut", "a_faire", "en_cours"]], null, { debut: jour(2), h: 12 });
   await tache("jd", "OC", "Pièces justificatives par type de client", "a_faire", jour(11), [], null, { debut: jour(8), h: 6 });
   await tache("wb", "OC", "Compte rendu du comité de suivi", "faite", jour(2), [[2, "statut", "a_faire", "faite"]], null, { h: 1 });
+
+  // ---------- Livrables : responsables et tâches rattachées ----------
+  // Chaque livrable a un responsable (il en détermine les tâches) ; certaines tâches restent hors livrable.
+  const livrable = async (pj, libelle, qui, titres = [], { pret = null } = {}) => {
+    const [l] = await tx`update indicateurs set responsable_id = ${P[qui]}${pret !== null ? tx`, pret_le = ${moment(pret, 15)}` : tx``} where projet_id = ${PJ[pj]} and libelle = ${libelle} returning id`;
+    if (!l) throw new Error(`Livrable introuvable : ${pj} · ${libelle}`);
+    if (titres.length) await tx`update taches set livrable_id = ${l.id} where projet_id = ${PJ[pj]} and titre = any(${titres})`;
+  };
+  await livrable("UR", "Audit de sécurité effectué et passé", "dj", ["Préparation de l'audit de sécurité", "Points 1 et 2 de l'audit de sécurité", "Point 3 de l'audit de sécurité", "Correctifs de sécurité (points 4 à 6)", "Contre-audit de sécurité (points 4 à 6)", "Date du nouveau passage d'audit", "Validation métier des correctifs de l'audit"]);
+  await livrable("UR", "Application développée", "re", ["Module de virements", "Tests du module de virements"]);
+  await livrable("UR", "Application mise en ligne", "re", ["Correctifs du module de virements", "Mise en ligne d'UNIBANKOnline Retail", "Ouvrir les flux du pare-feu pour l'environnement de test"]);
+  await livrable("UR", "Plan de lancement finalisé et approuvé", "mv");
+  await livrable("UR", "Plan de communication approuvé", "mv");
+  await livrable("CR", "Validation métier réalisée", "wb", ["Validation métier avec le Crédit", "Jeux de données de test", "Serveur de test", "Validation métier de Credos"]);
+  await livrable("CR", "Mise en production", "lp");
+  await livrable("CR", "Formation des utilisateurs", "wb", ["Rédaction des procédures Credos"]);
+  await livrable("PR", "Cahier des charges validé", "dj", ["Revue du cahier des charges avec la DRH", "Cahier des charges, version 1", "Signature de la DRH sur le cahier des charges"]);
+  await livrable("PR", "Maquettes du formulaire de candidature", "dj", ["Maquettes du formulaire de candidature"]);
+  await livrable("PR", "Développement terminé", "re", ["Environnement de développement", "Développement du formulaire de candidature"]);
+  await livrable("PR", "Tests avec la DRH", "dj", ["Démonstration à la DRH"]);
+  await livrable("CE", "Formations réalisées", "sc", ["Supports de formation du Réseau", "Sessions de formation du Réseau"]);
+  await livrable("CE", "Plan de communication défini", "wb");
+  await livrable("UN", "Intégration avec TMS", "lp", ["Accès de test DTI", "Point hebdomadaire avec la DTI"]);
+  await livrable("UN", "Migration des données existantes", "lp", ["Plan de migration des données", "Migration des contenus de l'intranet"]);
+  await livrable("UC", "Maquettes graphiques validées", "jn", ["Maquettes graphiques des écrans de paie"], { pret: -9 });
+  await livrable("UC", "Développement terminé", "jn", ["Spécifications du module de paie", "Spécifications des virements de masse", "Tests d'intégration du module de paie"]);
+  await livrable("OC", "Parcours client validé", "sc", ["Parcours d'ouverture de compte : maquettes"]);
+  await livrable("OC", "Pièces justificatives définies par type de client", "jd", ["Pièces justificatives par type de client"]);
+  await livrable("AE", "Archives physiques transférées", "fm", ["Transfert des archives du 2e étage", "Indexation des dossiers de crédit 2019", "Numérisation des registres"]);
+  // Un livrable validé garde qui l'a validé : le chef de projet.
+  await tx`update indicateurs i set valide_par_id = p.chef_projet_id, atteint_le = coalesce(i.atteint_le, ${jour(-30)}) from projets p where p.id = i.projet_id and i.etat = 'atteint'`;
+  // Notification : les maquettes de paie attendent la validation de Marc-Antoine.
+  await tx`insert into notifications (personne_id, type, texte, lien) values (${P.ml}, 'projet', ${"Jean-Robert Noël : « Maquettes graphiques validées » (UC) est prêt à valider"}, ${`/projets/${PJ.UC}#livrables`})`;
 
   // ---------- Tâches terminées des semaines passées (pour le bilan semaine sur semaine) ----------
   // Tirage déterministe : mêmes données à chaque semis.

@@ -6,7 +6,7 @@ import { aujourdhui, dateCourte, dateLocale, moisAnnee } from "@/lib/dates";
 import { portefeuille } from "@/lib/donnees/projets";
 import { demandesDeProjet } from "@/lib/donnees/gestion";
 import { peutDecider } from "@/lib/projets";
-import { Anneau, Bandeau } from "@/components/Bandeau";
+import { Anneau, Bandeau, LienChiffre } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { Chronologie } from "./Chronologie";
 import { Glissements, RepartitionSante } from "@/components/Graphiques";
@@ -28,7 +28,7 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
   // La santé est calculée : à jour à chaque ouverture du portefeuille.
   await recalculerSante();
   const [tous, nArchives, demandes] = await Promise.all([portefeuille(a, { archives }), archives ? Promise.resolve(null) : portefeuille(a, { archives: true }).then((l) => l.length), demandesDeProjet(a, await idsProjetsVisibles(a))]);
-  const projets = tous.filter((p) => filtre === "tous" || archives || (filtre === "strat" && p.strategique) || (filtre === "glisse" && p.glissementSemaines > 0));
+  const projets = tous.filter((p) => filtre === "tous" || archives || (filtre === "strat" && p.strategique) || (filtre === "glisse" && p.glissementSemaines > 0) || (filtre === "retard" && p.sante === "en_retard") || (filtre === "surveiller" && p.sante === "a_surveiller"));
   const decideur = peutDecider(a);
   const enAttente = demandes.filter((d) => d.statut === "requete");
   const miennes = demandes.filter((d) => d.demandeurId === u.id);
@@ -39,6 +39,7 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
     { id: "tous", libelle: `Tous · ${tous.length}` },
     { id: "strat", libelle: `Stratégiques · ${tous.filter((p) => p.strategique).length}` },
     { id: "glisse", libelle: `Date repoussée · ${tous.filter((p) => p.glissementSemaines > 0).length}` },
+    ...(tous.some((p) => p.sante === "en_retard") || filtre === "retard" ? [{ id: "retard", libelle: `En retard · ${tous.filter((p) => p.sante === "en_retard").length}` }] : []),
     ...(nArchives || archives ? [{ id: "archives", libelle: archives ? `Archivés · ${tous.length}` : `Archivés · ${nArchives}` }] : []),
   ];
 
@@ -51,15 +52,23 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
             <dd>{tous.length}</dd>
           </div>
           <div className="chiffre">
-            <dt>stratégiques</dt>
+            <dt>
+              <LienChiffre href="/projets?filtre=strat#liste-projets" detail="voir les projets stratégiques">
+                stratégiques
+              </LienChiffre>
+            </dt>
             <dd>{tous.filter((p) => p.strategique).length}</dd>
           </div>
           <div className="chiffre chiffre--retard">
-            <dt>en retard</dt>
+            <dt>
+              <LienChiffre href="/projets?filtre=retard#liste-projets" detail="voir les projets en retard">
+                en retard
+              </LienChiffre>
+            </dt>
             <dd>{tous.filter((p) => p.sante === "en_retard").length}</dd>
           </div>
           <div className="chiffre">
-            <dt>des indicateurs atteints</dt>
+            <dt>des livrables validés</dt>
             <dd>
               {totalInd ? Math.round((atteints / totalInd) * 100) : 0}
               <small>&nbsp;%</small>
@@ -68,7 +77,7 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
         </dl>
       </Bandeau>
       <div className="page">
-        <div className="ligne-actions">
+        <div className="ligne-actions" id="liste-projets" style={{ scrollMarginTop: 80 }}>
           <nav className="filtres" aria-label="Filtrer les projets">
             {filtres.map((f) => (
               <a key={f.id} className="filtre" href={`/projets?filtre=${f.id}${vue === "chronologie" ? "&vue=chronologie" : ""}`} aria-current={filtre === f.id ? "true" : undefined}>
@@ -184,7 +193,7 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
                   </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-                  <Anneau fait={p.atteints} total={p.totalIndicateurs} taille={84} label={`${p.atteints} indicateurs vérifiables atteints sur ${p.totalIndicateurs}`} />
+                  <Anneau fait={p.atteints} total={p.totalIndicateurs} taille={84} label={`${p.atteints} livrables validés sur ${p.totalIndicateurs}`} />
                   <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
                     <span className="carte__titre" style={{ margin: 0, fontSize: 10, lineHeight: "12px" }}>
                       Fin prévue

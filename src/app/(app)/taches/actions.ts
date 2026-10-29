@@ -127,6 +127,7 @@ export async function creerTache(_: EtatNouvelleTache, form: FormData): Promise<
     echeance: lireDate(form.get("echeance")),
     debut: lireDate(form.get("debut")),
     estimationHeures: lireHeures(form.get("estimationHeures")),
+    livrableId: String(form.get("livrableId") ?? "") || null,
   });
   if ("erreur" in r) return { message: r.erreur };
   revalidatePath("/", "layout");
@@ -251,6 +252,7 @@ export async function definirTache(_: EtatTache, form: FormData): Promise<EtatTa
     projetId: String(form.get("projetId") ?? "") || null,
     assigneId: String(form.get("assigneId") ?? "") || t.assigneId,
     nouvelExterne: nouvelExterne(form),
+    livrableId: form.has("livrableId") ? String(form.get("livrableId") ?? "") || null : undefined,
   });
   if ("erreur" in r) return { message: r.erreur };
   revalidatePath("/", "layout");

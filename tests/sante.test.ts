@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { calculerSante, signalActif, type DonneesSante } from "@/lib/sante";
 
 const AUJ = "2026-10-28";
-const base: DonneesSante = { statut: "en_cours", dateFinPrevue: "2027-03-31", jalons: [], taches: [], reports: [], risque: null };
+const base: DonneesSante = { statut: "en_cours", dateFinPrevue: "2027-03-31", livrables: [], taches: [], reports: [], risque: null };
 const t = (o: Partial<DonneesSante["taches"][number]> = {}) => ({ statut: "a_faire", echeance: null, creeLe: "2026-10-20", termineeLe: null, bloqueeDepuis: null, ...o });
 
 describe("santé calculée d'un projet", () => {
@@ -15,10 +15,13 @@ describe("santé calculée d'un projet", () => {
     expect(r.sante).toBe("en_retard");
     expect(r.raisons[0]).toBe("Fin prévue dépassée (15 oct.)");
   });
-  it("jalons : à surveiller dès la date passée, en retard au-delà de 30 jours ; un jalon atteint ne compte pas", () => {
-    expect(calculerSante({ ...base, jalons: [{ prevuLe: "2026-10-20", atteint: false }] }, AUJ)).toEqual({ sante: "a_surveiller", raisons: ["1 jalon en retard"] });
-    expect(calculerSante({ ...base, jalons: [{ prevuLe: "2026-09-01", atteint: false }, { prevuLe: "2026-10-01", atteint: false }] }, AUJ)).toEqual({ sante: "en_retard", raisons: ["1 jalon en retard de plus de 30 jours"] });
-    expect(calculerSante({ ...base, jalons: [{ prevuLe: "2026-09-01", atteint: true }] }, AUJ).sante).toBe("dans_les_temps");
+  it("livrables : à surveiller dès la date passée, en retard au-delà de 30 jours ; un livrable prêt ou validé ne compte pas", () => {
+    expect(calculerSante({ ...base, livrables: [{ prevuLe: "2026-10-20", atteint: false }] }, AUJ)).toEqual({ sante: "a_surveiller", raisons: ["1 livrable en retard"] });
+    expect(calculerSante({ ...base, livrables: [{ prevuLe: "2026-09-01", atteint: false }, { prevuLe: "2026-10-01", atteint: false }] }, AUJ)).toEqual({ sante: "en_retard", raisons: ["1 livrable en retard de plus de 30 jours"] });
+    expect(calculerSante({ ...base, livrables: [{ prevuLe: "2026-09-01", atteint: true }] }, AUJ).sante).toBe("dans_les_temps");
+    // Des tâches prévues après la date d'un livrable à venir : il prendra du retard.
+    expect(calculerSante({ ...base, livrables: [{ prevuLe: "2026-11-15", atteint: false, tachesApres: 2 }] }, AUJ)).toEqual({ sante: "a_surveiller", raisons: ["2 tâches prévues après la date de son livrable"] });
+    expect(calculerSante({ ...base, livrables: [{ prevuLe: "2026-11-15", atteint: true, tachesApres: 2 }] }, AUJ).sante).toBe("dans_les_temps");
   });
   it("tâches : en retard au-delà d'un quart (3 au moins) ; à surveiller pour une tâche en retard de plus d'une semaine", () => {
     const quatre = [t({ echeance: "2026-10-27" }), t({ echeance: "2026-10-26" }), t({ echeance: "2026-10-25" }), t({ echeance: "2026-11-30" }), t({ echeance: "2026-12-01" }), t({ echeance: "2026-12-02" })];

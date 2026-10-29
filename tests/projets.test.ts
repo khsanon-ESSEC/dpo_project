@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleNom, codeSuggere, codeValide, dureeTexte, dureeValide, peutAssigner, peutDecider, peutGererProjet, projetOuvert, projetSupprimable, responsableId, separerNom, tacheSupprimable, verifierChefEtReferent, type Acteur } from "@/lib/projets";
+import { apresLeLivrable, cleNom, codeSuggere, codeValide, dureeTexte, dureeValide, etatAffiche, peutAssigner, peutDeclarerPret, peutDecider, peutGererProjet, projetOuvert, projetSupprimable, responsableId, separerNom, tacheSupprimable, verifierChefEtReferent, type Acteur } from "@/lib/projets";
 
 const chef: Acteur = { moiId: "chef", suivis: new Set(["chef", "a", "b"]), projetsDiriges: new Set(["P1"]), directeur: false, toutVoir: false };
 const employe: Acteur = { moiId: "e", suivis: new Set(["e"]), projetsDiriges: new Set(), directeur: false, toutVoir: false };
@@ -41,6 +41,35 @@ describe("qui confie une tâche à qui", () => {
     expect(peutAssigner(chef, "m", P2)).toBe(false);
     expect(peutAssigner(chef, "m", null)).toBe(false);
     expect(peutAssigner(chef, "inconnu", P1)).toBe(false);
+  });
+  it("le responsable d'un livrable confie les tâches de son livrable à l'équipe du projet, pas au-delà", () => {
+    const L = { projetId: "P1", responsableId: "e" };
+    expect(peutAssigner(employe, "m", P1, false, L)).toBe(true);
+    expect(peutAssigner(employe, "chef", P1, false, L)).toBe(true);
+    expect(peutAssigner(employe, "m", P1, true, L)).toBe(true); // membre hors division de l'équipe
+    expect(peutAssigner(employe, "a", P1, false, L)).toBe(false); // pas dans l'équipe
+    expect(peutAssigner(employe, "m", P1)).toBe(false); // sans le livrable
+    expect(peutAssigner(employe, "m", P2, false, L)).toBe(false); // livrable d'un autre projet
+    expect(peutAssigner(employe, "m", P1, false, { projetId: "P1", responsableId: "autre" })).toBe(false);
+  });
+});
+
+describe("livrables", () => {
+  it("son responsable (ou qui gère le projet) le déclare prêt, une seule fois", () => {
+    expect(peutDeclarerPret("e", { responsableId: "e", etat: "en_cours" }, false)).toBe(true);
+    expect(peutDeclarerPret("z", { responsableId: "e", etat: "en_cours" }, false)).toBe(false);
+    expect(peutDeclarerPret("chef", { responsableId: "e", etat: "a_venir" }, true)).toBe(true);
+    expect(peutDeclarerPret("e", { responsableId: "e", etat: "pret" }, false)).toBe(false);
+    expect(peutDeclarerPret("e", { responsableId: "e", etat: "atteint" }, true)).toBe(false);
+  });
+  it("« à venir » devient « en cours » dès qu'une tâche a commencé ; une tâche ouverte après la date est signalée", () => {
+    expect(etatAffiche("a_venir", [{ statut: "a_faire" }])).toBe("a_venir");
+    expect(etatAffiche("a_venir", [{ statut: "a_faire" }, { statut: "faite" }])).toBe("en_cours");
+    expect(etatAffiche("pret", [{ statut: "a_faire" }])).toBe("pret");
+    expect(apresLeLivrable({ statut: "a_faire", echeance: "2026-11-20" }, "2026-11-15")).toBe(true);
+    expect(apresLeLivrable({ statut: "faite", echeance: "2026-11-20" }, "2026-11-15")).toBe(false);
+    expect(apresLeLivrable({ statut: "a_faire", echeance: "2026-11-10" }, "2026-11-15")).toBe(false);
+    expect(apresLeLivrable({ statut: "a_faire", echeance: "2026-11-20" }, null)).toBe(false);
   });
 });
 
@@ -140,5 +169,18 @@ describe("personnes hors division et projets d'autres divisions", () => {
     expect(separerNom("Jonas")).toEqual({ prenom: "Jonas", nom: "" });
     expect(separerNom("   ")).toBeNull();
     expect(cleNom("Nathalie CÉLESTIN")).toBe(cleNom("nathalie  celestin"));
+  });
+});
+
+describe("page de retour après une action", () => {
+  it("seulement des pages de l'application, avec au plus une ancre", async () => {
+    const { retourValide } = await import("@/lib/retour");
+    const id = "0b9d9f3e-1c2a-4b5c-8d7e-0123456789ab";
+    expect(retourValide(`/projets/${id}#livrable-${id}`)).toBe(`/projets/${id}#livrable-${id}`);
+    expect(retourValide("/a-faire")).toBe("/a-faire");
+    expect(retourValide("//exemple.com")).toBeNull();
+    expect(retourValide(`/projets/${id}#"><script>`)).toBeNull();
+    expect(retourValide(`/projets/${id}?x=1`)).toBeNull();
+    expect(retourValide("https://exemple.com/semaine")).toBeNull();
   });
 });

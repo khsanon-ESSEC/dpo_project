@@ -10,7 +10,7 @@ import { SaisieLigne, type PersonneLigne } from "@/components/SaisieLigne";
  * Mettre à jour une tâche ou un projet en une ligne, depuis sa fiche, comme avec la barre : la tâche ou le projet
  * est déjà choisi. Tâche : « faite », « bloquée attente de la DTI », « vendredi », « 3h », « relancer », « @ » ou
  * « pour Fabienne » pour la confier. Projet (chef de projet) : « à surveiller : retard du prestataire »,
- * « jalon validation métier 15/11 », « fin prévue 20/12 ». Même action serveur que la barre, avec « Annuler » ensuite.
+ * « livrable validation métier 15/11 », « fin prévue 20/12 ». Même action serveur que la barre, avec « Annuler » ensuite.
  * Le formulaire complet reste dessous pour le détail.
  */
 export function LigneMiseAJour({

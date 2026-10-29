@@ -6,6 +6,8 @@ import { acces, exigerProjetVisible } from "@/lib/acces";
 import { exigerInterne, exigerUtilisateur } from "@/lib/auth/session";
 import {
   ajouterIndicateur,
+  ajouterLivrable,
+  modifierLivrable,
   ajouterMembre,
   archiverProjet,
   changerRoleMembre,
@@ -127,7 +129,30 @@ export async function supprimer(projetId: string, form: FormData) {
   redirect("/projets?supprime=1");
 }
 
-// ---------- Indicateurs ----------
+// ---------- Livrables ----------
+
+const donneesLivrable = (form: FormData) => ({
+  libelle: String(form.get("libelle") ?? ""),
+  prevuLe: String(form.get("prevuLe") ?? "") || null,
+  responsableId: UUID.test(String(form.get("responsableId") ?? "")) ? String(form.get("responsableId")) : null,
+  critere: String(form.get("critere") ?? ""),
+});
+
+export async function nouveauLivrable(projetId: string, form: FormData) {
+  const { u } = await exigerGestion(projetId);
+  const r = await ajouterLivrable(projetId, donneesLivrable(form), u.id);
+  revalider(projetId);
+  if ("erreur" in r) redirect(`/projets/${projetId}/modifier?erreur=${encodeURIComponent(r.erreur)}#livrables`);
+  redirect(`/projets/${projetId}/modifier?livrable=ajoute#livrables`);
+}
+
+export async function enregistrerLivrable(projetId: string, livrableId: string, form: FormData) {
+  const { u } = await exigerGestion(projetId);
+  const r = await modifierLivrable(projetId, livrableId, donneesLivrable(form), u.id);
+  revalider(projetId);
+  if ("erreur" in r) redirect(`/projets/${projetId}/modifier?erreur=${encodeURIComponent(r.erreur)}#livrable-${livrableId}`);
+  redirect(`/projets/${projetId}/modifier?livrable=enregistre#livrable-${livrableId}`);
+}
 
 export async function nouvelIndicateur(projetId: string, form: FormData) {
   const { u } = await exigerGestion(projetId);

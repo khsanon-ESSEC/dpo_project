@@ -75,17 +75,31 @@ export async function monEquipe(a: Acces) {
         .orderBy(asc(schema.taches.majLe))
     : [];
 
-  const charge = new Map<string, { id: string; titre: string; n: number }>();
+  // Par projet : les tâches encore ouvertes de ces personnes (toutes échéances) et celles faites cette semaine.
+  const charge = new Map<string, { id: string; code: string; titre: string; n: number; faites: number }>();
   for (const t of taches)
-    if (t.statut !== "faite" && t.projetId && t.projetTitre) {
-      const c = charge.get(t.projetId) ?? { id: t.projetId, titre: t.projetTitre, n: 0 };
-      c.n += 1;
+    if (t.projetId && t.projetTitre) {
+      const c = charge.get(t.projetId) ?? { id: t.projetId, code: t.projetCode ?? "", titre: t.projetTitre, n: 0, faites: 0 };
+      if (t.statut === "faite") c.faites += 1;
+      else c.n += 1;
       charge.set(t.projetId, c);
     }
+
+  // Les tâches derrière les chiffres du bandeau : en retard (ouvertes, échéance passée, pas bloquées) et faites cette semaine.
+  const nomDe = (id: string) => {
+    const x = org.personnes.get(id);
+    return x ? nomComplet(x) : "?";
+  };
+  const enLigne = (t: (typeof taches)[number]) => ({ id: t.id, titre: t.titre, statut: t.statut, echeance: t.echeance, termineeLe: t.termineeLe, assigneId: t.assigneId, qui: nomDe(t.assigneId), projetId: t.projetId, projetCode: t.projetCode, projetTitre: t.projetTitre });
+  const listes = {
+    retard: taches.filter((t) => t.statut !== "faite" && t.statut !== "bloquee" && t.echeance !== null && t.echeance < jour).sort((x, y) => x.echeance!.localeCompare(y.echeance!)).map(enLigne),
+    faites: taches.filter((t) => t.statut === "faite").sort((x, y) => (y.termineeLe?.getTime() ?? 0) - (x.termineeLe?.getTime() ?? 0)).map(enLigne),
+  };
 
   return {
     semaine,
     toute,
+    listes,
     personnes,
     groupes,
     recus: personnes.filter((p) => p.rapport).length,
@@ -98,7 +112,7 @@ export async function monEquipe(a: Acces) {
       faites: personnes.reduce((s, p) => s + p.faites, 0),
     },
     blocages: bloquees.map((b) => ({ ...b, qui: nomComplet(org.personnes.get(b.assigneId)!), depuis: dateLocale(b.majLe) })),
-    charge: [...charge.values()].sort((x, y) => y.n - x.n).slice(0, 8),
+    charge: [...charge.values()].filter((c) => c.n > 0).sort((x, y) => y.n - x.n || y.faites - x.faites).slice(0, 8),
   };
 }
 

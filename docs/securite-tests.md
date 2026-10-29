@@ -240,6 +240,13 @@ Nouvelles lectures de données, vérifiées à la lecture du code et par des tes
 - **Rôles proposés** : à qui gère un projet, la saisie du rôle propose les rôles déjà donnés dans toutes les équipes projet (« Développeur », « Analyste fonctionnel »), sans nom de personne ni de projet. **[Faible]** C'est un choix : ces libellés ne disent rien de qui fait quoi. **[déduction]**
 - **Listes où l'on tape** : elles proposent les mêmes personnes qu'avant et envoient le même identifiant ; tous les contrôles restent côté serveur (qui peut être chef, recevoir une tâche, entrer dans une équipe). Taper un nom ne fait aucune recherche au serveur. **[déduction]**
 
+## Livrables et chiffres cliquables (28 octobre 2026, nuit)
+
+- **Délégation par livrable** : la règle d'assignation (`peutAssigner`, src/lib/projets.ts) s'élargit d'un seul cas : le responsable d'un livrable confie une tâche **rattachée à ce livrable** à l'équipe du projet (chef, référent, membres). Rien d'autre ne change : sans le livrable, ou hors de l'équipe, c'est refusé ; une nouvelle fiche hors division reste réservée au chef du projet. Le livrable choisi doit appartenir au projet de la tâche (contrôle serveur). **[vérifié par tests]**
+- **Valider, renvoyer, rouvrir** : réservés à qui gère le projet ; « prêt à valider » au responsable et à qui gère le projet ; l'action vérifie aussi que le livrable est bien celui du projet de l'adresse. **[vérifié par tests]**
+- **Page de retour** : `retourValide` accepte désormais une ancre sur la page (`#livrable-…`, lettres, chiffres et tirets seulement) ; toujours aucune adresse externe ni paramètre. **[vérifié par tests]**
+- **Listes derrière les chiffres** (Équipe : tâches en retard, faites cette semaine) : mêmes personnes que la page (celles qu'on suit) ; un projet qu'on ne voit pas reste en texte, sans lien. **[déduction]**
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.

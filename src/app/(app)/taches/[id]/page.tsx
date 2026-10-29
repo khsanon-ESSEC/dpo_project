@@ -16,8 +16,9 @@ import { FormulaireTache } from "./FormulaireTache";
 import { DefinitionTache } from "./DefinitionTache";
 import { LigneMiseAJour } from "@/components/LigneMiseAJour";
 import { assignables, histoireDeTache } from "@/lib/donnees/gestion";
+import { choixDeLivrables } from "@/lib/donnees/livrables";
 import { tousLesProjetsActifs } from "@/lib/donnees/projets";
-import { tacheSupprimable } from "@/lib/projets";
+import { tacheSupprimable, apresLeLivrable } from "@/lib/projets";
 import { annuler, retablir, supprimer } from "../actions";
 
 export const metadata: Metadata = { title: "Tâche" };
@@ -38,13 +39,19 @@ export default async function PageTache({ params, searchParams }: { params: Prom
   const visibles = await idsProjetsVisibles(a);
   const projets = (await tousLesProjetsActifs()).filter((x) => visibles === "tous" || visibles.has(x.id) || x.id === t.projetId);
   if (projet && !projets.some((x) => x.id === projet.id)) projets.unshift({ id: projet.id, code: projet.code, titre: projet.titre });
-  const { personnes, base, parProjet, externesPartout, horsProjet } = await assignables(a);
+  const { personnes, base, parProjet, parLivrable, externesPartout, horsProjet } = await assignables(a);
+  // Livrables : celui de la tâche (s'il y en a un), et ceux de chaque projet pour la changer de livrable.
+  const choixLivrables = await choixDeLivrables(projets.map((x) => x.id));
+  const livrables = Object.fromEntries(Object.entries(choixLivrables).map(([k, l]) => [k, l.filter((x) => x.etat !== "atteint" || x.id === t.livrableId).map((x) => ({ id: x.id, libelle: x.libelle, prevuLe: x.prevuLe }))]));
+  const leLivrable = t.livrableId && t.projetId ? (choixLivrables[t.projetId] ?? []).find((x) => x.id === t.livrableId) : undefined;
+  const responsableLivrable = leLivrable?.responsableId ? org.personnes.get(leLivrable.responsableId) : undefined;
+  const apresLivrable = !!leLivrable && apresLeLivrable(t, leLivrable.prevuLe);
   const actuel = org.personnes.get(t.assigneId)!;
   if (!personnes.some((x) => x.id === t.assigneId)) personnes.push({ id: t.assigneId, nom: nomComplet(actuel), externe: actuel.externe, organisation: actuel.organisation });
   // « @ » ou « pour … » dans la ligne de mise à jour : les personnes à qui l'on peut confier cette tâche
   // (mêmes règles que « Confiée à » plus bas ; le serveur les vérifie de nouveau).
   const modifiable = peutModifierTache(a, t);
-  const permisLigne = new Set([...base, ...(parProjet[t.projetId ?? ""] ?? [])]);
+  const permisLigne = new Set([...base, ...(parProjet[t.projetId ?? ""] ?? []), ...(parLivrable[t.livrableId ?? ""] ?? [])]);
   const externesLigne = externesPartout || (!t.projetId && horsProjet) || (!!t.projetId && t.projetId in parProjet);
   const personnesLigne = personnes.filter((x) => permisLigne.has(x.id) || (x.externe && externesLigne));
   const supprimable = tacheSupprimable({ statut: t.statut, ...(await histoireDeTache(t.id)) });
@@ -63,6 +70,10 @@ export default async function PageTache({ params, searchParams }: { params: Prom
     if (ev.type === "echeance") return `Échéance déplacée au ${dateCourte(ev.apres)}`;
     if (ev.type === "titre") return `Renommée : « ${ev.apres} »`;
     if (ev.type === "projet") return "Projet changé";
+    if (ev.type === "livrable") {
+      const l = ev.apres ? Object.values(choixLivrables).flat().find((x) => x.id === ev.apres) : null;
+      return ev.apres ? `Rattachée au livrable${l ? ` « ${l.libelle} »` : ""}` : "Retirée de son livrable";
+    }
     if (ev.type === "assignation") return `Confiée à ${ev.note ?? "une autre personne"}`;
     if (ev.type === "annulation") return `Annulée : ${ev.note ?? ""}`;
     if (ev.type === "retablie") return "Rétablie";
@@ -117,6 +128,25 @@ export default async function PageTache({ params, searchParams }: { params: Prom
         </dl>
       </Bandeau>
       <div className="page" style={{ maxWidth: 760 }}>
+        {leLivrable ? (
+          <p className={`note-livrable${apresLivrable ? " note-livrable--apres" : ""}`}>
+            <Icone nom="drapeau" taille={16} />
+            <span>
+              Mène au livrable{" "}
+              <a href={`/projets/${t.projetId}#livrable-${leLivrable.id}`} className="lien-discret">
+                « {leLivrable.libelle} »
+              </a>
+              {leLivrable.prevuLe ? `, prévu le ${dateCourte(leLivrable.prevuLe)}` : ""}
+              {responsableLivrable ? (
+                <>
+                  {" "}
+                  · responsable <LienPersonne id={responsableLivrable.id}>{nomComplet(responsableLivrable)}</LienPersonne>
+                </>
+              ) : null}
+              {apresLivrable ? <strong> · l&apos;échéance de la tâche tombe après : le livrable prendra du retard.</strong> : null}
+            </span>
+          </p>
+        ) : null}
         {reunion ? (
           <p className="note" style={{ margin: 0 }}>
             Action décidée en réunion :{" "}
@@ -188,6 +218,9 @@ export default async function PageTache({ params, searchParams }: { params: Prom
             titre={t.titre}
             description={t.description}
             projetId={t.projetId ?? ""}
+            livrableId={t.livrableId ?? ""}
+            livrables={livrables}
+            parLivrable={parLivrable}
             assigneId={t.assigneId}
             projets={projets}
             personnes={personnes}

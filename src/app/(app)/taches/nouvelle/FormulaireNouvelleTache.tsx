@@ -20,6 +20,9 @@ export function FormulaireNouvelleTache({
   personnes,
   base,
   parProjet,
+  parLivrable = {},
+  livrables = {},
+  livrableParDefaut = "",
   externesPartout,
   horsProjet = true,
   indications,
@@ -34,6 +37,11 @@ export function FormulaireNouvelleTache({
   base: string[];
   /** Pour chaque projet qu'on dirige : son équipe, à qui on peut aussi confier ses tâches. */
   parProjet: Record<string, string[]>;
+  /** Pour chaque livrable dont on est responsable : l'équipe du projet, à qui on peut confier ses tâches. */
+  parLivrable?: Record<string, string[]>;
+  /** Les livrables de chaque projet (pas encore validés). */
+  livrables?: Record<string, { id: string; libelle: string; prevuLe: string | null }[]>;
+  livrableParDefaut?: string;
   /** Direction et exécutifs : personnes hors division sur tous les projets. */
   externesPartout: boolean;
   /** Hors projet, peut-on choisir une personne hors division ? (Non pour un accès limité.) */
@@ -48,6 +56,7 @@ export function FormulaireNouvelleTache({
   const [pour, setPour] = useState(pourParDefaut || personnes[0]?.id || "");
   const [echeance, setEcheance] = useState("");
   const [projet, setProjet] = useState(projetParDefaut);
+  const [livrable, setLivrable] = useState(livrableParDefaut);
   const [heures, setHeures] = useState("");
   const [pret, setPret] = useState(false);
   // Ce que la phrase du titre a rempli : si elle cesse de le dire, le champ revient à sa valeur d'avant
@@ -71,8 +80,12 @@ export function FormulaireNouvelleTache({
     appliquer("echeance", v.echeance, setEcheance, "");
     appliquer("heures", v.heures ? String(v.heures) : null, setHeures, "");
   };
-  const permis = new Set([...base, ...(parProjet[projet] ?? [])]);
+  const livrablesDuProjet = livrables[projet] ?? [];
+  const livrableValide = livrablesDuProjet.some((l) => l.id === livrable) ? livrable : "";
+  const leLivrable = livrablesDuProjet.find((l) => l.id === livrableValide);
+  const permis = new Set([...base, ...(parProjet[projet] ?? []), ...(parLivrable[livrableValide] ?? [])]);
   const externesPermis = externesPermisPour(projet, parProjet, externesPartout, horsProjet);
+  const apres = !!leLivrable?.prevuLe && !!echeance && echeance > leLivrable.prevuLe;
   const choix = personnes.filter((p) => permis.has(p.id) || (p.externe && externesPermis));
   const pourValide = pour === NOUVELLE_PERSONNE && externesPermis ? pour : choix.some((p) => p.id === pour) ? pour : (choix[0]?.id ?? "");
 
@@ -126,6 +139,23 @@ export function FormulaireNouvelleTache({
           ))}
         </select>
       </div>
+      {livrablesDuProjet.length ? (
+        <div className="champ">
+          <label htmlFor="livrableId">Livrable</label>
+          <select id="livrableId" name="livrableId" value={livrableValide} onChange={(e) => setLivrable(e.target.value)} aria-describedby="livrableId-aide">
+            <option value="">Aucun (tâche hors livrable)</option>
+            {livrablesDuProjet.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.libelle}
+                {l.prevuLe ? ` · prévu le ${dateCourte(l.prevuLe)}` : ""}
+              </option>
+            ))}
+          </select>
+          <span className="aide" id="livrableId-aide">
+            Le livrable auquel cette tâche mène.
+          </span>
+        </div>
+      ) : null}
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <ChoixPour id="assigneId" personnes={personnes} permis={permis} externesPermis={externesPermis} valeur={pourValide} onChange={setPour} />
         {ind && n ? (
@@ -150,7 +180,12 @@ export function FormulaireNouvelleTache({
         </div>
         <div className="champ" style={{ flex: "1 1 160px" }}>
           <label htmlFor="echeance">Échéance</label>
-          <input id="echeance" name="echeance" type="date" value={echeance} onChange={(e) => setEcheance(e.target.value)} />
+          <input id="echeance" name="echeance" type="date" value={echeance} onChange={(e) => setEcheance(e.target.value)} aria-describedby={apres ? "echeance-apres" : undefined} />
+          {apres && leLivrable?.prevuLe ? (
+            <span className="aide ton-veille" id="echeance-apres" role="status">
+              Après la date du livrable ({dateCourte(leLivrable.prevuLe)}) : il prendra du retard.
+            </span>
+          ) : null}
         </div>
         <div className="champ" style={{ flex: "1 1 140px" }}>
           <label htmlFor="estimationHeures">Temps estimé (heures)</label>

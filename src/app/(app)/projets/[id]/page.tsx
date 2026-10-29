@@ -10,16 +10,17 @@ import { nomComplet } from "@/lib/regles";
 import { LigneMiseAJour } from "@/components/LigneMiseAJour";
 import { DocumentsProjet } from "./Documents";
 import { documentsDuProjet, peutDeposerDocument } from "@/lib/donnees/documents";
-import { LIBELLE_STATUT_PROJET, peutDecider, peutGererProjet, STATUTS_ACCEPTES } from "@/lib/projets";
+import { LIBELLE_ETAT_LIVRABLE, LIBELLE_STATUT_PROJET, peutDecider, peutDeclarerPret, peutGererProjet, STATUTS_ACCEPTES } from "@/lib/projets";
 import { ajouter, archiver, decider, retirer } from "../gestion-actions";
 import { lignesDuProjetCetteSemaine } from "@/lib/donnees/rapport";
-import { Anneau, Bandeau } from "@/components/Bandeau";
+import { Anneau, Bandeau, LienChiffre } from "@/components/Bandeau";
 import { CocheSeule } from "@/components/CaseTache";
 import { Icone } from "@/components/Icone";
 import { LienPersonne } from "@/components/Liens";
 import { ChoixPersonne } from "@/components/ChoixPersonne";
 import { ListeFiltrable } from "@/components/ListeFiltrable";
-import { changerIndicateur, mettreAJourProjet, signalerUnRisque } from "./actions";
+import { agirLivrable, mettreAJourProjet, signalerUnRisque } from "./actions";
+import { livrablesDuProjet } from "@/lib/donnees/livrables";
 import { recalculerSante } from "@/lib/donnees/sante";
 import { signalActif } from "@/lib/sante";
 import { OngletsVues } from "./commun";
@@ -39,11 +40,11 @@ const SANTE = {
   a_surveiller: { texte: "À surveiller", classe: "ton-veille" },
   dans_les_temps: { texte: "Dans les temps", classe: "ton-ok" },
 } as const;
-const ETAT_IND = { atteint: "Atteint", en_cours: "En cours", a_venir: "À venir" } as const;
 
-export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string }> }) {
+export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string }> }) {
   const { id } = await params;
-  const { propose, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement } = await searchParams;
+  const { propose, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut } = await searchParams;
+  const livrableFait = livrableBrut === "pret" || livrableBrut === "valider" || livrableBrut === "renvoyer" || livrableBrut === "rouvrir" ? livrableBrut : null;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
   const a = await acces(u);
@@ -77,7 +78,9 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const nomsDeposants = new Map(documents.filter((d) => d.deposeParId).map((d) => [d.deposeParId!, nom(d.deposeParId) ?? "—"]));
   const rapports = auteurs ? await lignesDuProjetCetteSemaine(id, auteurs) : null;
   const jour = aujourdhui();
-  const atteints = f.indicateurs.filter((i) => i.etat === "atteint").length;
+  const lv = await livrablesDuProjet(id, jour);
+  const valides = lv.livrables.filter((l) => l.etat === "atteint").length;
+  const lvMessage = livrableFait ? { pret: "Livrable déclaré prêt à valider : le chef de projet est prévenu.", valider: "Livrable validé : son responsable est prévenu.", renvoyer: "Livrable renvoyé à reprendre : son responsable est prévenu.", rouvrir: "Livrable rouvert." }[livrableFait] : null;
   // Avancement sur la période choisie (le même sélecteur que le bilan), comparé à la période d'avant.
   const debutExercice = moisDebutExercice(process.env.EXERCICE_DEBUT_MOIS);
   const planAv = planBilan(vueAvancement ?? (await periodePreferee("semaine")), pAvancement, jour, debutExercice);
@@ -97,6 +100,149 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
     { libelle: "Lancement prévu", date: p.dateLancementPrevue },
   ];
 
+  // Un livrable de la fiche (l'ordre du chef de projet ; les validés à la fin, repliés).
+  const rendreLivrable = (l: (typeof lv.livrables)[number]) => {
+    const gere = peutModifier && actif;
+    const responsable = l.responsableId === u.id;
+    const peutPret = actif && peutDeclarerPret(u.id, l, gere);
+    const pct = l.compte.total ? Math.round((l.compte.faites / l.compte.total) * 100) : 0;
+    return (
+      <li key={l.id} id={`livrable-${l.id}`} className={`livrable livrable--${l.affiche}${l.enRetard ? " livrable--retard" : ""}`}>
+        <div className="livrable__tete">
+          <span className={`livrable__etat livrable__etat--${l.affiche}`} role="img" aria-label={LIBELLE_ETAT_LIVRABLE[l.affiche]}>
+            {l.affiche === "atteint" ? <CocheSeule /> : null}
+          </span>
+          <span className="livrable__texte">
+            <span className="livrable__nom">{l.libelle}</span>
+            <span className="livrable__sous">
+              {l.responsableId ? (
+                <>
+                  <LienPersonne id={l.responsableId}>{l.responsable}</LienPersonne>
+                  {" · "}
+                </>
+              ) : l.etat !== "atteint" ? (
+                <>
+                  <span className="ton-veille">sans responsable</span>
+                  {" · "}
+                </>
+              ) : null}
+              {l.etat === "atteint" ? null : (
+                <>
+                  {l.prevuLe ? <span className={l.enRetard ? "ton-retard" : undefined}>{l.enRetard ? "en retard, prévu le " : "prévu le "}{dateCourte(l.prevuLe)}</span> : "sans date"}
+                  {" · "}
+                </>
+              )}
+              <span className={l.affiche === "pret" ? "ton-veille" : l.affiche === "atteint" ? "ton-ok" : undefined}>
+                {l.affiche === "atteint" && l.atteintLe ? `validé le ${dateCourte(l.atteintLe)}${l.validePar ? ` par ${l.validePar}` : ""}` : l.affiche === "pret" && l.pretLe ? `prêt à valider depuis le ${dateCourte(l.pretLe)}` : LIBELLE_ETAT_LIVRABLE[l.affiche].toLowerCase()}
+              </span>
+            </span>
+          </span>
+          {l.etat === "atteint" && !l.compte.total ? null : (
+            <span className="livrable__avancement" role="img" aria-label={l.compte.total ? `${l.compte.faites} tâches faites sur ${l.compte.total}` : "Aucune tâche"}>
+              <span className="livrable__piste">
+                <span className="livrable__rempli" style={{ width: `${pct}%` }} />
+              </span>
+              <span className="livrable__chiffre">{l.compte.total ? `${l.compte.faites}/${l.compte.total}` : "0 tâche"}</span>
+            </span>
+          )}
+        </div>
+        {l.critere ? <p className="livrable__critere">Validé quand : {l.critere}</p> : null}
+        {l.remarque && l.etat !== "atteint" ? (
+          <p className="livrable__alerte livrable__alerte--retour">
+            À reprendre : {l.remarque}
+          </p>
+        ) : null}
+        {l.compte.apres ? (
+          <p className="livrable__alerte">
+            {l.compte.apres} tâche{l.compte.apres > 1 ? "s" : ""} prévue{l.compte.apres > 1 ? "s" : ""} après le {dateCourte(l.prevuLe!)} : le livrable prendra du retard.
+          </p>
+        ) : null}
+        {!l.compte.total && l.etat !== "atteint" ? (
+          <p className="livrable__alerte livrable__alerte--discret">{responsable ? "À vous de déterminer les tâches qui y mènent." : `Pas encore de tâche : ${l.responsable ? `${l.responsable} les détermine` : "nommez un responsable"}.`}</p>
+        ) : null}
+        {l.taches.length ? (
+          <details className="livrable__taches" open={responsable && l.etat !== "atteint" ? true : undefined}>
+            <summary>
+              {l.compte.total} tâche{l.compte.total > 1 ? "s" : ""}
+              {l.compte.retard ? <span className="ton-retard"> · {l.compte.retard} en retard</span> : null}
+              {l.compte.bloquees ? <span className="ton-veille"> · {l.compte.bloquees} bloquée{l.compte.bloquees > 1 ? "s" : ""}</span> : null}
+            </summary>
+            <ul className="liste">
+              {l.taches.map((t) => {
+                const e = echeanceRelative(t.echeance, jour);
+                return (
+                  <li key={t.id}>
+                    <a href={`/taches/${t.id}?retour=${encodeURIComponent(`/projets/${p.id}`)}`} className="rangee">
+                      <span className="mono mono--petit" aria-hidden="true">
+                        {t.initiales}
+                      </span>
+                      <span className="rangee__texte">
+                        <span className={`rangee__titre${t.statut === "faite" ? " rangee__titre--faite" : ""}`}>{t.titre}</span>
+                        <span className="rangee__sous">
+                          {t.nom}
+                          {t.apres ? <span className="ton-veille"> · après la date du livrable</span> : null}
+                        </span>
+                      </span>
+                      <span className={`rangee__meta ${t.statut === "bloquee" ? "ton-veille" : t.retard ? "ton-retard" : ""}`}>
+                        {t.statut === "faite" ? "Faite" : t.statut === "bloquee" ? "Bloquée" : e.texte || "Sans échéance"}
+                      </span>
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        ) : null}
+        {actif && (responsable || gere || peutPret) && l.etat !== "atteint" ? (
+          <div className="livrable__actions">
+            {responsable || gere ? (
+              <a href={`/taches/nouvelle?projet=${p.id}&livrable=${l.id}&retour=${encodeURIComponent(`/projets/${p.id}#livrable-${l.id}`)}`} className="bouton-mini">
+                <Icone nom="ajouter" taille={14} /> Ajouter une tâche
+              </a>
+            ) : null}
+            {peutPret ? (
+              <form action={agirLivrable.bind(null, p.id, l.id, "pret")}>
+                <button type="submit" className="bouton-mini">
+                  <Icone nom="drapeau" taille={14} /> Déclarer prêt à valider
+                </button>
+              </form>
+            ) : null}
+            {gere && l.etat === "pret" ? (
+              <>
+                <form action={agirLivrable.bind(null, p.id, l.id, "valider")}>
+                  <button type="submit" className="bouton-mini bouton-mini--fort">
+                    <Icone nom="coche" taille={14} /> Valider
+                  </button>
+                </form>
+                <details className="livrable__renvoi">
+                  <summary className="bouton-mini">Renvoyer à reprendre</summary>
+                  <form action={agirLivrable.bind(null, p.id, l.id, "renvoyer")} className="livrable__renvoi-form">
+                    <label htmlFor={`renvoi-${l.id}`}>Ce qui reste à reprendre</label>
+                    <input id={`renvoi-${l.id}`} name="remarque" required maxLength={500} placeholder="Ex. : manque la signature de la DRH" />
+                    <button type="submit" className="bouton-contour">
+                      Renvoyer
+                    </button>
+                  </form>
+                </details>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+        {actif && gere && l.etat === "atteint" ? (
+          <div className="livrable__actions">
+            <form action={agirLivrable.bind(null, p.id, l.id, "rouvrir")}>
+              <button type="submit" className="bouton-mini">
+                Rouvrir
+              </button>
+            </form>
+          </div>
+        ) : null}
+      </li>
+    );
+  };
+  const actifs = lv.livrables.filter((l) => l.etat !== "atteint");
+  const livrablesValides = lv.livrables.filter((l) => l.etat === "atteint");
+
   return (
     <>
       <Bandeau
@@ -109,14 +255,28 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
         }
       >
         <div className="chiffres">
-          <Anneau fait={atteints} total={f.indicateurs.length} legende="indicateurs" label={`${atteints} indicateurs vérifiables atteints sur ${f.indicateurs.length}`} />
+          <a href="#livrables" className="chiffre-lien" aria-label={`${valides} livrables validés sur ${lv.livrables.length} : voir les livrables`}>
+            <Anneau fait={valides} total={lv.livrables.length} legende="livrables" label={`${valides} livrables validés sur ${lv.livrables.length}`} />
+          </a>
           <dl style={{ margin: 0, display: "flex", flexWrap: "wrap", gap: "12px 48px" }}>
             <div className="chiffre">
-              <dt>fin prévue{ancienne && ancienne !== p.dateFinPrevue ? ` · ${dateCourte(ancienne)} au dernier rapport` : ""}</dt>
+              <dt>
+                <LienChiffre href="#dates" detail="voir les dates et les reports">
+                  fin prévue{ancienne && ancienne !== p.dateFinPrevue ? ` · ${dateCourte(ancienne)} au dernier rapport` : ""}
+                </LienChiffre>
+              </dt>
               <dd>{dateCourte(p.dateFinPrevue)}</dd>
             </div>
             <div className={`chiffre ${p.sante === "en_retard" ? "chiffre--retard" : p.sante === "a_surveiller" ? "chiffre--veille" : ""}`}>
-              <dt>{SANTE[p.sante].texte.toLowerCase()}</dt>
+              <dt>
+                {p.sante !== "dans_les_temps" && p.santeMotif ? (
+                  <LienChiffre href="#sante" detail="voir pourquoi">
+                    {SANTE[p.sante].texte.toLowerCase()}
+                  </LienChiffre>
+                ) : (
+                  SANTE[p.sante].texte.toLowerCase()
+                )}
+              </dt>
               <dd>
                 {glissement > 0 ? (
                   <>
@@ -286,7 +446,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
           </div>
         ) : null}
         {p.sante !== "dans_les_temps" && p.santeMotif ? (
-          <div className={`note-sante ${p.sante === "en_retard" ? "note-sante--retard" : ""}`}>
+          <div id="sante" className={`note-sante ${p.sante === "en_retard" ? "note-sante--retard" : ""}`} style={{ scrollMarginTop: 80 }}>
             <p style={{ margin: 0 }}>
               <strong>{SANTE[p.sante].texte}</strong>
               {p.santeLe ? ` depuis le ${dateCourte(dateLocale(p.santeLe))}` : ""}
@@ -316,58 +476,61 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
         </div>
         <div className="colonnes colonnes--tablette">
           <div className="colonne-large">
-            <section className="carte carte--liste" aria-labelledby="p-ind">
-              <h2 id="p-ind" className="carte__titre">
-                Indicateurs vérifiables
-              </h2>
-              <ol className="liste">
-                {f.indicateurs.map((i) => (
-                  <li key={i.id} style={{ display: "flex", alignItems: "center", gap: 16, minHeight: 48 }}>
-                    <span style={{ width: 18, flex: "none", fontSize: 12, color: "var(--discret)", textAlign: "right" }}>{i.ordre}</span>
-                    <span
-                      role="img"
-                      aria-label={ETAT_IND[i.etat]}
-                      style={{
-                        width: 18,
-                        height: 18,
-                        flex: "none",
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "var(--case-coche)",
-                        ...(i.etat === "atteint" ? { background: "var(--case-fait)" } : i.etat === "en_cours" ? { border: "1.5px dashed var(--veille-point)" } : { border: "1.5px solid var(--case)" }),
-                      }}
-                    >
-                      {i.etat === "atteint" ? <CocheSeule /> : null}
-                    </span>
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 15, lineHeight: "20px", color: i.etat === "a_venir" ? "var(--discret)" : undefined }}>
-                      {i.libelle}
-                      {i.prevuLe ? (
-                        <span className={`indicateur__date${i.etat !== "atteint" && i.prevuLe < aujourdhui() ? " ton-retard" : ""}`}> · prévu le {dateCourte(i.prevuLe)}</span>
-                      ) : null}
-                    </span>
-                    {peutModifier && actif ? (
-                      <form key={`${i.id}-${i.etat}`} action={changerIndicateur.bind(null, p.id, i.id)} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                        <label className="visuellement-cache" htmlFor={`ind-${i.id}`}>
-                          État de « {i.libelle} »
-                        </label>
-                        <select id={`ind-${i.id}`} name="etat" defaultValue={i.etat} className="saisie saisie--compacte">
-                          <option value="a_venir">À venir</option>
-                          <option value="en_cours">En cours</option>
-                          <option value="atteint">Atteint</option>
-                        </select>
-                        <button type="submit" className="bouton-icone" style={{ width: 32, height: 32 }} aria-label="Enregistrer" title="Enregistrer">
-                          <Icone nom="coche" taille={16} />
-                        </button>
-                      </form>
-                    ) : (
-                      <span className={i.etat === "en_cours" ? "ton-veille" : "ton-discret"} style={{ fontSize: 12 }}>
-                        {ETAT_IND[i.etat]}
-                      </span>
-                    )}
+            <section className="carte carte--liste livrables" id="livrables" aria-labelledby="p-livrables" style={{ scrollMarginTop: 80 }}>
+              <div className="carte__entete">
+                <h2 id="p-livrables" className="carte__titre">
+                  Livrables · {valides}/{lv.livrables.length} validés
+                </h2>
+                {peutModifier && actif ? (
+                  <a href={`/projets/${p.id}/modifier#livrables`} className="lien-discret">
+                    Gérer les livrables →
+                  </a>
+                ) : null}
+              </div>
+              {lvMessage ? (
+                <p className="succes" role="status" style={{ margin: "8px 0" }}>
+                  {lvMessage}
+                </p>
+              ) : null}
+              {lv.livrables.length ? (
+                <p className="note" style={{ margin: "4px 0 10px" }}>
+                  Chaque livrable a un responsable : il détermine les tâches qui y mènent, peut en confier à l&apos;équipe du projet, puis le déclare prêt à valider.
+                  {lv.horsLivrable.ouvertes ? (
+                    <>
+                      {" "}
+                      <a href={`/projets/${p.id}/liste?livrable=aucun`} className="lien-discret">
+                        {lv.horsLivrable.ouvertes} tâche{lv.horsLivrable.ouvertes > 1 ? "s" : ""} ouverte{lv.horsLivrable.ouvertes > 1 ? "s" : ""} hors livrable
+                      </a>
+                      .
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
+              <ol className="livrables__liste">
+                {actifs.map(rendreLivrable)}
+                {livrablesValides.length ? (
+                  <li className="livrable livrable--valides">
+                    <details className="livrables__valides">
+                      <summary>
+                        {livrablesValides.length} livrable{livrablesValides.length > 1 ? "s" : ""} validé{livrablesValides.length > 1 ? "s" : ""}
+                      </summary>
+                      <ol className="livrables__liste">{livrablesValides.map(rendreLivrable)}</ol>
+                    </details>
                   </li>
-                ))}
+                ) : null}
+                {lv.livrables.length === 0 ? (
+                  <li className="vide">
+                    Aucun livrable.{peutModifier && actif ? (
+                      <>
+                        {" "}
+                        <a href={`/projets/${p.id}/modifier#livrables`} className="lien-discret">
+                          Ajouter les livrables du projet
+                        </a>
+                        .
+                      </>
+                    ) : null}
+                  </li>
+                ) : null}
               </ol>
             </section>
 
@@ -500,7 +663,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
           </div>
 
           <div className="colonne-etroite">
-            <section className="carte" aria-labelledby="p-dates">
+            <section className="carte" aria-labelledby="p-dates" id="dates" style={{ scrollMarginTop: 80 }}>
               <h2 id="p-dates" className="carte__titre" style={{ marginBottom: 16 }}>
                 Calendrier
               </h2>
@@ -539,7 +702,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                   cible={{ genre: "projet", projetId: p.id }}
                   aujourdhui={aujourdhui()}
                   libelle="Mettre à jour le projet en une ligne"
-                  placeholder="« risque : retard du prestataire », « jalon validation métier 15/11 », « fin prévue 20/12 »"
+                  placeholder="« risque : retard du prestataire », « livrable validation métier 15/11 », « fin prévue 20/12 »"
                 />
                 <p className="note" style={{ margin: "16px 0 12px" }}>
                   Ou champ par champ :
@@ -562,7 +725,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                     Santé : {SANTE[p.sante].texte.toLowerCase()}
                   </h3>
                   <p className="note" style={{ margin: "0 0 12px" }}>
-                    Calculée par l&apos;application : fin prévue, jalons, tâches en retard ou bloquées, fin repoussée, rythme des dernières semaines. Un risque que les données ne montrent pas (un prestataire qui
+                    Calculée par l&apos;application : fin prévue, livrables, tâches en retard ou bloquées, fin repoussée, rythme des dernières semaines. Un risque que les données ne montrent pas (un prestataire qui
                     lâche, un budget gelé) se signale ici : le projet passe « à surveiller » pendant 30 jours ; un signal ne peut pas l&apos;améliorer.
                   </p>
                   {signalActif(p.risqueMotif && p.risqueLe ? { motif: p.risqueMotif, le: dateLocale(p.risqueLe), par: null } : null, aujourdhui()) ? (

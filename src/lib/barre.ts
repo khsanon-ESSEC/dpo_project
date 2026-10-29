@@ -49,7 +49,7 @@ export function analyserNote(saisie: string, projets: ProjetSaisie[]): AnalyseNo
 }
 
 // ---------------------------------------------------------------------------
-// Mettre à jour un projet : « /UR à surveiller : retard du prestataire », « /UR jalon validation métier 15/11 »
+// Mettre à jour un projet : « /UR risque : retard du prestataire », « /UR livrable validation métier 15/11 » (« jalon » aussi)
 // ---------------------------------------------------------------------------
 
 export type SanteProjet = "dans_les_temps" | "a_surveiller" | "en_retard";
@@ -78,7 +78,7 @@ export function analyserMajProjet(texte: string, aujourdhui: string): MajProjet 
     const motif = sante[2].replace(/^(?:car|parce\s+que|:)\s*/i, "").trim().slice(0, 500);
     return { genre: "sante", sante: s, motif: motif ? motif.charAt(0).toUpperCase() + motif.slice(1) : "" };
   }
-  const jalon = /^jalon(?=$|[\s:,–—-])[\s:,–—-]*(.*)$/i.exec(t);
+  const jalon = /^(?:jalon|livrable)(?=$|[\s:,–—-])[\s:,–—-]*(.*)$/i.exec(t);
   if (jalon) {
     const d = dateFuture(` ${jalon[1]} `, aujourdhui);
     const libelle = d.reste.trim().slice(0, 200);
@@ -99,7 +99,7 @@ export function analyserMajProjet(texte: string, aujourdhui: string): MajProjet 
 
 export function texteMajProjet(m: MajProjet): string {
   if (m.genre === "sante") return m.sante === "a_surveiller" ? `Signaler un risque${m.motif ? ` : ${m.motif}` : ""}` : m.sante === "dans_les_temps" ? "Retirer le risque signalé" : "La santé est calculée : « risque : … » pour signaler un risque";
-  if (m.genre === "jalon") return `Jalon : ${m.libelle || "(sans libellé)"}${m.prevuLe ? `, prévu ${jourComplet(m.prevuLe).toLowerCase()}` : ""}`;
+  if (m.genre === "jalon") return `Livrable : ${m.libelle || "(sans libellé)"}${m.prevuLe ? `, prévu ${jourComplet(m.prevuLe).toLowerCase()}` : ""}`;
   if (m.genre === "fin") return `Fin prévue : ${jourComplet(m.date).toLowerCase()}`;
   return `Lancement prévu : ${jourComplet(m.date).toLowerCase()}`;
 }

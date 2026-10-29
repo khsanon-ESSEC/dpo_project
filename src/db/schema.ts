@@ -37,7 +37,8 @@ export const statutTache = pgEnum("statut_tache", ["a_faire", "en_cours", "bloqu
 /** requete : proposé, en attente de la direction ; refuse : demande refusée (gardée, avec son motif). */
 export const statutProjet = pgEnum("statut_projet", ["requete", "en_attente", "en_cours", "continu", "finalise", "refuse"]);
 export const santeProjet = pgEnum("sante_projet", ["dans_les_temps", "a_surveiller", "en_retard"]);
-export const etatIndicateur = pgEnum("etat_indicateur", ["a_venir", "en_cours", "atteint"]);
+/** État d'un livrable : « prêt » = déclaré prêt à valider par son responsable ; « atteint » = validé par qui gère le projet. */
+export const etatIndicateur = pgEnum("etat_indicateur", ["a_venir", "en_cours", "pret", "atteint"]);
 export const statutRapport = pgEnum("statut_rapport", ["brouillon", "envoye"]);
 export const statutConseil = pgEnum("statut_conseil", ["brouillon", "approuve", "envoye"]);
 
@@ -149,6 +150,11 @@ export const membresProjet = pgTable(
   (t) => [unique("membre_projet_unique").on(t.projetId, t.personneId), index("membres_projet_personne_idx").on(t.personneId)],
 );
 
+/**
+ * Les livrables d'un projet (table historique « indicateurs » : les indicateurs vérifiables du rapport au conseil).
+ * Un livrable a une date prévue et un responsable, qui détermine les tâches qui y mènent (taches.livrable_id),
+ * le déclare prêt à valider ; qui gère le projet le valide (« atteint ») ou le renvoie avec une remarque.
+ */
 export const indicateurs = pgTable(
   "indicateurs",
   {
@@ -158,10 +164,18 @@ export const indicateurs = pgTable(
     libelle: text().notNull(),
     etat: etatIndicateur().notNull().default("a_venir"),
     atteintLe: date("atteint_le"),
-    /** Jalon : date prévue (facultative). */
+    /** Date prévue du livrable (facultative). */
     prevuLe: date("prevu_le"),
+    /** Qui en est responsable : il en détermine les tâches et peut en confier à l'équipe du projet. */
+    responsableId: uuid("responsable_id").references(() => personnes.id, { onDelete: "set null" }),
+    /** Ce qui sera vérifié pour le valider (facultatif). */
+    critere: text().notNull().default(""),
+    pretLe: timestamp("pret_le", { withTimezone: true }),
+    valideParId: uuid("valide_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    /** Remarque de qui gère le projet quand il renvoie le livrable à reprendre. */
+    remarque: text().notNull().default(""),
   },
-  (t) => [index("indicateurs_projet_idx").on(t.projetId)],
+  (t) => [index("indicateurs_projet_idx").on(t.projetId), index("indicateurs_responsable_idx").on(t.responsableId)],
 );
 
 export const taches = pgTable(
@@ -191,8 +205,10 @@ export const taches = pgTable(
     motifAnnulation: text("motif_annulation").notNull().default(""),
     /** Action décidée en réunion : la réunion d'où vient la tâche (facultatif). */
     reunionId: uuid("reunion_id").references((): AnyPgColumn => reunions.id, { onDelete: "set null" }),
+    /** Le livrable du projet auquel la tâche mène (facultatif : une tâche peut rester hors livrable). */
+    livrableId: uuid("livrable_id").references(() => indicateurs.id, { onDelete: "set null" }),
   },
-  (t) => [index("taches_assigne_idx").on(t.assigneId), index("taches_projet_idx").on(t.projetId), index("taches_reunion_idx").on(t.reunionId)],
+  (t) => [index("taches_assigne_idx").on(t.assigneId), index("taches_projet_idx").on(t.projetId), index("taches_reunion_idx").on(t.reunionId), index("taches_livrable_idx").on(t.livrableId)],
 );
 
 /**

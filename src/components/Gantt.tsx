@@ -7,7 +7,7 @@ export const PX_PAR_JOUR: Record<Zoom, number> = { jour: 36, semaine: 16, mois: 
 export const LIBELLE_ZOOM: Record<Zoom, string> = { jour: "Jours", semaine: "Semaines", mois: "Mois" };
 
 export type BarreGantt = { debut: string; fin: string; classe: string; texte?: string; titre: string; lien?: string };
-export type JalonGantt = { date: string; type: "fin" | "initial" | "lancement"; titre: string };
+export type JalonGantt = { date: string; type: "fin" | "initial" | "lancement" | "livrable" | "livrable-valide" | "livrable-retard"; titre: string };
 export type LigneGantt = { id: string; libelle: string; sous?: string; lien?: string; groupe?: boolean; mono?: string; barres: BarreGantt[]; jalons?: JalonGantt[] };
 
 const MOIS = new Intl.DateTimeFormat("fr-FR", { timeZone: "UTC", month: "short", year: "numeric" });
@@ -64,7 +64,10 @@ export function Gantt({ id, lignes, debut, fin, zoom, aujourdhui, finProjet }: {
                     {l.mono}
                   </i>
                 ) : null}
-                <span>{l.libelle}</span>
+                <span>
+                  {l.libelle}
+                  {l.sous ? <small style={{ display: "block", color: "var(--discret)", fontWeight: 400 }}>{l.sous}</small> : null}
+                </span>
               </a>
             ) : (
               <div className="gantt__nom" title={l.libelle}>

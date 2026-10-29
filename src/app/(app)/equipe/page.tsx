@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { exigerInterne } from "@/lib/auth/session";
-import { aujourdhui, dateCourte, dateLocale, heure, jourAbrege, jourComplet } from "@/lib/dates";
+import { aujourdhui, dateCourte, dateLocale, echeanceRelative, heure, jourAbrege, jourComplet } from "@/lib/dates";
 import { monEquipe } from "@/lib/donnees/equipe";
 import { chargeDesPersonnes } from "@/lib/donnees/charge";
 import { Niveau } from "@/components/Charge";
 import { LIBELLE_NIVEAU, nombre } from "@/lib/charge";
-import { Anneau, Bandeau } from "@/components/Bandeau";
+import { Anneau, Bandeau, LienChiffre } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { CodeProjet, LienPersonne, LienProjet } from "@/components/Liens";
 import { dureeTexte } from "@/lib/projets";
@@ -15,8 +15,9 @@ import { relancerEquipe } from "./actions";
 
 export const metadata: Metadata = { title: "Mon équipe" };
 
-export default async function PageEquipe({ searchParams }: { searchParams: Promise<{ filtre?: string; relance?: string }> }) {
-  const { filtre = "tous", relance } = await searchParams;
+export default async function PageEquipe({ searchParams }: { searchParams: Promise<{ filtre?: string; relance?: string; liste?: string }> }) {
+  const { filtre = "tous", relance, liste: listeDemandee } = await searchParams;
+  const liste = listeDemandee === "retard" || listeDemandee === "faites" ? listeDemandee : null;
   const u = await exigerInterne();
   const a = await acces(u);
   const jour = aujourdhui();
@@ -45,7 +46,7 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
     { id: "sans", libelle: `Sans rapport · ${e.manquants.length}` },
     { id: "bloc", libelle: `Avec blocage · ${e.personnes.filter((p) => p.bloquees > 0).length}` },
   ];
-  const maxCharge = Math.max(1, ...e.charge.map((c) => c.n));
+  const maxCharge = Math.max(1, ...e.charge.map((c) => c.n + c.faites));
   const visibles = await idsProjetsVisibles(a);
   const voit = (id: string) => visibles === "tous" || visibles.has(id);
 
@@ -53,18 +54,32 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
     <>
       <Bandeau surtitre={jourComplet(jour)} titre={titre}>
         <div className="chiffres">
-          <Anneau fait={e.recus} total={e.personnes.length} legende="rapports" label={`${e.recus} rapports reçus sur ${e.personnes.length}`} />
+          <a href={e.manquants.length ? "/equipe?filtre=sans#personnes" : "/equipe/rapports"} className="chiffre-lien" aria-label={`${e.recus} rapports reçus sur ${e.personnes.length} : ${e.manquants.length ? "voir les personnes sans rapport" : "voir les rapports"}`}>
+            <Anneau fait={e.recus} total={e.personnes.length} legende="rapports" label={`${e.recus} rapports reçus sur ${e.personnes.length}`} />
+          </a>
           <dl style={{ margin: 0, display: "flex", flexWrap: "wrap", gap: "12px 48px" }}>
             <div className="chiffre chiffre--veille">
-              <dt>tâches bloquées</dt>
+              <dt>
+                <LienChiffre href="#t-blocages" detail="voir les blocages">
+                  tâches bloquées
+                </LienChiffre>
+              </dt>
               <dd>{e.totaux.bloquees}</dd>
             </div>
             <div className="chiffre chiffre--retard">
-              <dt>en retard</dt>
+              <dt>
+                <LienChiffre href="/equipe?liste=retard#liste" detail="voir les tâches en retard">
+                  en retard
+                </LienChiffre>
+              </dt>
               <dd>{e.totaux.retard}</dd>
             </div>
             <div className="chiffre">
-              <dt>faites cette semaine</dt>
+              <dt>
+                <LienChiffre href="/equipe?liste=faites#liste" detail="voir les tâches faites cette semaine">
+                  faites cette semaine
+                </LienChiffre>
+              </dt>
               <dd>{e.totaux.faites}</dd>
             </div>
           </dl>
@@ -96,8 +111,51 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
           ) : null}
         </div>
 
+        {liste ? (
+          <section className="carte carte--liste" id="liste" aria-labelledby="t-liste" style={{ scrollMarginTop: 80, marginTop: 16 }}>
+            <div className="carte__entete">
+              <h2 id="t-liste" className="carte__titre">
+                {liste === "retard" ? "Tâches en retard" : "Faites cette semaine"} · {e.listes[liste].length}
+              </h2>
+              <a href="/equipe" className="lien-discret">
+                Fermer
+              </a>
+            </div>
+            {e.listes[liste].length === 0 ? <p className="vide">{liste === "retard" ? "Aucune tâche en retard." : "Aucune tâche faite cette semaine pour l'instant."}</p> : null}
+            <ul className="liste">
+              {e.listes[liste].map((t) => (
+                <li key={t.id} className="rangee rangee--etiree">
+                  {t.projetCode && t.projetId ? <CodeProjet id={t.projetId} code={t.projetCode} titre={t.projetTitre ?? ""} visible={voit(t.projetId)} /> : null}
+                  <span className="rangee__texte">
+                    <a href={`/taches/${t.id}?retour=${encodeURIComponent("/equipe")}`} className="rangee__titre rangee__lien">
+                      {t.titre}
+                    </a>
+                    <span className="rangee__sous">
+                      <LienPersonne id={t.assigneId}>{t.qui}</LienPersonne>
+                      {t.projetId ? (
+                        <>
+                          {" · "}
+                          <LienProjet id={t.projetId} visible={voit(t.projetId)}>
+                            {t.projetTitre}
+                          </LienProjet>
+                        </>
+                      ) : (
+                        " · Hors projet"
+                      )}
+                    </span>
+                  </span>
+                  <span className={`rangee__meta ${liste === "retard" ? "ton-retard" : "ton-ok"}`} style={{ fontSize: 12 }}>
+                    {liste === "retard" ? echeanceRelative(t.echeance, jour).texte : t.termineeLe ? `faite ${jourAbrege(dateLocale(t.termineeLe)).toLowerCase()}` : "faite"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <ApercuEquipe personnes={e.personnes} semaines={e.personnes.map((p) => chargeDe.get(p.id) ?? [])} />
 
+        <span id="personnes" style={{ display: "block", scrollMarginTop: 80 }} />
         {groupes.length > 1 ? (
           <nav className="filtres" aria-label="Équipes de la structure">
             {groupes.map((g) => (
@@ -165,25 +223,39 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
             </ul>
           </section>
           <section className="carte" style={{ flex: "1 1 420px" }} aria-labelledby="t-charge">
-            <h2 id="t-charge" className="carte__titre" style={{ marginBottom: 18 }}>
-              Tâches ouvertes par projet
+            <h2 id="t-charge" className="carte__titre" style={{ marginBottom: 6 }}>
+              Tâches ouvertes de l&apos;équipe, par projet
             </h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {e.charge.map(({ id, titre: nom, n }) => (
-                <div key={id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 170px) minmax(0, 1fr) 24px", alignItems: "center", gap: 14 }}>
-                  <span style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <p className="note" style={{ margin: "0 0 14px" }}>
+              Les tâches encore à faire, en cours ou bloquées des personnes de cette page, toutes échéances confondues ; en clair, celles faites cette semaine.
+            </p>
+            <div className="taches-projets">
+              {e.charge.map(({ id, code, titre: nom, n, faites }) => (
+                <div key={id} className="taches-projets__ligne">
+                  <span className="taches-projets__nom">
+                    <span className="etiquette-projet">{code}</span>
                     <LienProjet id={id} visible={voit(id)}>
                       {nom}
                     </LienProjet>
                   </span>
-                  <span className="barre" style={{ height: 10 }} role="img" aria-label={`${nom} : ${n} tâches ouvertes`}>
-                    <span style={{ width: `${Math.round((n / maxCharge) * 100)}%` }} />
+                  <span className="taches-projets__barre" role="img" aria-label={`${nom} : ${n} tâche${n > 1 ? "s" : ""} ouverte${n > 1 ? "s" : ""}${faites ? `, ${faites} faite${faites > 1 ? "s" : ""} cette semaine` : ""}`}>
+                    <span className="taches-projets__part taches-projets__part--ouvertes" style={{ width: `${(n / maxCharge) * 100}%` }} title={`${n} ouverte${n > 1 ? "s" : ""}`} />
+                    {faites ? <span className="taches-projets__part taches-projets__part--faites" style={{ width: `${(faites / maxCharge) * 100}%` }} title={`${faites} faite${faites > 1 ? "s" : ""} cette semaine`} /> : null}
                   </span>
-                  <span className="rangee__meta" style={{ textAlign: "right" }}>
-                    {n}
+                  <span className="taches-projets__chiffre">
+                    <strong>{n}</strong>
+                    {faites ? <span className="ton-discret"> +{faites}</span> : null}
                   </span>
                 </div>
               ))}
+            </div>
+            <div className="legende" aria-hidden="true" style={{ marginTop: 14 }}>
+              <span className="niveau">
+                <span className="point-tache taches-projets__part--ouvertes" /> Ouvertes
+              </span>
+              <span className="niveau">
+                <span className="point-tache taches-projets__part--faites" /> Faites cette semaine
+              </span>
             </div>
           </section>
         </div>

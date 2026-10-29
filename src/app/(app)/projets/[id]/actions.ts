@@ -7,7 +7,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { acces, exigerProjetVisible } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
-import { mettreAJourIndicateur } from "@/lib/donnees/projets";
+import { agirSurLivrable, livrableEtProjet, type ActionLivrable } from "@/lib/donnees/livrables";
 import { noterReportFin } from "@/lib/donnees/reports-fin";
 import { recalculerSante, signalerRisque } from "@/lib/donnees/sante";
 import { noter } from "@/lib/journal";
@@ -28,16 +28,21 @@ const date = (v: FormDataEntryValue | null) => {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
 };
 
-export async function changerIndicateur(projetId: string, indicateurId: string, form: FormData) {
-  const { u } = await exigerDroitProjet(projetId);
-  const etat = String(form.get("etat") ?? "");
-  if (etat !== "a_venir" && etat !== "en_cours" && etat !== "atteint") return;
-  const [i] = await db.select().from(schema.indicateurs).where(and(eq(schema.indicateurs.id, indicateurId), eq(schema.indicateurs.projetId, projetId)));
-  if (!i) return;
-  await mettreAJourIndicateur(indicateurId, etat);
-  await noter(u.id, "indicateur", indicateurId, { etat });
-  await recalculerSante([projetId]);
-  revalidatePath(`/projets/${projetId}`);
+/**
+ * Livrable : le responsable le déclare prêt à valider ; qui gère le projet le valide, le renvoie à reprendre
+ * (avec une remarque) ou le rouvre. Les droits sont vérifiés dans agirSurLivrable.
+ */
+export async function agirLivrable(projetId: string, livrableId: string, action: ActionLivrable, form: FormData) {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  await exigerProjetVisible(a, projetId);
+  if (!["pret", "valider", "renvoyer", "rouvrir"].includes(action)) return;
+  const l = await livrableEtProjet(livrableId);
+  if (!l || l.projet.id !== projetId) redirect(`/projets/${projetId}?erreur=${encodeURIComponent("Livrable introuvable.")}#livrables`);
+  const r = await agirSurLivrable(a, livrableId, action, String(form.get("remarque") ?? ""));
+  revalidatePath(`/projets/${projetId}`, "layout");
+  if ("erreur" in r) redirect(`/projets/${projetId}?erreur=${encodeURIComponent(r.erreur)}#livrable-${livrableId}`);
+  redirect(`/projets/${projetId}?livrable=${action}#livrable-${livrableId}`);
 }
 
 /** Dates du projet. La santé n'est pas choisie : elle est calculée (src/lib/sante.ts), puis recalculée ici. */

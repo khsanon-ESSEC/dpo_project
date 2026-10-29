@@ -10,7 +10,7 @@ import { activiteDeLaSemaine, compter, etatMonRapport, journeeDe, mesProjets, ta
 import { semaineCourante } from "@/lib/donnees/rapport";
 import { chargeDesPersonnes } from "@/lib/donnees/charge";
 import { Jauge } from "@/components/Charge";
-import { Anneau, Bandeau } from "@/components/Bandeau";
+import { Anneau, Bandeau, LienChiffre } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { ONGLETS_SEMAINE, SousOnglets } from "@/components/SousOnglets";
 import { reunionsDe } from "@/lib/donnees/reunions";
@@ -62,18 +62,32 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
     <>
       <Bandeau surtitre={jourComplet(jour)} titre="Ma semaine">
         <div className="chiffres">
-          <Anneau fait={c.faites} total={c.total} legende="faites" label={`${c.faites} tâches terminées sur ${c.total}`} />
+          <a href="/a-faire?voir=faites#mes-taches" className="chiffre-lien" aria-label={`${c.faites} tâches terminées sur ${c.total} : voir les tâches faites`}>
+            <Anneau fait={c.faites} total={c.total} legende="faites" label={`${c.faites} tâches terminées sur ${c.total}`} />
+          </a>
           <dl style={{ margin: 0, display: "flex", flexWrap: "wrap", gap: "12px 48px" }}>
             <div className="chiffre chiffre--retard">
-              <dt>en retard</dt>
+              <dt>
+                <LienChiffre href="/a-faire?voir=retard#mes-taches" detail="voir les tâches en retard">
+                  en retard
+                </LienChiffre>
+              </dt>
               <dd>{c.retard}</dd>
             </div>
             <div className="chiffre">
-              <dt>{c.bloquees > 1 ? "bloquées" : "bloquée"}</dt>
+              <dt>
+                <LienChiffre href="/a-faire?voir=bloquees#mes-taches" detail="voir les tâches bloquées">
+                  {c.bloquees > 1 ? "bloquées" : "bloquée"}
+                </LienChiffre>
+              </dt>
               <dd>{c.bloquees}</dd>
             </div>
             <div className="chiffre">
-              <dt>à faire</dt>
+              <dt>
+                <LienChiffre href="/a-faire?voir=afaire#mes-taches" detail="voir les tâches à faire">
+                  à faire
+                </LienChiffre>
+              </dt>
               <dd>{c.aFaire}</dd>
             </div>
           </dl>
@@ -270,7 +284,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
                 {projets.map((p) => (
                   <li key={p.id}>
                     <a href={`/projets/${p.id}`} className="rangee" style={{ minHeight: 68, gap: 16 }}>
-                      <Anneau fait={p.atteints} total={p.totalIndicateurs} taille={44} label={`${p.atteints} indicateurs atteints sur ${p.totalIndicateurs}`} />
+                      <Anneau fait={p.atteints} total={p.totalIndicateurs} taille={44} label={`${p.atteints} livrables validés sur ${p.totalIndicateurs}`} />
                       <span className="rangee__texte">
                         <span className="rangee__titre" style={{ whiteSpace: "nowrap" }}>
                           {p.titre}

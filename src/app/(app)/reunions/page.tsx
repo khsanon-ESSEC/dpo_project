@@ -8,7 +8,7 @@ import { reunionsDe } from "@/lib/donnees/reunions";
 import { chargerOrganisation } from "@/lib/organisation";
 import { DUREES_REUNION, dureeTexte } from "@/lib/projets";
 import { nomComplet } from "@/lib/regles";
-import { Bandeau } from "@/components/Bandeau";
+import { Bandeau, LienChiffre } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { CodeProjet, LienPersonne, LienProjet } from "@/components/Liens";
 import { ONGLETS_SEMAINE, SousOnglets } from "@/components/SousOnglets";
@@ -106,14 +106,22 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
       <Bandeau surtitre={`Semaine du ${dateCourte(semaine)} au ${dateCourte(ajouterJours(semaine, 4))}`} titre="Réunions">
         <dl className="chiffres">
           <div className="chiffre">
-            <dt>en réunion</dt>
+            <dt>
+              <LienChiffre href="#r-chiffres" detail="voir les réunions en chiffres">
+                en réunion
+              </LienChiffre>
+            </dt>
             <dd>
               {Math.floor(minutes / 60)}
               <small>&nbsp;h{minutes % 60 ? ` ${String(minutes % 60).padStart(2, "0")}` : ""}</small>
             </dd>
           </div>
           <div className="chiffre">
-            <dt>réunion{liste.length > 1 ? "s" : ""}</dt>
+            <dt>
+              <LienChiffre href="#r-liste" detail="voir la liste des réunions">
+                réunion{liste.length > 1 ? "s" : ""}
+              </LienChiffre>
+            </dt>
             <dd>{liste.length}</dd>
           </div>
           <div className={`chiffre ${part >= 40 ? "chiffre--retard" : part >= 25 ? "chiffre--veille" : ""}`}>
@@ -157,7 +165,7 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
           </p>
         ) : null}
         <div className="colonnes">
-          <section className="carte carte--liste colonne-large" aria-labelledby="r-liste">
+          <section className="carte carte--liste colonne-large" aria-labelledby="r-liste" style={{ scrollMarginTop: 80 }}>
             <h2 id="r-liste" className="carte__titre">
               Réunions de la semaine · {liste.length}
             </h2>

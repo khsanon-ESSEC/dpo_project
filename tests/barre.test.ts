@@ -42,6 +42,7 @@ describe("mettre à jour un projet", () => {
     expect(analyserMajProjet("jalon recette 15/11", AUJ)).toEqual({ genre: "jalon", libelle: "Recette", prevuLe: "2026-11-15" });
     expect(analyserMajProjet("jalon validation métier 15/11", AUJ)).toEqual({ genre: "jalon", libelle: "Validation métier", prevuLe: "2026-11-15" });
     expect(analyserMajProjet("jalon : mise en production", AUJ)).toEqual({ genre: "jalon", libelle: "Mise en production", prevuLe: null });
+    expect(analyserMajProjet("livrable modèle conceptuel validé 20/11", AUJ)).toEqual({ genre: "jalon", libelle: "Modèle conceptuel validé", prevuLe: "2026-11-20" });
     expect(analyserMajProjet("fin prévue 20/12", AUJ)).toEqual({ genre: "fin", date: "2026-12-20" });
     expect(analyserMajProjet("lancement 5 janvier", AUJ)).toEqual({ genre: "lancement", date: "2027-01-05" });
     expect(analyserMajProjet("fin prévue bientôt", AUJ)).toBeNull();

@@ -245,15 +245,61 @@ export async function supprimerProjet(projetId: string, parId: string): Promise<
 }
 
 // ---------------------------------------------------------------------------
-// Indicateurs vérifiables
+// Livrables (table « indicateurs »)
 // ---------------------------------------------------------------------------
 
-export async function ajouterIndicateur(projetId: string, libelle: string, parId: string) {
-  const l = texte(libelle, 200);
-  if (!l) return;
+export type DonneesLivrable = { libelle: string; prevuLe: string | null; responsableId: string | null; critere: string };
+
+/** Le responsable d'un livrable : une personne active ; il entre dans l'équipe du projet et il est prévenu. */
+async function responsableValide(responsableId: string | null) {
+  if (!responsableId) return { id: null as string | null };
+  const p = await personneActuelle(responsableId);
+  if (!p?.actif) return { erreur: "Ce responsable n'est plus actif." };
+  return { id: p.id as string | null, personne: p };
+}
+
+async function prevenirResponsable(projetId: string, libelle: string, responsableId: string, parId: string) {
+  const [pr] = await db.select({ titre: schema.projets.titre, code: schema.projets.code }).from(schema.projets).where(eq(schema.projets.id, projetId));
+  const p = await personneActuelle(responsableId);
+  await entrerDansLEquipe(projetId, responsableId, parId);
+  if (responsableId === parId || !p || (p.externe && !p.acces)) return;
+  await db.insert(schema.notifications).values({ personneId: responsableId, type: "projet", texte: `Vous êtes responsable du livrable « ${libelle} » (${pr?.code ?? "projet"}) : ses tâches sont à déterminer avec l'équipe du projet`, lien: `/projets/${projetId}#livrables` });
+}
+
+export async function ajouterLivrable(projetId: string, d: DonneesLivrable, parId: string): Promise<{ ok: true; id: string } | { erreur: string }> {
+  const l = texte(d.libelle, 200);
+  if (!l) return { erreur: "Donnez un nom au livrable." };
+  const r = await responsableValide(d.responsableId);
+  if ("erreur" in r) return { erreur: r.erreur! };
   const [{ m }] = await db.select({ m: max(schema.indicateurs.ordre) }).from(schema.indicateurs).where(eq(schema.indicateurs.projetId, projetId));
-  await db.insert(schema.indicateurs).values({ projetId, libelle: l, ordre: (m ?? 0) + 1 });
-  await noter(parId, "indicateur_ajoute", projetId, { libelle: l });
+  const [n] = await db
+    .insert(schema.indicateurs)
+    .values({ projetId, libelle: l, ordre: (m ?? 0) + 1, prevuLe: date(d.prevuLe), responsableId: r.id, critere: texte(d.critere, 500) })
+    .returning({ id: schema.indicateurs.id });
+  if (r.id) await prevenirResponsable(projetId, l, r.id, parId);
+  await noter(parId, "livrable_ajoute", projetId, { libelle: l, responsable: r.id, prevuLe: date(d.prevuLe) });
+  await recalculerSante([projetId]);
+  return { ok: true, id: n.id };
+}
+
+/** Compatibilité : ajouter un livrable par son seul nom. */
+export async function ajouterIndicateur(projetId: string, libelle: string, parId: string) {
+  await ajouterLivrable(projetId, { libelle, prevuLe: null, responsableId: null, critere: "" }, parId);
+}
+
+export async function modifierLivrable(projetId: string, livrableId: string, d: DonneesLivrable, parId: string): Promise<{ ok: true } | { erreur: string }> {
+  const [avant] = await db.select().from(schema.indicateurs).where(and(eq(schema.indicateurs.id, livrableId), eq(schema.indicateurs.projetId, projetId)));
+  if (!avant) return { erreur: "Livrable introuvable." };
+  const l = texte(d.libelle, 200);
+  if (!l) return { erreur: "Donnez un nom au livrable." };
+  const r = await responsableValide(d.responsableId);
+  if ("erreur" in r) return { erreur: r.erreur! };
+  const prevuLe = date(d.prevuLe);
+  await db.update(schema.indicateurs).set({ libelle: l, prevuLe, responsableId: r.id, critere: texte(d.critere, 500) }).where(eq(schema.indicateurs.id, livrableId));
+  if (r.id && r.id !== avant.responsableId) await prevenirResponsable(projetId, l, r.id, parId);
+  await noter(parId, "livrable_modifie", livrableId, { libelle: l !== avant.libelle ? l : undefined, prevuLe: prevuLe !== avant.prevuLe ? prevuLe : undefined, responsable: r.id !== avant.responsableId ? r.id : undefined });
+  await recalculerSante([projetId]);
+  return { ok: true };
 }
 
 export async function renommerIndicateur(projetId: string, indicateurId: string, libelle: string, parId: string) {
@@ -362,7 +408,7 @@ export async function assignables(a: Acces) {
   // Hors division (accès limité) : on ne se confie une tâche qu'à soi-même.
   if (a.moi.externe) {
     const moi = org.personnes.get(a.moi.id)!;
-    return { personnes: [{ id: moi.id, nom: "Moi", externe: false, organisation: moi.organisation }], base: [moi.id], parProjet: {} as Record<string, string[]>, externes: [] as string[], externesPartout: false, horsProjet: false };
+    return { personnes: [{ id: moi.id, nom: "Moi", externe: false, organisation: moi.organisation }], base: [moi.id], parProjet: {} as Record<string, string[]>, parLivrable: {} as Record<string, string[]>, externes: [] as string[], externesPartout: false, horsProjet: false };
   }
   const actives = [...org.personnes.values()].filter((p) => p.actif);
   const base = actives.filter((p) => !p.externe && (p.id === a.moi.id || a.suivis === "toutes" || a.suivis.has(p.id))).map((p) => p.id);
@@ -374,12 +420,23 @@ export async function assignables(a: Acces) {
     const membres = await db.select({ id: schema.membresProjet.personneId }).from(schema.membresProjet).where(eq(schema.membresProjet.projetId, projetId));
     parProjet[projetId] = [a.moi.id, ...membres.map((m) => m.id).filter((id) => org.personnes.get(id)?.actif)];
   }
-  const ids = new Set([...base, ...Object.values(parProjet).flat(), ...externes]);
+  // Livrables dont on est responsable : on en confie les tâches à l'équipe du projet (chef, référent, membres).
+  const parLivrable: Record<string, string[]> = {};
+  const miens = await db
+    .select({ id: schema.indicateurs.id, projetId: schema.indicateurs.projetId, chef: schema.projets.chefProjetId, referent: schema.projets.referentId })
+    .from(schema.indicateurs)
+    .innerJoin(schema.projets, eq(schema.projets.id, schema.indicateurs.projetId))
+    .where(and(eq(schema.indicateurs.responsableId, a.moi.id), ne(schema.indicateurs.etat, "atteint"), isNull(schema.projets.archiveLe)));
+  for (const l of miens) {
+    const membres = await db.select({ id: schema.membresProjet.personneId }).from(schema.membresProjet).where(eq(schema.membresProjet.projetId, l.projetId));
+    parLivrable[l.id] = [...new Set([a.moi.id, l.chef, l.referent, ...membres.map((m) => m.id)])].filter((id): id is string => !!id && !!org.personnes.get(id)?.actif);
+  }
+  const ids = new Set([...base, ...Object.values(parProjet).flat(), ...Object.values(parLivrable).flat(), ...externes]);
   const personnes = [...ids]
     .map((id) => org.personnes.get(id)!)
     .sort((x, y) => Number(y.id === a.moi.id) - Number(x.id === a.moi.id) || Number(x.externe) - Number(y.externe) || x.nom.localeCompare(y.nom, "fr"))
     .map((p) => ({ id: p.id, nom: p.id === a.moi.id ? "Moi" : nomComplet(p), externe: p.externe, organisation: p.organisation }));
-  return { personnes, base, parProjet, externes, externesPartout, horsProjet: false };
+  return { personnes, base, parProjet, parLivrable, externes, externesPartout, horsProjet: false };
 }
 
 /** Assigner sur un projet fait entrer la personne dans l'équipe du projet (si elle n'y est pas). */
@@ -408,9 +465,17 @@ async function assigneEffectif(a: Acces, d: { assigneId: string; nouvelExterne?:
   return id ? { id } : { erreur: "Donnez le nom de la personne hors division." };
 }
 
+/** Le livrable choisi pour une tâche : il doit être un livrable du projet de la tâche. */
+async function livrablePourTache(livrableId: string | null | undefined, projetId: string | null) {
+  if (!livrableId) return { livrable: null };
+  const [l] = await db.select({ id: schema.indicateurs.id, projetId: schema.indicateurs.projetId, responsableId: schema.indicateurs.responsableId }).from(schema.indicateurs).where(eq(schema.indicateurs.id, livrableId));
+  if (!l || l.projetId !== projetId) return { erreur: "Ce livrable n'est pas un livrable du projet choisi." };
+  return { livrable: l };
+}
+
 export async function creerTacheGeree(
   a: Acces,
-  d: { titre: string; description: string; projetId: string | null; assigneId: string; nouvelExterne?: NouvelExterne | null; echeance: string | null; debut: string | null; estimationHeures: number | null; reunionId?: string | null },
+  d: { titre: string; description: string; projetId: string | null; assigneId: string; nouvelExterne?: NouvelExterne | null; echeance: string | null; debut: string | null; estimationHeures: number | null; reunionId?: string | null; livrableId?: string | null },
 ): Promise<{ id: string } | { erreur: string }> {
   const titre = texte(d.titre, 200);
   if (!titre) return { erreur: "Donnez un titre à la tâche." };
@@ -419,20 +484,23 @@ export async function creerTacheGeree(
   if (d.projetId && !projet) return { erreur: "Projet introuvable." };
   if (d.projetId && !(await projetAccessible(a, d.projetId))) return { erreur: "Projet introuvable." };
   if (projet && !projetOuvert(projet)) return { erreur: "Ce projet ne reçoit pas de tâches (demande, refusé, finalisé ou archivé)." };
+  const lv = await livrablePourTache(d.livrableId, d.projetId);
+  if ("erreur" in lv) return { erreur: lv.erreur! };
   const eff = await assigneEffectif(a, d, projet);
   if ("erreur" in eff) return { erreur: eff.erreur! };
   d = { ...d, assigneId: eff.id };
   const assigne = await personneActuelle(d.assigneId);
   if (!assigne?.actif) return { erreur: "Cette personne n'est plus active." };
-  if (!peutAssigner(acteur(a), d.assigneId, projet, assigne.externe)) return { erreur: "Vous ne pouvez pas confier une tâche à cette personne." };
+  if (!peutAssigner(acteur(a), d.assigneId, projet, assigne.externe, lv.livrable)) return { erreur: "Vous ne pouvez pas confier une tâche à cette personne." };
   const [t] = await db
     .insert(schema.taches)
-    .values({ titre, description: texte(d.description, 4000), projetId: d.projetId, assigneId: d.assigneId, echeance: d.echeance, debut: d.debut, estimationHeures: d.estimationHeures, creeParId: a.moi.id, reunionId: d.reunionId ?? null })
+    .values({ titre, description: texte(d.description, 4000), projetId: d.projetId, assigneId: d.assigneId, echeance: d.echeance, debut: d.debut, estimationHeures: d.estimationHeures, creeParId: a.moi.id, reunionId: d.reunionId ?? null, livrableId: lv.livrable?.id ?? null })
     .returning({ id: schema.taches.id });
   await db.insert(schema.evenementsTache).values({ tacheId: t.id, auteurId: a.moi.id, type: "creation" });
   await entrerDansLEquipe(d.projetId, d.assigneId, a.moi.id);
   if (d.assigneId !== a.moi.id && (!assigne.externe || assigne.acces)) await db.insert(schema.notifications).values({ personneId: d.assigneId, type: "tache", texte: `${a.moi.prenom} ${a.moi.nom} vous a confié « ${titre} »`, lien: `/taches/${t.id}` });
-  await noter(a.moi.id, "tache_creee", t.id, { assigne: d.assigneId, projet: d.projetId });
+  await noter(a.moi.id, "tache_creee", t.id, { assigne: d.assigneId, projet: d.projetId, livrable: lv.livrable?.id });
+  if (lv.livrable) await recalculerSante([lv.livrable.projetId]);
   return { id: t.id };
 }
 
@@ -440,22 +508,27 @@ export async function creerTacheGeree(
 export async function modifierDefinitionTache(
   a: Acces,
   tache: typeof schema.taches.$inferSelect,
-  d: { titre: string; description: string; projetId: string | null; assigneId: string; nouvelExterne?: NouvelExterne | null },
+  d: { titre: string; description: string; projetId: string | null; assigneId: string; nouvelExterne?: NouvelExterne | null; livrableId?: string | null },
 ): Promise<{ ok: true } | { erreur: string }> {
   const titre = texte(d.titre, 200);
   if (!titre) return { erreur: "Donnez un titre à la tâche." };
   const projet = await projetPourAssignation(d.projetId);
   if (d.projetId && !projet) return { erreur: "Projet introuvable." };
+  // Sans livrable dans le formulaire (ancien formulaire, barre) : on garde celui de la tâche s'il est du même projet.
+  const livrableVoulu = d.livrableId === undefined ? (d.projetId === tache.projetId ? tache.livrableId : null) : d.livrableId;
+  const lv = await livrablePourTache(livrableVoulu, d.projetId);
+  if ("erreur" in lv) return { erreur: lv.erreur! };
   const eff = await assigneEffectif(a, d, projet);
   if ("erreur" in eff) return { erreur: eff.erreur! };
   d = { ...d, assigneId: eff.id };
-  const change = { titre: titre !== tache.titre, projet: d.projetId !== tache.projetId, assigne: d.assigneId !== tache.assigneId };
+  const change = { titre: titre !== tache.titre, projet: d.projetId !== tache.projetId, assigne: d.assigneId !== tache.assigneId, livrable: (lv.livrable?.id ?? null) !== tache.livrableId };
   if (change.projet && d.projetId && !(await projetAccessible(a, d.projetId))) return { erreur: "Projet introuvable." };
   if (change.projet && projet && !projetOuvert(projet)) return { erreur: "Ce projet ne reçoit pas de tâches (demande, refusé, finalisé ou archivé)." };
   const assigne = await personneActuelle(d.assigneId);
   if (change.assigne && !assigne?.actif) return { erreur: "Cette personne n'est plus active." };
-  if ((change.assigne || change.projet) && !peutAssigner(acteur(a), d.assigneId, projet, !!assigne?.externe)) return { erreur: "Vous ne pouvez pas confier cette tâche à cette personne." };
-  await db.update(schema.taches).set({ titre, description: texte(d.description, 4000), projetId: d.projetId, assigneId: d.assigneId, majLe: new Date() }).where(eq(schema.taches.id, tache.id));
+  if ((change.assigne || change.projet) && !peutAssigner(acteur(a), d.assigneId, projet, !!assigne?.externe, lv.livrable)) return { erreur: "Vous ne pouvez pas confier cette tâche à cette personne." };
+  await db.update(schema.taches).set({ titre, description: texte(d.description, 4000), projetId: d.projetId, assigneId: d.assigneId, livrableId: lv.livrable?.id ?? null, majLe: new Date() }).where(eq(schema.taches.id, tache.id));
+  if (change.livrable) await db.insert(schema.evenementsTache).values({ tacheId: tache.id, auteurId: a.moi.id, type: "livrable", avant: tache.livrableId, apres: lv.livrable?.id ?? null });
   if (change.titre) await db.insert(schema.evenementsTache).values({ tacheId: tache.id, auteurId: a.moi.id, type: "titre", avant: tache.titre, apres: titre });
   if (change.projet) await db.insert(schema.evenementsTache).values({ tacheId: tache.id, auteurId: a.moi.id, type: "projet", avant: tache.projetId, apres: d.projetId });
   if (change.assigne) {
@@ -469,6 +542,7 @@ export async function modifierDefinitionTache(
   }
   if (change.assigne || change.projet) await entrerDansLEquipe(d.projetId, d.assigneId, a.moi.id);
   await noter(a.moi.id, "tache_definie", tache.id, change);
+  if (change.livrable || change.projet) await recalculerSante([d.projetId, tache.projetId].filter((x): x is string => !!x));
   return { ok: true };
 }
 

@@ -236,8 +236,10 @@ export default async function PageFichePersonne({ params, searchParams }: { para
                 la semaine prochaine, sur {charge.semaines[1].capacite} h{charge.semaines[1].reunions ? ` hors ${heuresTexte(charge.semaines[1].reunions)} de réunion` : ""}
               </dt>
               <dd>
-                {Math.round(charge.semaines[1].heures)}
-                <small>&nbsp;h</small>
+                <a href="#charge" className="lien-nom" style={{ textDecorationColor: "rgba(255,255,255,0.35)" }}>
+                  {Math.round(charge.semaines[1].heures)}
+                  <small>&nbsp;h</small>
+                </a>
               </dd>
             </div>
             <div className="chiffre">
@@ -260,7 +262,17 @@ export default async function PageFichePersonne({ params, searchParams }: { para
             {!p.executif ? (
               <div className="chiffre">
                 <dt>rapport du vendredi</dt>
-                <dd style={{ fontSize: 22, lineHeight: "54px", fontWeight: 300 }}>{rapport?.statut === "envoye" ? (moi ? "Envoyé" : "Reçu") : "Pas encore"}</dd>
+                <dd style={{ fontSize: 22, lineHeight: "54px", fontWeight: 300 }}>
+                  {rapport?.statut === "envoye" && rapport.id ? (
+                    <a href={`/rapports/${rapport.id}`} className="lien-nom" style={{ textDecorationColor: "rgba(255,255,255,0.35)" }}>
+                      {moi ? "Envoyé" : "Reçu"}
+                    </a>
+                  ) : rapport?.statut === "envoye" ? (
+                    moi ? "Envoyé" : "Reçu"
+                  ) : (
+                    "Pas encore"
+                  )}
+                </dd>
               </div>
             ) : null}
           </dl>

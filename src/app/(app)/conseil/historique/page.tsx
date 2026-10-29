@@ -3,7 +3,7 @@ import { acces, exigerAccesConseil, idsProjetsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { dateCourte, dateLongue, dateLocale, moisAnnee } from "@/lib/dates";
 import { historiqueConseil } from "@/lib/donnees/conseil";
-import { Bandeau } from "@/components/Bandeau";
+import { Bandeau, LienChiffre } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { ONGLETS_CONSEIL, SousOnglets } from "@/components/SousOnglets";
 
@@ -33,11 +33,19 @@ export default async function PageHistoriqueConseil({ searchParams }: { searchPa
             <dd>{approuves}</dd>
           </div>
           <div className="chiffre">
-            <dt>mensuels</dt>
+            <dt>
+              <LienChiffre href="/conseil/historique?genre=mensuel" detail="voir les rapports mensuels">
+                mensuels
+              </LienChiffre>
+            </dt>
             <dd>{tous.filter((r) => r.genre === "mensuel").length}</dd>
           </div>
           <div className="chiffre">
-            <dt>ponctuels</dt>
+            <dt>
+              <LienChiffre href="/conseil/historique?genre=ponctuel" detail="voir les rapports ponctuels">
+                ponctuels
+              </LienChiffre>
+            </dt>
             <dd>{tous.filter((r) => r.genre === "ponctuel").length}</dd>
           </div>
         </dl>

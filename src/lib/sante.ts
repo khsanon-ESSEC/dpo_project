@@ -3,11 +3,12 @@
  *
  * En retard, si l'une de ces conditions est vraie :
  *  - la fin prévue est dépassée (projet pas finalisé) ;
- *  - un jalon non atteint a plus de JOURS_JALON_EN_RETARD jours de retard ;
+ *  - un livrable ni prêt ni validé a plus de JOURS_JALON_EN_RETARD jours de retard ;
  *  - au moins PART_TACHES_EN_RETARD des tâches ouvertes à échéance sont en retard (MIN_TACHES_EN_RETARD au moins).
  * À surveiller, si l'une de ces conditions est vraie :
  *  - la fin prévue a été repoussée dans les JOURS_REPORT_RECENT derniers jours ;
- *  - un jalon non atteint a dépassé sa date ;
+ *  - un livrable ni prêt ni validé a dépassé sa date ;
+ *  - des tâches ouvertes d'un livrable sont prévues après la date de ce livrable ;
  *  - une tâche a plus de JOURS_TACHE_EN_RETARD jours de retard, ou une tâche est bloquée depuis plus de JOURS_BLOCAGE jours ;
  *  - au rythme des SEMAINES_RYTHME dernières semaines, les tâches ouvertes ne seront pas finies avant la fin prévue ;
  *  - le chef de projet a signalé un risque (il ne peut qu'aggraver : jamais rendre un projet meilleur que le calcul),
@@ -32,7 +33,8 @@ export type Sante = "dans_les_temps" | "a_surveiller" | "en_retard";
 export type DonneesSante = {
   statut: string;
   dateFinPrevue: string | null;
-  jalons: { prevuLe: string | null; atteint: boolean }[];
+  /** Livrables : « atteint » vaut aussi pour un livrable prêt à valider (le travail est fait). */
+  livrables: { prevuLe: string | null; atteint: boolean; tachesApres?: number }[];
   /** Tâches non annulées du projet. */
   taches: { statut: string; echeance: string | null; creeLe: string; termineeLe: string | null; bloqueeDepuis: string | null }[];
   /** Reports de la fin prévue : le jour où ils ont été décidés. */
@@ -59,11 +61,17 @@ export function calculerSante(d: DonneesSante, jour: string): { sante: Sante; ra
   const continu = d.statut === "continu";
   if (!continu && d.dateFinPrevue && d.dateFinPrevue < jour) retard.push(`Fin prévue dépassée (${dateCourte(d.dateFinPrevue)})`);
 
-  // Jalons.
-  const jalonsEnRetard = d.jalons.filter((j) => !j.atteint && j.prevuLe && j.prevuLe < jour);
-  const jalonsTresEnRetard = jalonsEnRetard.filter((j) => ecartJours(j.prevuLe!, jour) > S.JOURS_JALON_EN_RETARD);
-  if (jalonsTresEnRetard.length) retard.push(`${pluriel(jalonsTresEnRetard.length, "jalon")} en retard de plus de ${S.JOURS_JALON_EN_RETARD} jours`);
-  else if (jalonsEnRetard.length) surveiller.push(`${pluriel(jalonsEnRetard.length, "jalon")} en retard`);
+  // Livrables.
+  const livrablesEnRetard = d.livrables.filter((j) => !j.atteint && j.prevuLe && j.prevuLe < jour);
+  const livrablesTresEnRetard = livrablesEnRetard.filter((j) => ecartJours(j.prevuLe!, jour) > S.JOURS_JALON_EN_RETARD);
+  if (livrablesTresEnRetard.length) retard.push(`${pluriel(livrablesTresEnRetard.length, "livrable")} en retard de plus de ${S.JOURS_JALON_EN_RETARD} jours`);
+  else if (livrablesEnRetard.length) surveiller.push(`${pluriel(livrablesEnRetard.length, "livrable")} en retard`);
+  // Un livrable pas encore en retard, mais dont des tâches sont prévues après sa date : il le sera.
+  const menaces = d.livrables.filter((j) => !j.atteint && (j.tachesApres ?? 0) > 0 && !(j.prevuLe && j.prevuLe < jour));
+  if (menaces.length) {
+    const n = menaces.reduce((x, j) => x + (j.tachesApres ?? 0), 0);
+    surveiller.push(`${pluriel(n, "tâche prévue", "tâches prévues")} après la date de ${menaces.length > 1 ? "leur livrable" : "son livrable"}`);
+  }
 
   // Tâches en retard, tâches bloquées.
   const ouvertes = d.taches.filter((t) => t.statut !== "faite");

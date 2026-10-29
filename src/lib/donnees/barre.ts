@@ -95,7 +95,7 @@ export async function ajouterNoteAuRapport(u: Utilisateur, o: { saisie: string; 
 
 /**
  * Le chef de projet (ou le référent DPO, sa direction, les exécutifs) met le projet à jour depuis la barre :
- * « à surveiller : retard du prestataire », « jalon validation métier 15/11 », « fin prévue 20/12 », « lancement 5/1 ».
+ * « à surveiller : retard du prestataire », « livrable validation métier 15/11 », « fin prévue 20/12 », « lancement 5/1 ».
  */
 export async function mettreAJourProjetDepuisBarre(u: Utilisateur, a: Acces, o: { saisie: string; projetId: string }): Promise<ResultatBarre> {
   const projets = await projetsPourSaisie(u);
@@ -107,9 +107,9 @@ export async function mettreAJourProjetDepuisBarre(u: Utilisateur, a: Acces, o: 
   const projetVu = choisi ? projets.find((p) => p.id === choisi) : (enTete?.projet ?? mots?.projet ?? null);
   if (!projetVu || (choisi && !UUID.test(choisi))) return { message: "Projet introuvable." };
   const m = analyserMajProjet(enTete ? enTete.reste : (mots?.texte ?? saisie), aujourdhui());
-  if (!m) return { message: "Écrivez « risque : … », « jalon … 15/11 », « fin prévue 20/12 » ou « lancement 15/01 »." };
+  if (!m) return { message: "Écrivez « risque : … », « livrable … 15/11 », « fin prévue 20/12 » ou « lancement 15/01 »." };
   if (m.genre === "sante" && m.sante === "en_retard")
-    return { message: "La santé d'un projet est calculée par l'application (fin prévue, jalons, tâches). Pour signaler un risque que les données ne montrent pas : « risque : … »." };
+    return { message: "La santé d'un projet est calculée par l'application (fin prévue, livrables, tâches). Pour signaler un risque que les données ne montrent pas : « risque : … »." };
   if (m.genre === "sante" && m.sante === "a_surveiller" && !m.motif) return { message: "Dites quel risque : « risque : le prestataire ne livre pas »." };
   const [p] = await db.select().from(schema.projets).where(eq(schema.projets.id, projetVu.id));
   if (!p || !peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir, suivis: a.suivis }, p))
@@ -118,7 +118,7 @@ export async function mettreAJourProjetDepuisBarre(u: Utilisateur, a: Acces, o: 
 
   let annulation: string;
   if (m.genre === "jalon") {
-    if (!m.libelle) return { message: "Donnez un nom au jalon : « jalon validation métier 15/11 »." };
+    if (!m.libelle) return { message: "Donnez un nom au livrable : « livrable validation métier 15/11 »." };
     const [{ dernier }] = await db.select({ dernier: max(schema.indicateurs.ordre) }).from(schema.indicateurs).where(eq(schema.indicateurs.projetId, p.id));
     const [i] = await db
       .insert(schema.indicateurs)
