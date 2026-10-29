@@ -29,13 +29,15 @@ export default async function PageNouveauPonctuel({ searchParams }: { searchPara
           </a>
         }
       />
-      <div className="page" style={{ maxWidth: 760 }}>
+      <div className="page">
         {erreur ? (
           <p className="erreur" role="alert">
             {erreur}
           </p>
         ) : null}
-        <form action={creerPonctuel} className="carte" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+        <form action={creerPonctuel} className="carte formulaire-volets" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+          <div className="formulaire-volets__groupes">
+          <div className="formulaire-volets__groupe" style={{ gap: 22 }}>
           <div className="champ">
             <label htmlFor="p-titre">Titre</label>
             <input id="p-titre" name="titre" required maxLength={120} placeholder="Ex. : Point de situation après la panne du 26 octobre" />
@@ -54,7 +56,8 @@ export default async function PageNouveauPonctuel({ searchParams }: { searchPara
               Les tâches terminées depuis cette date sont citées dans l&apos;état d&apos;avancement de chaque projet.
             </span>
           </div>
-          <fieldset className="editeur__choix" style={{ border: 0, padding: 0, margin: 0 }}>
+          </div>
+          <fieldset className="editeur__choix formulaire-volets__groupe" style={{ border: 0, padding: 0, margin: 0, gap: 0 }}>
             <legend style={{ fontWeight: 500, marginBottom: 8 }}>Projets</legend>
             <span className="note" style={{ marginBottom: 8, display: "block" }}>
               Les projets stratégiques sont cochés ; ajoutez ou retirez ceux que la demande concerne.
@@ -80,6 +83,7 @@ export default async function PageNouveauPonctuel({ searchParams }: { searchPara
               ))}
             </div>
           </fieldset>
+          </div>
           <div>
             <button type="submit" className="bouton-ambre">
               Préparer le rapport

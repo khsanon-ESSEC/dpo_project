@@ -29,7 +29,8 @@ export default async function PageProfil() {
           </p>
         ) : null}
       </Bandeau>
-      <div className="page" style={{ maxWidth: 640 }}>
+      <div className="page">
+        <div className="cartes-en-grille">
         <section className="carte" aria-labelledby="pr-theme">
           <h2 id="pr-theme" className="carte__titre" style={{ marginBottom: 14 }}>
             Apparence
@@ -51,6 +52,7 @@ export default async function PageProfil() {
             <Icone nom="cadenas" taille={16} /> Changer mon mot de passe
           </a>
         </section>
+        </div>
         <form action={seDeconnecter}>
           <button type="submit" className="bouton-contour">
             <Icone nom="deconnexion" taille={16} /> Se déconnecter

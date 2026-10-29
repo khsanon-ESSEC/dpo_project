@@ -6152,7 +6152,7 @@ a.chaleur__case:focus-visible {
 .glissements__ligne,
 .glissements__axe {
   display: grid;
-  grid-template-columns: minmax(0, 260px) minmax(0, 1fr) 64px;
+  grid-template-columns: minmax(0, max(260px, min(36%, 460px))) minmax(0, 1fr) 64px;
   align-items: center;
   gap: 12px;
 }
@@ -6294,7 +6294,7 @@ a.chaleur__case:focus-visible {
 }
 .barres__ligne {
   display: grid;
-  grid-template-columns: minmax(0, 220px) minmax(0, 1fr) 72px;
+  grid-template-columns: minmax(0, max(220px, min(36%, 460px))) minmax(0, 1fr) 72px;
   align-items: center;
   gap: 12px;
   min-height: 36px;
@@ -6724,12 +6724,19 @@ a.barres__ligne:hover .barres__libelle {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 4px 16px;
+  justify-content: flex-start;
+  gap: 4px 14px;
   margin-bottom: 12px;
 }
 .groupe-equipe__entete .carte__titre {
   margin: 0;
+}
+/* Le poste du responsable suit le décompte des rapports, à gauche, séparé par un filet. */
+@media (min-width: 600px) {
+  .groupe-equipe__entete .rangee__sous {
+    padding-left: 14px;
+    border-left: 1px solid var(--surface-filet);
+  }
 }
 .grille-equipe {
   display: grid;
@@ -6899,7 +6906,8 @@ a.pastille-rapport:hover {
 }
 .taches-projets__ligne {
   display: grid;
-  grid-template-columns: minmax(0, 210px) minmax(0, 1fr) 44px;
+  /* Le nom du projet prend jusqu'à 460 px quand la carte est large (210 px au moins, comme sur téléphone). */
+  grid-template-columns: minmax(0, max(210px, min(36%, 460px))) minmax(0, 1fr) 44px;
   align-items: center;
   gap: 12px;
 }
@@ -7929,6 +7937,89 @@ a.pastille-rapport:hover {
 }
 @media (max-width: 899px) {
   .colonne-large__partie {
+    gap: 20px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Toutes les pages sur grand écran (29 octobre 2026). Plus de page bornée à 640–980 px :
+   - .cartes-en-grille : les cartes d'une page (mois, équipes, groupes) se rangent en colonnes ;
+   - .liste--colonnes : une longue liste (alertes) se lit sur deux ou trois colonnes ;
+   - .volets : un formulaire à gauche, les cartes qui l'accompagnent à droite ;
+   - .formulaire-volets : un formulaire seul dont les champs se partagent en deux groupes côte à côte.
+   Sous 1 600 px de fenêtre, tout reste sur une colonne, et un formulaire garde une largeur de lecture.
+   --------------------------------------------------------------------------- */
+.cartes-en-grille {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-width: 0;
+}
+.volets {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  max-width: 960px;
+  min-width: 0;
+}
+.volets__partie,
+.formulaire-volets__groupe {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+.volets__partie {
+  gap: 28px;
+}
+.formulaire-volets {
+  max-width: 960px;
+}
+.formulaire-volets__groupes {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+@media (min-width: 1600px) {
+  .cartes-en-grille {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 620px), 1fr));
+    align-items: start;
+  }
+  .cartes-en-grille > .pleine-largeur {
+    grid-column: 1 / -1;
+  }
+  .liste--colonnes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 620px), 1fr));
+    column-gap: 40px;
+  }
+  .volets {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    max-width: none;
+  }
+  .formulaire-volets {
+    max-width: none;
+  }
+  .formulaire-volets__groupes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    column-gap: 40px;
+  }
+  .formulaire-volets > .bouton-ambre--large {
+    align-self: flex-start;
+    width: auto;
+    min-width: 360px;
+  }
+}
+@media (max-width: 899px) {
+  .volets,
+  .volets__partie,
+  .cartes-en-grille {
     gap: 20px;
   }
 }

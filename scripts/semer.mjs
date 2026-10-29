@@ -837,6 +837,10 @@ await sql.begin(async (tx) => {
       values (${RP}, ${PJ[k]}, ${ordreP}, ${ETATS_PONCTUEL[k]}, ${pr.dernier?.fin ?? null}, ${pr.fin}, ${pr.lancement})`;
   }
 
+  // Listes de référence (programmes, divisions) : celles des projets de démonstration.
+  await tx`insert into listes_projet (genre, libelle) select distinct 'programme', programme from projets where programme <> '' on conflict do nothing`;
+  await tx`insert into listes_projet (genre, libelle) select distinct 'division', division from projets where division <> '' on conflict do nothing`;
+
   await tx`insert into journal (action, objet, details) values ('donnees_exemple', 'base', ${sql.json({ personnes: gens.length, projets: projets.length, version: VERSION_DONNEES_EXEMPLE })})`;
 });
 

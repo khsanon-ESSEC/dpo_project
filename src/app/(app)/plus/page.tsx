@@ -63,7 +63,8 @@ export default async function PagePlus() {
   return (
     <>
       <Bandeau surtitre={`${u.prenom} ${u.nom}`} titre="Plus" />
-      <div className="page" style={{ maxWidth: 640 }}>
+      <div className="page">
+        <div className="cartes-en-grille">
         {groupes.map((g) => (
           <section key={g.titre} className="carte carte--liste" aria-labelledby={`plus-${g.titre}`}>
             <h2 id={`plus-${g.titre}`} className="carte__titre">
@@ -108,6 +109,7 @@ export default async function PagePlus() {
             </form>
           </div>
         </section>
+        </div>
       </div>
     </>
   );

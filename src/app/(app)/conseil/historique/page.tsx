@@ -50,7 +50,7 @@ export default async function PageHistoriqueConseil({ searchParams }: { searchPa
           </div>
         </dl>
       </Bandeau>
-      <div className="page" style={{ maxWidth: 980 }}>
+      <div className="page">
         <SousOnglets onglets={ONGLETS_CONSEIL} courant="/conseil/historique" label="Rapports au conseil" />
         <div className="ligne-actions">
           <nav className="filtres" aria-label="Genre de rapport">
@@ -71,7 +71,7 @@ export default async function PageHistoriqueConseil({ searchParams }: { searchPa
             <h2 id={`h-${an}`} className="carte__titre">
               {an}
             </h2>
-            <ul className="liste">
+            <ul className="liste liste--colonnes">
               {liste
                 .filter((r) => r.date.startsWith(an))
                 .map((r) => {

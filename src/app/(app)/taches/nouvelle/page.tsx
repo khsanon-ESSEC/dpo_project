@@ -45,7 +45,7 @@ export default async function PageNouvelleTache({ searchParams }: { searchParams
           </a>
         }
       />
-      <div className="page" style={{ maxWidth: 760 }}>
+      <div className="page">
         <FormulaireNouvelleTache
           projets={projets}
           personnes={personnes}

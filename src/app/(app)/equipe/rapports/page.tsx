@@ -59,10 +59,11 @@ export default async function PageRapportsEquipe({ searchParams }: { searchParam
             </div>
           </dl>
         </Bandeau>
-        <div className="page" style={{ maxWidth: 980 }}>
+        <div className="page">
           <SousOnglets onglets={ONGLETS_EQUIPE} courant="/equipe/rapports" label="Équipe" />
           <ChoixPersonne options={options} choisie={personne} />
           {liste.length === 0 ? <p className="vide">Aucun rapport envoyé.</p> : null}
+          <div className="cartes-en-grille">
           {mois.map((m) => (
             <section key={m} className="carte carte--liste" aria-labelledby={`m-${m}`}>
               <h2 id={`m-${m}`} className="carte__titre">
@@ -79,6 +80,7 @@ export default async function PageRapportsEquipe({ searchParams }: { searchParam
               </ul>
             </section>
           ))}
+          </div>
         </div>
       </>
     );
@@ -107,7 +109,7 @@ export default async function PageRapportsEquipe({ searchParams }: { searchParam
           </div>
         </dl>
       </Bandeau>
-      <div className="page" style={{ maxWidth: 980 }}>
+      <div className="page">
         <SousOnglets onglets={ONGLETS_EQUIPE} courant="/equipe/rapports" label="Équipe" />
         <div className="ligne-actions">
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -128,6 +130,7 @@ export default async function PageRapportsEquipe({ searchParams }: { searchParam
           <ChoixPersonne options={options} />
         </div>
         {lignes.length === 0 ? <p className="vide">Personne ne vous envoie de rapport pour le moment.</p> : null}
+        <div className="cartes-en-grille">
         {equipes.map((eq) => (
           <section key={eq} className="carte carte--liste" aria-label={eq}>
             {equipes.length > 1 ? <h2 className="carte__titre">{eq}</h2> : null}
@@ -164,6 +167,7 @@ export default async function PageRapportsEquipe({ searchParams }: { searchParam
             </ul>
           </section>
         ))}
+        </div>
         <p className="note">
           L&apos;icône <Icone nom="historique" taille={14} /> ouvre tous les rapports d&apos;une personne. Votre propre historique est dans Rapport → Mes rapports.
         </p>

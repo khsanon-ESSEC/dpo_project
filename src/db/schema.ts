@@ -151,6 +151,25 @@ export const projets = pgTable("projets", {
   majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Listes de référence des projets (demandé le 29 octobre 2026) : les programmes et les divisions proposés dans les
+ * formulaires. Le projet garde le libellé (projets.programme, projets.division) : renommer une valeur renomme aussi
+ * les projets qui la portent ; une valeur retirée n'est plus proposée, les projets qui la portent la gardent.
+ */
+export const listesProjet = pgTable(
+  "listes_projet",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    /** « programme » ou « division ». */
+    genre: text().notNull(),
+    libelle: text().notNull(),
+    actif: boolean().notNull().default(true),
+    creeParId: uuid("cree_par_id").references((): AnyPgColumn => personnes.id, { onDelete: "set null" }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("listes_projet_libelle_idx").on(t.genre, sql`lower(${t.libelle})`)],
+);
+
 /** Équipe d'un projet : établie par le chef de projet. Les membres voient le projet et reçoivent ses tâches. */
 export const membresProjet = pgTable(
   "membres_projet",

@@ -17,6 +17,8 @@ import { ListeFiltrable } from "@/components/ListeFiltrable";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { ChoixPersonne } from "@/components/ChoixPersonne";
+import { ChoixListe } from "@/components/ChoixListe";
+import { choixListes, peutGererListes } from "@/lib/donnees/listes";
 import { archiver, deplacerInd, enregistrerLivrable, enregistrerProjet, nouveauLivrable, retirerInd, supprimer } from "../../gestion-actions";
 
 export const metadata: Metadata = { title: "Modifier le projet" };
@@ -56,6 +58,8 @@ export default async function PageModifierProjet({ params, searchParams }: { par
   ];
   const supprimable = projetSupprimable(activite);
   const demande = p.statut === "requete" || p.statut === "refuse";
+  const listes = await choixListes();
+  const gereListes = peutGererListes(u, a);
 
   return (
     <>
@@ -68,7 +72,7 @@ export default async function PageModifierProjet({ params, searchParams }: { par
           </a>
         }
       />
-      <div className="page" style={{ maxWidth: 860 }}>
+      <div className="page">
         {erreur ? (
           <p className="erreur" role="alert">
             {erreur}
@@ -78,6 +82,8 @@ export default async function PageModifierProjet({ params, searchParams }: { par
             Projet enregistré.
           </p>
         ) : null}
+        <div className="volets">
+        <div className="volets__partie">
         <form action={enregistrerProjet.bind(null, p.id)} className="carte" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <h2 className="carte__titre" style={{ margin: 0 }}>
             Fiche du projet
@@ -97,16 +103,19 @@ export default async function PageModifierProjet({ params, searchParams }: { par
             <textarea id="mp-description" name="description" rows={3} defaultValue={p.description} maxLength={2000} />
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
-            <div className="champ" style={{ flex: "2 1 240px" }}>
-              <label htmlFor="mp-programme">Programme</label>
-              <input id="mp-programme" name="programme" defaultValue={p.programme} maxLength={160} />
+            <div style={{ flex: "2 1 240px", minWidth: 0 }}>
+              <ChoixListe id="mp-programme" name="programme" libelle="Programme" valeurs={listes.programme} actuelle={p.programme} vide="Aucun programme" lienListes={gereListes} />
             </div>
-            <div className="champ" style={{ flex: "1 1 220px" }}>
-              <label htmlFor="mp-division">Division du projet</label>
-              <input id="mp-division" name="division" defaultValue={p.division} maxLength={120} placeholder="Vide : la DPO" aria-describedby="mp-division-aide" />
-              <span className="aide" id="mp-division-aide">
-                Pour un projet d&apos;une autre division. Il n&apos;entre pas dans le rapport mensuel au conseil.
-              </span>
+            <div style={{ flex: "1 1 220px", minWidth: 0 }}>
+              <ChoixListe
+                id="mp-division"
+                name="division"
+                libelle="Division du projet"
+                valeurs={listes.division}
+                actuelle={p.division}
+                vide="La DPO"
+                aide="Pour un projet d'une autre division. Il n'entre pas dans le rapport mensuel au conseil."
+              />
             </div>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
@@ -196,6 +205,8 @@ export default async function PageModifierProjet({ params, searchParams }: { par
             </button>
           </div>
         </form>
+        </div>
+        <div className="volets__partie">
 
         <section className="carte carte--liste" id="phases" aria-labelledby="mp-phases" style={{ scrollMarginTop: 80 }}>
           <h2 id="mp-phases" className="carte__titre">
@@ -486,6 +497,8 @@ export default async function PageModifierProjet({ params, searchParams }: { par
             </form>
           )}
         </section>
+        </div>
+        </div>
       </div>
     </>
   );

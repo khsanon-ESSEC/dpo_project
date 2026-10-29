@@ -7,7 +7,8 @@ import { courrielActif } from "@/lib/courriel";
 import { bilanCourriels } from "@/lib/donnees/courriels";
 import { semaineCourante } from "@/lib/donnees/rapport";
 import { Bandeau } from "@/components/Bandeau";
-import { ONGLETS_ORGANISATION, SousOnglets } from "@/components/SousOnglets";
+import { ongletsOrganisation, SousOnglets } from "@/components/SousOnglets";
+import { acces } from "@/lib/acces";
 import { Courbes, valeurTexte } from "@/components/Courbes";
 import { debutDesDonnees } from "@/lib/donnees/bilan";
 import { ecart, moisDebutExercice, planBilan } from "@/lib/bilan";
@@ -79,8 +80,8 @@ export default async function PagePilote({ searchParams }: { searchParams: Promi
           </div>
         </dl>
       </Bandeau>
-      <div className="page" style={{ maxWidth: 980 }}>
-        <SousOnglets onglets={u.administrateur ? ONGLETS_ORGANISATION : ONGLETS_ORGANISATION.filter((o) => o.href === "/organisation" || o.href === "/pilote")} courant="/pilote" label="Organisation" />
+      <div className="page">
+        <SousOnglets onglets={ongletsOrganisation(u, (await acces(u)).toutVoir)} courant="/pilote" label="Organisation" />
         <section aria-labelledby="p-tendances" id="tendances" style={{ scrollMarginTop: 80 }}>
           <h2 id="p-tendances" className="carte__titre" style={{ marginBottom: 12 }}>
             Adoption

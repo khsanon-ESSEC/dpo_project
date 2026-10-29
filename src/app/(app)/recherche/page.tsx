@@ -26,11 +26,11 @@ export default async function PageRecherche({ searchParams }: { searchParams: Pr
   return (
     <>
       <Bandeau surtitre="Chercher, ou ajouter une tâche" titre="Rechercher" />
-      <div className="page" style={{ maxWidth: 760 }}>
+      <div className="page">
         {q && !r ? <p className="note">Tapez au moins deux lettres.</p> : null}
         {r && !total ? <p className="vide">Rien trouvé pour « {q} ». Essayez un autre mot, ou une partie du nom.</p> : null}
         {r ? (
-          <>
+          <div className="cartes-en-grille">
             {groupe(
               "Aller à",
               "rq-ecrans",
@@ -113,7 +113,7 @@ export default async function PageRecherche({ searchParams }: { searchParams: Pr
                 </li>
               )),
             )}
-          </>
+          </div>
         ) : !q ? (
           <div className="note" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span>Une seule barre pour chercher et pour ajouter : écrivez « Relire maquettes », tapez / pour choisir un projet, @ pour une personne, puis Entrée. # affiche vos tâches ouvertes.</span>

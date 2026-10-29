@@ -13,6 +13,7 @@ import { chargerOrganisation, personneActuelle } from "@/lib/organisation";
 import { codeSuggere, codeValide, motifReport, peutAssigner, reportExigeMotif, projetOuvert, projetSupprimable, STATUTS_ACCEPTES, tacheSupprimable, verifierChefEtReferent, type StatutProjet } from "@/lib/projets";
 import { membresDeLaDirection, nomComplet, resoudreSuperieur } from "@/lib/regles";
 import { trouverOuCreerExterne } from "./externes";
+import { MESSAGE_HORS_LISTE, valeurDeListe } from "./listes";
 import { noterReportFin } from "./reports-fin";
 import { recalculerSante } from "./sante";
 
@@ -62,6 +63,11 @@ export async function proposerProjet(d: DemandeProjet, parId: string): Promise<{
   const code = d.code.trim() ? codeValide(d.code) : codeSuggere(titre, pris);
   if (!code) return { erreur: "Le code a 2 à 4 lettres ou chiffres." };
   if (pris.includes(code)) return { erreur: `Le code ${code} est déjà pris.` };
+  // Programme et division : choisis dans les listes de référence (Organisation → Listes).
+  const programme = await valeurDeListe("programme", d.programme);
+  if (programme === null) return { erreur: MESSAGE_HORS_LISTE.programme };
+  const division = await valeurDeListe("division", d.division);
+  if (division === null) return { erreur: MESSAGE_HORS_LISTE.division };
   const org = await chargerOrganisation();
   const chefSuggere = d.chefSuggereId && org.personnes.get(d.chefSuggereId)?.actif ? d.chefSuggereId : null;
   const [p] = await db
@@ -70,7 +76,7 @@ export async function proposerProjet(d: DemandeProjet, parId: string): Promise<{
       code,
       titre,
       description: texte(d.description, 2000),
-      programme: texte(d.programme, 160),
+      programme,
       strategique: d.strategique,
       statut: "requete",
       chefProjetId: chefSuggere,
@@ -79,7 +85,7 @@ export async function proposerProjet(d: DemandeProjet, parId: string): Promise<{
       demandeParId: parId,
       demandeLe: new Date(),
       justification,
-      division: texte(d.division, 120),
+      division,
     })
     .returning({ id: schema.projets.id });
   // Les directeurs au-dessus du demandeur, et les exécutifs.
@@ -116,13 +122,15 @@ export async function deciderDemande(
     if (incoherence) return { erreur: incoherence };
     const statut = (STATUTS_ACCEPTES as string[]).includes(d.statut ?? "") ? (d.statut as StatutProjet) : "en_attente";
     const fin = date(d.dateFinPrevue) ?? p.dateFinPrevue;
+    const division = d.division !== undefined ? await valeurDeListe("division", d.division, p.division) : p.division;
+    if (division === null) return { erreur: MESSAGE_HORS_LISTE.division };
     await db
       .update(schema.projets)
       .set({
         statut: statut as typeof p.statut,
         chefProjetId: chef,
         referentId: referent,
-        division: d.division !== undefined ? texte(d.division, 120) : p.division,
+        division,
         dateEntree: date(d.dateEntree) ?? p.dateEntree,
         dateFinPrevue: fin,
         dateFinInitiale: p.dateFinInitiale ?? fin,
@@ -201,16 +209,20 @@ export async function modifierProjet(projetId: string, d: ModifProjet, parId: st
     if (d.sponsorId && !sponsorP?.actif && d.sponsorId !== p.sponsorId) return { erreur: "Ce sponsor n'est plus actif." };
     sponsorId = sponsorP ? sponsorP.id : null;
   }
+  const programme = await valeurDeListe("programme", d.programme, p.programme);
+  if (programme === null) return { erreur: MESSAGE_HORS_LISTE.programme };
+  const division = await valeurDeListe("division", d.division, p.division);
+  if (division === null) return { erreur: MESSAGE_HORS_LISTE.division };
   const valeurs = {
     code,
     titre,
     description: texte(d.description, 2000),
-    programme: texte(d.programme, 160),
+    programme,
     strategique: d.strategique,
     statut: statut as typeof p.statut,
     chefProjetId: chef,
     referentId: referent,
-    division: texte(d.division, 120),
+    division,
     dateEntree: date(d.dateEntree),
     dateFinInitiale: date(d.dateFinInitiale),
     dateFinPrevue: date(d.dateFinPrevue),

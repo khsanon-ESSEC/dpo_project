@@ -43,10 +43,11 @@ export default async function PageMesRapports() {
           </div>
         </dl>
       </Bandeau>
-      <div className="page" style={{ maxWidth: 980 }}>
+      <div className="page">
         <SousOnglets onglets={ONGLETS_RAPPORT} courant="/rapports" label="Rapports" />
         <span id="rapports" style={{ display: "block", scrollMarginTop: 80 }} />
         {liste.length === 0 ? <p className="vide">Pas encore de rapport. Le premier se prépare tout seul à partir de vos tâches, dans l&apos;onglet « Cette semaine ».</p> : null}
+        <div className="cartes-en-grille">
         {mois.map((m) => (
           <section key={m} className="carte carte--liste" aria-labelledby={`m-${m}`}>
             <h2 id={`m-${m}`} className="carte__titre">
@@ -72,6 +73,7 @@ export default async function PageMesRapports() {
             </ul>
           </section>
         ))}
+        </div>
       </div>
     </>
   );

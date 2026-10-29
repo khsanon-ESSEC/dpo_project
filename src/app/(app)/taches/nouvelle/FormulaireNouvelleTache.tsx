@@ -97,13 +97,15 @@ export function FormulaireNouvelleTache({
   const n = ind ? NIVEAU[ind.niveau] : null;
 
   return (
-    <form action={action} style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+    <form action={action} className="formulaire-volets" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {retour ? <input type="hidden" name="retour" value={retour} /> : null}
       {etat.message ? (
         <p className="erreur" role="alert">
           {etat.message}
         </p>
       ) : null}
+      <div className="formulaire-volets__groupes" style={{ gap: 20 }}>
+      <div className="formulaire-volets__groupe" style={{ gap: 20 }}>
       <div className="champ">
         <label htmlFor="titre">Titre</label>
         <SaisieLigne
@@ -129,6 +131,8 @@ export function FormulaireNouvelleTache({
         <label htmlFor="description">Précisions (facultatif)</label>
         <textarea id="description" name="description" rows={2} maxLength={4000} />
       </div>
+      </div>
+      <div className="formulaire-volets__groupe" style={{ gap: 20 }}>
       <div className="champ">
         <label htmlFor="projetId">Projet</label>
         <select id="projetId" name="projetId" value={projet} onChange={(e) => setProjet(e.target.value)}>
@@ -202,6 +206,8 @@ export function FormulaireNouvelleTache({
           <label htmlFor="estimationHeures">Temps estimé (heures)</label>
           <input id="estimationHeures" name="estimationHeures" type="number" min={1} max={400} step={1} inputMode="numeric" value={heures} onChange={(e) => setHeures(e.target.value)} />
         </div>
+      </div>
+      </div>
       </div>
       <p className="note">Le temps estimé sert à mesurer la charge de chacun. Sans estimation, une tâche compte pour 4 heures.</p>
       <button type="submit" className="bouton-ambre bouton-ambre--large" disabled={enCours || !pret}>

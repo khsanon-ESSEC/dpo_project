@@ -152,7 +152,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
           ) : null}
         </dl>
       </Bandeau>
-      <div className="page" style={{ maxWidth: 760 }}>
+      <div className="page">
         {leLivrable ? (
           <p className={`note-livrable${apresLivrable ? " note-livrable--apres" : ""}`}>
             <Icone nom="drapeau" taille={16} />
@@ -210,6 +210,8 @@ export default async function PageTache({ params, searchParams }: { params: Prom
           </div>
         ) : null}
         {t.description && t.annuleeLe ? <p style={{ whiteSpace: "pre-line" }}>{t.description}</p> : null}
+        <div className="volets">
+        <div className="volets__partie">
         {t.annuleeLe || !modifiable ? null : (
           <section aria-labelledby="t-ligne" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <h2 id="t-ligne" className="carte__titre" style={{ margin: 0 }}>
@@ -236,6 +238,43 @@ export default async function PageTache({ params, searchParams }: { params: Prom
           retour={retour ?? null}
         />
         )}
+        {t.annuleeLe ? null : (
+          <DefinitionTache
+            key={`def-${t.majLe.toISOString()}`}
+            tacheId={t.id}
+            titre={t.titre}
+            description={t.description}
+            projetId={t.projetId ?? ""}
+            livrableId={t.livrableId ?? ""}
+            priorite={t.priorite}
+            livrables={livrables}
+            parLivrable={parLivrable}
+            assigneId={t.assigneId}
+            projets={projets}
+            personnes={personnes}
+            base={base}
+            parProjet={parProjet}
+            externesPartout={externesPartout}
+            horsProjet={horsProjet}
+          />
+        )}
+        <section aria-labelledby="t-historique">
+          <h2 id="t-historique" className="carte__titre">
+            Historique
+          </h2>
+          <ol className="liste">
+            {evenements.map((ev) => (
+              <li key={ev.id} style={{ display: "flex", gap: 12, padding: "10px 0", fontSize: 13, lineHeight: "18px", borderTop: 0 }}>
+                <span style={{ width: 64, flex: "none", color: "var(--discret)" }}>
+                  {jourAbrege(dateLocale(ev.creeLe))} {Number(dateLocale(ev.creeLe).slice(8))}
+                </span>
+                <span>{decrire(ev)}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+        </div>
+        <div className="volets__partie">
         {t.projetId && !t.annuleeLe && (ench.precedentes.length || ench.suivantes.length || peutModifierTache(a, t)) ? (
           <section className="carte carte--liste" id="enchainement" aria-labelledby="t-enchainement" style={{ scrollMarginTop: 80 }}>
             <h2 id="t-enchainement" className="carte__titre">
@@ -480,26 +519,6 @@ export default async function PageTache({ params, searchParams }: { params: Prom
           </section>
         ) : null}
         {t.annuleeLe ? null : (
-          <DefinitionTache
-            key={`def-${t.majLe.toISOString()}`}
-            tacheId={t.id}
-            titre={t.titre}
-            description={t.description}
-            projetId={t.projetId ?? ""}
-            livrableId={t.livrableId ?? ""}
-            priorite={t.priorite}
-            livrables={livrables}
-            parLivrable={parLivrable}
-            assigneId={t.assigneId}
-            projets={projets}
-            personnes={personnes}
-            base={base}
-            parProjet={parProjet}
-            externesPartout={externesPartout}
-            horsProjet={horsProjet}
-          />
-        )}
-        {t.annuleeLe ? null : (
           <section className="carte" id="suppression" aria-labelledby="t-suppr" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <h2 id="t-suppr" className="carte__titre" style={{ margin: 0 }}>
               {supprimable ? "Supprimer la tâche" : "Annuler la tâche"}
@@ -533,21 +552,8 @@ export default async function PageTache({ params, searchParams }: { params: Prom
             )}
           </section>
         )}
-        <section aria-labelledby="t-historique">
-          <h2 id="t-historique" className="carte__titre">
-            Historique
-          </h2>
-          <ol className="liste">
-            {evenements.map((ev) => (
-              <li key={ev.id} style={{ display: "flex", gap: 12, padding: "10px 0", fontSize: 13, lineHeight: "18px", borderTop: 0 }}>
-                <span style={{ width: 64, flex: "none", color: "var(--discret)" }}>
-                  {jourAbrege(dateLocale(ev.creeLe))} {Number(dateLocale(ev.creeLe).slice(8))}
-                </span>
-                <span>{decrire(ev)}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
+        </div>
+        </div>
       </div>
     </>
   );

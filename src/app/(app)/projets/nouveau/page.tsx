@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import { exigerInterne } from "@/lib/auth/session";
+import { acces } from "@/lib/acces";
+import { choixListes, peutGererListes } from "@/lib/donnees/listes";
+import { ChoixListe } from "@/components/ChoixListe";
 import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet } from "@/lib/regles";
 import { Bandeau } from "@/components/Bandeau";
@@ -14,6 +17,8 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
   const { erreur } = await searchParams;
   const u = await exigerInterne();
   const org = await chargerOrganisation();
+  const listes = await choixListes();
+  const gereListes = peutGererListes(u, await acces(u));
   const personnes = [...org.personnes.values()]
     .filter((p) => p.actif)
     .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
@@ -33,13 +38,15 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
           Votre proposition part à la direction. Un directeur ou un exécutif l&apos;accepte et nomme le chef de projet, ou la refuse en vous disant pourquoi.
         </p>
       </Bandeau>
-      <div className="page" style={{ maxWidth: 760 }}>
+      <div className="page">
         {erreur ? (
           <p className="erreur" role="alert">
             {erreur}
           </p>
         ) : null}
-        <form action={proposer} className="carte" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        <form action={proposer} className="carte formulaire-volets" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div className="formulaire-volets__groupes" style={{ gap: 20 }}>
+          <div className="formulaire-volets__groupe" style={{ gap: 20 }}>
           <div className="champ">
             <label htmlFor="pp-titre">Titre</label>
             <input id="pp-titre" name="titre" required maxLength={160} placeholder="Ex. : Signature électronique des contrats de prêt" />
@@ -55,23 +62,26 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
             <label htmlFor="pp-description">Description (facultatif)</label>
             <textarea id="pp-description" name="description" rows={3} maxLength={2000} />
           </div>
+          </div>
+          <div className="formulaire-volets__groupe" style={{ gap: 20 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
-            <div className="champ" style={{ flex: "2 1 240px" }}>
-              <label htmlFor="pp-programme">Programme (facultatif)</label>
-              <input id="pp-programme" name="programme" maxLength={160} placeholder="Ex. : Amélioration de l'expérience client" />
+            <div style={{ flex: "2 1 240px", minWidth: 0 }}>
+              <ChoixListe id="pp-programme" name="programme" libelle="Programme (facultatif)" valeurs={listes.programme} vide="Aucun programme" lienListes={gereListes} />
             </div>
             <div className="champ" style={{ flex: "1 1 160px" }}>
               <label htmlFor="pp-fin">Fin souhaitée (facultatif)</label>
               <input id="pp-fin" name="finSouhaitee" type="date" />
             </div>
           </div>
-          <div className="champ">
-            <label htmlFor="pp-division">Projet d&apos;une autre division ? (facultatif)</label>
-            <input id="pp-division" name="division" maxLength={120} placeholder="Ex. : Division Réseau et succursales" aria-describedby="pp-division-aide" />
-            <span className="aide" id="pp-division-aide">
-              Laissez vide pour un projet de la DPO. Pour le projet d&apos;une autre division, son chef de projet peut être hors division ; la direction nommera un référent de la DPO.
-            </span>
-          </div>
+          <ChoixListe
+            id="pp-division"
+            name="division"
+            libelle="Division du projet"
+            valeurs={listes.division}
+            vide="La DPO (projet de la division)"
+            aide="Pour le projet d'une autre division, son chef de projet peut être hors division ; la direction nommera un référent de la DPO."
+            lienListes={gereListes}
+          />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
             <div style={{ flex: "2 1 240px", minWidth: 0 }}>
               <ChoixPersonne id="pp-chef" name="chefSuggereId" prefixe="chef" libelle="Chef de projet suggéré (facultatif)" personnes={personnes} vide="À choisir par la direction" />
@@ -91,6 +101,8 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
             </span>
             <input type="checkbox" className="interrupteur" name="strategique" />
           </label>
+          </div>
+          </div>
           <div>
             <button type="submit" className="bouton-ambre">
               Envoyer la proposition

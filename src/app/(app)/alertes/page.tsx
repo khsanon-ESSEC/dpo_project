@@ -25,7 +25,7 @@ export default async function PageAlertes() {
   return (
     <>
       <Bandeau surtitre={nonLues ? `${nonLues} non lue${nonLues > 1 ? "s" : ""}` : "Tout est lu"} titre="Alertes" />
-      <div className="page" style={{ maxWidth: 860 }}>
+      <div className="page">
         {nonLues ? (
           <form action={toutMarquerLu} style={{ alignSelf: "flex-end" }}>
             <button type="submit" className="bouton-contour">
@@ -34,7 +34,7 @@ export default async function PageAlertes() {
           </form>
         ) : null}
         <section className="carte carte--liste" aria-label="Alertes">
-          <ul className="liste">
+          <ul className="liste liste--colonnes">
             {alertes.map((a, i) => (
               <li key={a.id} className="apparition" style={{ animationDelay: `${Math.min(i, 10) * 40}ms` }}>
                 <a href={a.lien ?? "#"} className="rangee" style={{ fontWeight: a.lue ? 400 : 500 }}>

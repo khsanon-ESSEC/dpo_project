@@ -232,7 +232,7 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
             <div className="taches-projets">
               {e.charge.map(({ id, code, titre: nom, n, faites }) => (
                 <div key={id} className="taches-projets__ligne">
-                  <span className="taches-projets__nom">
+                  <span className="taches-projets__nom" title={`${code} · ${nom}`}>
                     <span className="etiquette-projet">{code}</span>
                     <LienProjet id={id} visible={voit(id)}>
                       {nom}

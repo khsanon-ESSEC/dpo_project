@@ -45,7 +45,7 @@ export default async function PageApercu({ params }: { params: Promise<{ id: str
           Ce que la personne voit chaque semaine, dans cet ordre. Le contenu est préparé à partir de ses tâches{d.modele.genre === "chef" ? " et des rapports qu'elle reçoit" : ""}.
         </p>
       </Bandeau>
-      <div className="page" style={{ maxWidth: 860, display: "flex", flexDirection: "column", gap: 20 }}>
+      <div className="page" style={{ gap: 20 }}>
         {d.champs.map((c) => (
           <ChampRapport key={c.id} c={c} x={x} />
         ))}

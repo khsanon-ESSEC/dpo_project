@@ -39,6 +39,8 @@ import { ChoixPeriode } from "@/components/ChoixPeriode";
 import { reportsFinDe } from "@/lib/donnees/reports-fin";
 import { Courbes } from "@/components/Courbes";
 import { FriseReports } from "@/components/Graphiques";
+import { ChoixListe } from "@/components/ChoixListe";
+import { choixListes } from "@/lib/donnees/listes";
 
 export const metadata: Metadata = { title: "Projet" };
 
@@ -68,6 +70,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const org = await chargerOrganisation();
   const [membres, roles] = await Promise.all([membresDuProjet(id), peutModifier && actif ? rolesDesEquipes() : Promise.resolve([] as string[])]);
   const nom = (pid: string | null) => (pid && org.personnes.get(pid) ? nomComplet(org.personnes.get(pid)!) : null);
+  const listesDivision = demande && peutDecider(a) ? (await choixListes()).division : [];
   const personnesActives = [...org.personnes.values()]
     .filter((x) => x.actif)
     .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
@@ -478,9 +481,8 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                   <h3 style={{ margin: 0, fontSize: 15, fontWeight: 500 }}>Accepter</h3>
                   <ChoixPersonne id="d-chef" name="chefProjetId" prefixe="chef" libelle="Chef de projet" personnes={personnesActives} defaut={p.chefProjetId} vide="Choisir" />
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
-                    <div className="champ" style={{ flex: "1 1 180px" }}>
-                      <label htmlFor="d-division">Division du projet</label>
-                      <input id="d-division" name="division" defaultValue={p.division} maxLength={120} placeholder="Vide : la DPO" />
+                    <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+                      <ChoixListe id="d-division" name="division" libelle="Division du projet" valeurs={listesDivision} actuelle={p.division} vide="La DPO" />
                     </div>
                     <div style={{ flex: "1 1 180px", minWidth: 0 }}>
                       <ChoixPersonne
