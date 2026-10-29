@@ -9152,3 +9152,168 @@ a.livrable__lien:focus-visible {
     margin-top: 8px;
   }
 }
+
+/* ---------- Demande de projet (fiche du projet) ---------- */
+.demande {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.demande--attente {
+  border-color: var(--veille-point);
+}
+.demande__entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.demande__statut {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--tag);
+  color: var(--tag-encre);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+}
+.demande__statut::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--veille-point);
+}
+.demande__statut--refusee {
+  background: transparent;
+  border: 1px solid var(--retard-point);
+  color: var(--retard);
+}
+.demande__statut--refusee::before {
+  background: var(--retard-point);
+}
+.demande__qui {
+  margin: -8px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--discret);
+}
+.demande__grille {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  gap: 16px 32px;
+  align-items: start;
+}
+.demande__textes {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.demande__etiquette {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+.demande__pourquoi {
+  margin: 0;
+  padding: 2px 0 2px 14px;
+  border-left: 3px solid var(--arc);
+  font-size: 17px;
+  line-height: 26px;
+  white-space: pre-line;
+  color: var(--encre);
+}
+.demande__texte {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  white-space: pre-line;
+}
+.demande__faits {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--filet);
+  background: var(--fond);
+}
+.demande__faits > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+}
+.demande__faits > div + div {
+  border-top: 1px solid var(--filet);
+}
+.demande__faits dt {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--discret);
+}
+.demande__faits dd {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  text-align: right;
+}
+.demande__cadrage {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--filet);
+}
+.pastilles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.pastille {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--filet-fort);
+  background: var(--choisi);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--encre);
+}
+.pastille--ok {
+  border-color: var(--ok-point);
+  color: var(--ok);
+  background: transparent;
+}
+.pastille--manque {
+  border-style: dashed;
+  background: transparent;
+  color: var(--discret);
+}
+.pastille--vide {
+  background: transparent;
+  color: var(--discret);
+}
+@media (max-width: 899px) {
+  .demande__grille,
+  .demande__cadrage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.demande__decision {
+  padding-top: 18px;
+  border-top: 1px solid var(--filet);
+}

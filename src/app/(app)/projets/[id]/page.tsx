@@ -52,7 +52,7 @@ import { CarteConseil } from "./CarteConseil";
 import { avancementPourProjet } from "@/lib/donnees/avancement-conseil";
 import { kitDuProjet, projetPourKit } from "@/lib/donnees/kit";
 import { tailleDuKit } from "@/lib/kit";
-import { cadrageValide, lignesCadrage } from "@/lib/cadrage";
+import { cadrageValide, pastillesCadrage } from "@/lib/cadrage";
 
 export const metadata: Metadata = { title: "Projet" };
 
@@ -525,11 +525,14 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
           </p>
         ) : null}
         {demande || refuse ? (
-          <section className="carte" id="decision" aria-labelledby="p-demande" style={{ display: "flex", flexDirection: "column", gap: 14, borderColor: demande ? "var(--veille-point)" : undefined }}>
-            <h2 id="p-demande" className="carte__titre" style={{ margin: 0 }}>
-              {demande ? "Demande de projet" : "Demande refusée"}
-            </h2>
-            <p className="note" style={{ margin: 0 }}>
+          <section className={`carte demande${demande ? " demande--attente" : " demande--refusee"}`} id="decision" aria-labelledby="p-demande">
+            <div className="demande__entete">
+              <h2 id="p-demande" className="carte__titre" style={{ margin: 0 }}>
+                {demande ? "Demande de projet" : "Demande refusée"}
+              </h2>
+              <span className={`demande__statut${demande ? "" : " demande__statut--refusee"}`}>{demande ? "En attente de décision" : "Refusée"}</span>
+            </div>
+            <p className="demande__qui">
               {nom(p.demandeParId) ? (
                 <>
                   Proposé par <LienPersonne id={p.demandeParId}>{nom(p.demandeParId)}</LienPersonne>
@@ -537,21 +540,87 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
               ) : (
                 "Proposé"
               )}
-              {p.demandeLe ? ` le ${dateLongue(dateLocale(p.demandeLe))}` : ""}
-              {p.chefProjetId && demande ? (
-                <>
-                  {" · chef de projet suggéré : "}
-                  <LienPersonne id={p.chefProjetId}>{nom(p.chefProjetId)}</LienPersonne>
-                </>
-              ) : null}
+              {p.demandeLe ? <span className="demande__quand"> · {dateLongue(dateLocale(p.demandeLe))}</span> : null}
             </p>
-            {p.justification ? <p style={{ margin: 0, whiteSpace: "pre-line", fontSize: 15, lineHeight: "22px" }}>{p.justification}</p> : null}
+            <div className="demande__grille">
+              <div className="demande__textes">
+                {p.justification ? (
+                  <div>
+                    <h3 className="demande__etiquette">Pourquoi ce projet</h3>
+                    <p className="demande__pourquoi">{p.justification}</p>
+                  </div>
+                ) : null}
+                {p.description ? (
+                  <div>
+                    <h3 className="demande__etiquette">Description</h3>
+                    <p className="demande__texte">{p.description}</p>
+                  </div>
+                ) : null}
+              </div>
+              <dl className="demande__faits">
+                {demande ? (
+                  <div>
+                    <dt>Chef de projet suggéré</dt>
+                    <dd>{p.chefProjetId ? <LienPersonne id={p.chefProjetId}>{nom(p.chefProjetId)}</LienPersonne> : <span className="discret">À choisir</span>}</dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>Fin souhaitée</dt>
+                  <dd>{p.dateFinPrevue ? dateLongue(p.dateFinPrevue) : <span className="discret">Non précisée</span>}</dd>
+                </div>
+                <div>
+                  <dt>Division</dt>
+                  <dd>{p.division || "La DPO"}</dd>
+                </div>
+                {p.programme ? (
+                  <div>
+                    <dt>Programme</dt>
+                    <dd>{p.programme}</dd>
+                  </div>
+                ) : null}
+                {p.strategique ? (
+                  <div>
+                    <dt>Stratégique</dt>
+                    <dd>Oui, à confirmer</dd>
+                  </div>
+                ) : null}
+              </dl>
+            </div>
             {cadrage ? (
-              <p className="note" style={{ margin: 0 }}>
-                {lignesCadrage(cadrage)
-                  .map((l) => `${l.rubrique} : ${l.valeur}`)
-                  .join(" · ")}
-              </p>
+              (() => {
+                const pc = pastillesCadrage(cadrage);
+                return (
+                  <div className="demande__cadrage" aria-label="Fiche de projet de la DPO">
+                    <div className="demande__rubrique">
+                      <h3 className="demande__etiquette">Type de solution</h3>
+                      <ul className="pastilles">
+                        {pc.types.length ? pc.types.map((t) => <li key={t} className="pastille">{t}</li>) : <li className="pastille pastille--vide">Non précisé</li>}
+                      </ul>
+                    </div>
+                    <div className="demande__rubrique">
+                      <h3 className="demande__etiquette">Informations déjà disponibles</h3>
+                      <ul className="pastilles">
+                        {pc.infosDisponibles.map((t) => (
+                          <li key={t} className="pastille pastille--ok">
+                            <Icone nom="coche" taille={14} /> {t}
+                          </li>
+                        ))}
+                        {pc.infosManquantes.map((t) => (
+                          <li key={t} className="pastille pastille--manque" title="À réunir pendant le cadrage">
+                            {t} · à réunir
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="demande__rubrique">
+                      <h3 className="demande__etiquette">Spécialisations DPO impliquées</h3>
+                      <ul className="pastilles">
+                        {pc.specialisations.length ? pc.specialisations.map((t) => <li key={t} className="pastille">{t}</li>) : <li className="pastille pastille--vide">Non précisées</li>}
+                      </ul>
+                    </div>
+                  </div>
+                );
+              })()
             ) : null}
             {refuse ? (
               <p className="erreur" style={{ margin: 0 }}>
@@ -566,7 +635,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
               </p>
             ) : null}
             {demande && peutDeciderDemande(a, p) ? (
-              <div className="colonnes" style={{ alignItems: "flex-start" }}>
+              <div className="colonnes demande__decision" style={{ alignItems: "flex-start" }}>
                 <form action={decider.bind(null, p.id)} style={{ flex: "2 1 320px", display: "flex", flexDirection: "column", gap: 12 }}>
                   <input type="hidden" name="decision" value="accepter" />
                   <h3 style={{ margin: 0, fontSize: 15, fontWeight: 500 }}>Accepter</h3>

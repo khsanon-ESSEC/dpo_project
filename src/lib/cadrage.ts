@@ -59,3 +59,13 @@ export function lignesCadrage(c: Cadrage) {
     { rubrique: "Spécialisations DPO impliquées", valeur: libelles(c.specialisations, SPECIALISATIONS).join(", ") || "—" },
   ];
 }
+
+/** Pour un affichage en pastilles : ce qui est coché dans chaque rubrique, et les informations qui manquent. */
+export function pastillesCadrage(c: Cadrage) {
+  return {
+    types: libelles(c.types, TYPES_SOLUTION),
+    infosDisponibles: libelles(c.infos, INFOS_DISPONIBLES),
+    infosManquantes: INFOS_DISPONIBLES.filter((x) => !c.infos.includes(x.cle)).map((x) => x.libelle),
+    specialisations: libelles(c.specialisations, SPECIALISATIONS),
+  };
+}
