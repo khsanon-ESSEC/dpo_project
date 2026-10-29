@@ -86,8 +86,8 @@ describe.skipIf(!URL_TEST)("modèles de rapport et rapport de chef", () => {
     await R.synchroniserReprises(r);
     const lignes = await R.lignesDuRapport(r.id);
     const aDecider = lignes.filter((l) => l.champId === "a_decider");
-    expect(aDecider.map((l) => l.texte)).toContain("Serveur de recette demandé à la DTI lundi");
-    const decision = aDecider.find((l) => l.texte.startsWith("Valider le report de la recette Credos"));
+    expect(aDecider.map((l) => l.texte)).toContain("Serveur de test demandé à la DTI lundi");
+    const decision = aDecider.find((l) => l.texte.startsWith("Valider le report de la validation métier de Credos"));
     expect(decision?.visibilite).toBe("auteur"); // champ « supérieur seulement » chez Ludovic
     expect(lignes.filter((l) => l.champId === "fait_equipe").length).toBe(4);
     // Une deuxième synchronisation n'ajoute rien.
@@ -143,11 +143,11 @@ describe.skipIf(!URL_TEST)("modèles de rapport et rapport de chef", () => {
     const syntheses = await R.synchroniserSyntheses(r);
     const cr = syntheses.get("synthese")!.find((m) => m.code === "CR")!;
     const textes = cr.elements.map((e) => e.texte);
-    expect(textes).toContain("Serveur de recette demandé à la DTI lundi");
+    expect(textes).toContain("Serveur de test demandé à la DTI lundi");
     expect(textes.some((t) => t.startsWith("Valider le report"))).toBe(false); // champ « supérieur seulement » de Ludovic
     const rep = (await R.reponsesDuRapport(r.id)).find((x) => x.champId === "synthese" && x.projetCode === "CR")!;
     expect(rep.valeur).toBe(rep.propose);
-    expect(rep.valeur).toContain("À décider ou débloquer : Serveur de recette demandé à la DTI lundi");
+    expect(rep.valeur).toContain("À décider ou débloquer : Serveur de test demandé à la DTI lundi");
     // Niveau division : la synthèse de Myriam est reprise telle quelle.
     const na = await R.obtenirOuCreerRapport(qui("nadege.augustin").id);
     const ae = (await R.synchroniserSyntheses(na)).get("synthese")!.find((m) => m.code === "AE")!;
@@ -171,7 +171,7 @@ describe.skipIf(!URL_TEST)("modèles de rapport et rapport de chef", () => {
   it("une pièce jointe se lit selon le champ : supérieur et direction oui, collègue et chef de projet non", async () => {
     const lp = await rapportDe("ludovic.pierre");
     const [piece] = await PJ.piecesDuRapport(lp.id);
-    expect(piece.nom).toBe("Demande-serveur-recette-Credos.pdf");
+    expect(piece.nom).toBe("Demande-serveur-test-Credos.pdf");
     expect((await PJ.lirePiece(await A.acces(qui("marc-antoine.louis")), piece.id))?.contenu.subarray(0, 5).toString()).toBe("%PDF-");
     expect(await PJ.lirePiece(await A.acces(qui("nadege.augustin")), piece.id)).not.toBeNull();
     expect(await PJ.lirePiece(await A.acces(qui("daphnee.joseph")), piece.id)).toBeNull();

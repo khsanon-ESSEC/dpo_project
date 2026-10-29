@@ -2,8 +2,8 @@ import { peutGererProjet } from "@/lib/projets";
 import type { Metadata } from "next";
 import { acces, exigerAccesConseil, idsProjetsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
-import { moisAnnee } from "@/lib/dates";
-import { lignesConseil, moisCourant, moisValide, obtenirOuCreerRapportConseil } from "@/lib/donnees/conseil";
+import { deMois, moisAnnee } from "@/lib/dates";
+import { lignesConseil, moisCourant, moisDesRapports, moisValide, obtenirOuCreerRapportConseil, rapportDuMois } from "@/lib/donnees/conseil";
 import { iaDisponible } from "@/lib/ia";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
@@ -18,8 +18,44 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
   const u = await exigerUtilisateur();
   const a = await acces(u);
   exigerAccesConseil(a);
-  const mois = moisValide(moisDemande) ? moisDemande : moisCourant();
-  const r = await obtenirOuCreerRapportConseil(mois);
+  const courant = moisCourant();
+  const mois = moisValide(moisDemande) ? moisDemande : courant;
+  // Un mois passé se relit tel qu'il a été fait : on ne crée pas après coup le rapport d'un mois qui n'en a pas eu.
+  const existant = mois < courant ? await rapportDuMois(mois) : null;
+  const tousLesMois = [...new Set([...(await moisDesRapports()), courant])].sort();
+  const precedent = [...tousLesMois].reverse().find((m) => m < mois) ?? null;
+  const suivant = tousLesMois.find((m) => m > mois && m <= courant) ?? null;
+  const navigation = (
+    <nav className="bilan-periode__nav" aria-label="Autre mois" style={{ marginBottom: 12 }}>
+      {precedent ? (
+        <a href={`/conseil?mois=${precedent}`} className="bouton-icone" aria-label={`Rapport ${deMois(precedent)}`} title={`Rapport ${deMois(precedent)}`}>
+          <Icone nom="chevron-gauche" taille={20} />
+        </a>
+      ) : null}
+      <span>{moisAnnee(mois).replace(/^./, (c) => c.toUpperCase())}</span>
+      {suivant ? (
+        <a href={`/conseil?mois=${suivant}`} className="bouton-icone" aria-label={`Rapport ${deMois(suivant)}`} title={`Rapport ${deMois(suivant)}`}>
+          <Icone nom="chevron-droite" taille={20} />
+        </a>
+      ) : null}
+      <a href="/conseil/historique" className="lien-discret" style={{ marginLeft: 12 }}>
+        Tous les rapports soumis →
+      </a>
+    </nav>
+  );
+  if (mois < courant && !existant) {
+    return (
+      <>
+        <Bandeau surtitre="Rapport mensuel au conseil" titre={moisAnnee(mois).replace(/^./, (c) => c.toUpperCase())} />
+        <div className="page">
+          <SousOnglets onglets={ONGLETS_CONSEIL} courant="/conseil" label="Rapports au conseil" />
+          {navigation}
+          <p className="vide">Aucun rapport au conseil n&apos;a été fait pour ce mois.</p>
+        </div>
+      </>
+    );
+  }
+  const r = existant ?? (await obtenirOuCreerRapportConseil(mois));
   const visibles = await idsProjetsVisibles(a);
   // Un directeur ne voit que les projets stratégiques de sa direction ; un exécutif voit tout.
   const lignes = (await lignesConseil(r.id, r.statut)).filter((l) => visibles === "tous" || visibles.has(l.projet.id));
@@ -35,6 +71,7 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
       </Bandeau>
       <div className="page">
         <SousOnglets onglets={ONGLETS_CONSEIL} courant="/conseil" label="Rapports au conseil" />
+        {navigation}
         <div className="ligne-actions">
           <dl style={{ margin: 0, display: "flex", flexWrap: "wrap", gap: "12px 40px" }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>

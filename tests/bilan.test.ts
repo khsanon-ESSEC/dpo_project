@@ -189,6 +189,10 @@ describe("noms des périodes", () => {
     expect(aLa("septembre")).toBe("à septembre");
     expect(aLa("l'exercice 2024-2025")).toBe("à l'exercice 2024-2025");
     expect(aLa("la semaine dernière")).toBe("à la semaine dernière");
+    const { deMois } = await import("@/lib/dates");
+    expect(deMois("2026-08-01")).toBe("d'août 2026");
+    expect(deMois("2026-10-01")).toBe("d'octobre 2026");
+    expect(deMois("2026-09-01")).toBe("de septembre 2026");
     expect(nomsDesPeriodes(planBilan("semaine", undefined, "2026-10-28", 10), 10)).toEqual({ actuel: "Cette semaine", avant: "Semaine du 19 oct.", avantCourt: "la semaine dernière" });
     expect(nomsDesPeriodes(planBilan("semaine", "2026-09-14", "2026-10-28", 10), 10)).toEqual({ actuel: "Semaine du 14 sept.", avant: "Semaine du 7 sept.", avantCourt: "la semaine du 7 sept." });
     expect(nomsDesPeriodes(planBilan("mois", "2026-09", "2026-10-30", 10), 10).avantCourt).toBe("août");

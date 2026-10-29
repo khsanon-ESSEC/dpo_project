@@ -89,6 +89,12 @@ export function moisAnnee(iso: string): string {
   return fmt({ month: "long", year: "numeric" }).format(versDate(iso));
 }
 
+/** « de septembre 2026 », « d'août 2026 », « d'octobre 2026 » : la préposition, élidée devant une voyelle. */
+export function deMois(iso: string): string {
+  const m = moisAnnee(iso);
+  return /^[aeiouyàâéèêîôh]/i.test(m) ? `d'${m}` : `de ${m}`;
+}
+
 /** « Vendredi 30 octobre » */
 export function jourComplet(iso: string): string {
   const t = fmt({ weekday: "long", day: "numeric", month: "long" }).format(versDate(iso));

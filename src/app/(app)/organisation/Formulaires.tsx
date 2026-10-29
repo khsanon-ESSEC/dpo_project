@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { ListeFiltrable } from "@/components/ListeFiltrable";
 import { ajouterPersonne, changerAccesExterne, enregistrerExterne, enregistrerPersonne, fusionnerExterne, nouveauMotDePasse, type EtatFiche } from "./actions";
 
 type Option = { id: string; nom: string };
@@ -38,7 +39,15 @@ function RoleAuto({ libelle, detail }: { libelle: string; detail: string }) {
   );
 }
 
-function ChoixListe({ id, nom, libelle, options, valeur, vide, desactive }: { id: string; nom: string; libelle: string; options: Option[]; valeur: string | null; vide: string; desactive?: boolean }) {
+function ChoixListe({ id, nom, libelle, options, valeur, vide, desactive, filtrable }: { id: string; nom: string; libelle: string; options: Option[]; valeur: string | null; vide: string; desactive?: boolean; filtrable?: boolean }) {
+  // Une liste qui peut s'allonger (les personnes) : on tape pour trouver.
+  if (filtrable)
+    return (
+      <div className="champ">
+        <label htmlFor={id}>{libelle}</label>
+        <ListeFiltrable id={id} name={nom} defaultValue={valeur ?? ""} vide={vide} placeholder={`${vide} (tapez un nom)`} options={options.map((o) => ({ value: o.id, label: o.nom }))} disabled={desactive} aucun="Personne ne correspond à" />
+      </div>
+    );
   return (
     <div className="champ">
       <label htmlFor={id}>{libelle}</label>
@@ -129,7 +138,7 @@ export function FichePersonne({
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <ChoixListe id="superieurId" nom="superieurId" libelle="Supérieur" options={personnes} valeur={p.superieurId} vide="Responsable de l'équipe" desactive={!modifiable} />
+          <ChoixListe id="superieurId" nom="superieurId" libelle="Supérieur" filtrable options={personnes} valeur={p.superieurId} vide="Responsable de l'équipe" desactive={!modifiable} />
           <span className={p.superieurVacant && !p.superieurId ? "aide" : "aide"} style={{ fontSize: 12, color: "var(--discret)" }}>
             Ses rapports du vendredi vont à : <strong style={{ fontWeight: 500 }}>{p.superieurEffectif ?? "personne"}</strong>
           </span>
@@ -195,7 +204,7 @@ export function NouvellePersonne({ equipes, personnes, peutDonnerExecutif }: { e
           <input id="poste" name="poste" maxLength={120} />
         </div>
         <ChoixListe id="equipeId" nom="equipeId" libelle="Équipe" options={equipes} valeur={null} vide="Sans équipe" />
-        <ChoixListe id="superieurId" nom="superieurId" libelle="Supérieur" options={personnes} valeur={null} vide="Responsable de l'équipe" />
+        <ChoixListe id="superieurId" nom="superieurId" libelle="Supérieur" filtrable options={personnes} valeur={null} vide="Responsable de l'équipe" />
         <Interrupteur nom="directeur" libelle="Directeur" detail={DETAIL.directeur} coche={false} />
         {peutDonnerExecutif ? <Interrupteur nom="executif" libelle="Exécutif" detail={DETAIL.executif} coche={false} /> : null}
         <Interrupteur nom="administrateur" libelle="Administrateur" detail={DETAIL.administrateur} coche={false} />

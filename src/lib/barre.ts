@@ -49,7 +49,7 @@ export function analyserNote(saisie: string, projets: ProjetSaisie[]): AnalyseNo
 }
 
 // ---------------------------------------------------------------------------
-// Mettre à jour un projet : « /UR à surveiller : retard du prestataire », « /UR jalon recette 15/11 »
+// Mettre à jour un projet : « /UR à surveiller : retard du prestataire », « /UR jalon validation métier 15/11 »
 // ---------------------------------------------------------------------------
 
 export type SanteProjet = "dans_les_temps" | "a_surveiller" | "en_retard";
@@ -70,9 +70,11 @@ function dateFuture(texte: string, aujourdhui: string): { date: string | null; r
 
 export function analyserMajProjet(texte: string, aujourdhui: string): MajProjet | null {
   const t = texte.replace(/\s+/g, " ").trim();
-  const sante = /^(dans\s+les\s+temps|[àa]\s+surveiller|en\s+retard)(?=$|[\s:,.;!–—-])[\s:,.;!–—-]*(.*)$/i.exec(t);
+  // La santé est calculée par l'application : « à surveiller : … » ou « risque : … » signale un risque ; « dans les
+  // temps » retire le signal ; « en retard » ne s'impose pas (refusé avec une explication).
+  const sante = /^(dans\s+les\s+temps|[àa]\s+surveiller|en\s+retard|risques?)(?=$|[\s:,.;!–—-])[\s:,.;!–—-]*(.*)$/i.exec(t);
   if (sante) {
-    const s: SanteProjet = /temps/i.test(sante[1]) ? "dans_les_temps" : /surveiller/i.test(sante[1]) ? "a_surveiller" : "en_retard";
+    const s: SanteProjet = /temps/i.test(sante[1]) ? "dans_les_temps" : /surveiller|risque/i.test(sante[1]) ? "a_surveiller" : "en_retard";
     const motif = sante[2].replace(/^(?:car|parce\s+que|:)\s*/i, "").trim().slice(0, 500);
     return { genre: "sante", sante: s, motif: motif ? motif.charAt(0).toUpperCase() + motif.slice(1) : "" };
   }
@@ -96,7 +98,7 @@ export function analyserMajProjet(texte: string, aujourdhui: string): MajProjet 
 }
 
 export function texteMajProjet(m: MajProjet): string {
-  if (m.genre === "sante") return `${LIBELLES_SANTE[m.sante]}${m.motif ? ` : ${m.motif}` : ""}`;
+  if (m.genre === "sante") return m.sante === "a_surveiller" ? `Signaler un risque${m.motif ? ` : ${m.motif}` : ""}` : m.sante === "dans_les_temps" ? "Retirer le risque signalé" : "La santé est calculée : « risque : … » pour signaler un risque";
   if (m.genre === "jalon") return `Jalon : ${m.libelle || "(sans libellé)"}${m.prevuLe ? `, prévu ${jourComplet(m.prevuLe).toLowerCase()}` : ""}`;
   if (m.genre === "fin") return `Fin prévue : ${jourComplet(m.date).toLowerCase()}`;
   return `Lancement prévu : ${jourComplet(m.date).toLowerCase()}`;
@@ -286,7 +288,7 @@ export function reconnaitreMots<P extends Nomme>(saisie: string, o: { personnes:
 export type AnalyseLigne<P extends Nomme> = { texte: string; projet: ProjetSaisie | null; personne: P | null; echeance: string | null; heures: number | null };
 
 /**
- * « Recette validée UR », « Recette validée projet retail », « Envoyer le compte rendu pour Fabienne vendredi » :
+ * « Validation métier faite UR », « Validation métier faite projet retail », « Envoyer le compte rendu pour Fabienne vendredi » :
  * le projet (code en majuscules ou « projet … »), la personne (« pour … »), et, si on le demande, l'échéance et le
  * temps estimé. Chaque formulaire n'active que ce qui le concerne : une ligne du rapport ne lit que le projet
  * (« le 15/11 » y reste du texte). Le texte rendu est la ligne sans les mots reconnus.

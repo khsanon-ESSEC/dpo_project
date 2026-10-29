@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ajouterJours, aujourdhui, jourComplet, lundiDe, moisAnnee, premierDuMois } from "@/lib/dates";
+import { ajouterJours, aujourdhui, jourComplet, lundiDe, deMois, moisAnnee, premierDuMois } from "@/lib/dates";
 import { Icone } from "@/components/Icone";
 import { chargerVueProjet, cheminVue, EnTeteVue, LIBELLE_STATUT } from "../commun";
 
@@ -90,7 +90,7 @@ export default async function PageCalendrier({ params, searchParams }: { params:
           </div>
         </div>
 
-        <div className="calendrier" role="grid" aria-label={`Échéances de ${moisAnnee(mois)}`}>
+        <div className="calendrier" role="grid" aria-label={`Échéances ${deMois(mois)}`}>
           {["Lun.", "Mar.", "Mer.", "Jeu.", "Ven.", "Sam.", "Dim."].map((j) => (
             <div key={j} className="calendrier__tete" role="columnheader">
               {j}

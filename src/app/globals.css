@@ -4340,6 +4340,27 @@ a.puce:hover {
 .note-sante--retard {
   border-left-color: var(--retard-point);
 }
+.note-sante__raisons {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--encre-2);
+}
+.risque-projet {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--filet);
+}
+.risque-projet__actif {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--veille-point);
+  background: var(--relief);
+  font-size: 14px;
+  line-height: 20px;
+}
 .indicateur__date {
   font-size: 13px;
   color: var(--discret);
@@ -5997,7 +6018,7 @@ a.chaleur__case:focus-visible {
 .portefeuille-graphes {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
-  align-items: start;
+  align-items: stretch;
   gap: 16px;
 }
 @media (max-width: 899px) {
@@ -6050,6 +6071,64 @@ a.chaleur__case:focus-visible {
   font-weight: 500;
   color: var(--encre);
   font-variant-numeric: tabular-nums;
+}
+.sante-barre__aregarder {
+  border-top: 1px solid var(--filet);
+  padding-top: 14px;
+}
+.sante-barre__aregarder ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.sante-barre__titre {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+.sante-barre__projet {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 6px 0;
+  color: var(--encre);
+  text-decoration: none;
+  border-bottom: 1px solid var(--filet);
+}
+.sante-barre__aregarder li:last-child .sante-barre__projet {
+  border-bottom: 0;
+}
+.sante-barre__projet:hover .sante-barre__titre-projet {
+  text-decoration: underline;
+}
+.sante-barre__nom {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.sante-barre__titre-projet {
+  font-size: 14px;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Les raisons : jusqu'à deux lignes (elles disent pourquoi regarder ce projet). */
+.sante-barre__nom small {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--discret);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 .sante-barre__cle {
   display: inline-block;
@@ -6309,4 +6388,502 @@ a.barres__ligne:hover .barres__libelle {
 }
 .bilan-periode + .bilan-graphes {
   margin-top: 16px;
+}
+
+/* ---------- Rapports soumis au conseil ---------- */
+.historique-conseil {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------- Liste où l'on tape pour trouver (personnes, rôles) : src/components/ListeFiltrable.tsx ---------- */
+.liste-filtrable {
+  position: relative;
+  min-width: 0;
+  display: flex;
+}
+.liste-filtrable--ligne {
+  flex: 1 1 200px;
+}
+.liste-filtrable input[role="combobox"] {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 44px 0 14px;
+  border: 1px solid var(--champ-bord);
+  border-radius: var(--champ-rayon);
+  background-color: var(--champ);
+  color: var(--encre);
+  font-size: 16px;
+  text-overflow: ellipsis;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.liste-filtrable input[role="combobox"]:hover {
+  border-color: var(--champ-bord-fort);
+}
+.liste-filtrable input[role="combobox"]:focus {
+  border-color: var(--champ-focus);
+  box-shadow: 0 0 0 4px var(--champ-halo);
+  outline: none;
+}
+.liste-filtrable input[role="combobox"]:disabled {
+  opacity: 0.6;
+}
+.liste-filtrable input[role="combobox"]::placeholder {
+  color: var(--discret);
+}
+.liste-filtrable__ouvrir {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 44px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  color: var(--discret);
+  cursor: pointer;
+}
+/* Le champ qui porte l'obligation d'un choix : invisible, sous le champ, pour que le navigateur y montre son message. */
+.liste-filtrable__requis {
+  position: absolute;
+  left: 14px;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.liste-filtrable__liste {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  min-width: min(280px, 90vw);
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  max-height: min(50vh, 340px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--filet-fort);
+  border-radius: var(--champ-rayon);
+  box-shadow: 0 12px 32px rgba(11, 49, 86, 0.16);
+}
+.liste-filtrable__groupe {
+  display: block;
+  padding: 10px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+/* Le nom d'abord ; le poste ou l'organisation à droite, ou dessous quand la place manque (téléphone). */
+.liste-filtrable__option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+  min-height: 44px;
+  padding: 11px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--encre);
+  font-size: 15px;
+  line-height: 20px;
+}
+.liste-filtrable__option > span {
+  flex-shrink: 0;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.liste-filtrable__option small {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--discret);
+}
+.liste-filtrable__option[aria-selected="true"] {
+  background: var(--relief);
+}
+.liste-filtrable__option--choisie > span:first-child {
+  font-weight: 600;
+}
+.liste-filtrable__vide {
+  padding: 10px;
+  font-size: 13px;
+  color: var(--discret);
+}
+
+/* ---------- Équipe, cette semaine : en un coup d'œil, puis une carte par personne ---------- */
+.apercu-equipe {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
+  margin: 18px 0 8px;
+}
+.apercu-equipe__carte {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 22px;
+}
+.apercu-equipe__carte .carte__titre {
+  margin: 0;
+}
+.apercu-equipe__chiffre {
+  margin: 0;
+  font-size: 14px;
+  color: var(--encre-2);
+}
+.apercu-equipe__chiffre strong {
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 300;
+  color: var(--encre);
+  margin-right: 4px;
+}
+.apercu-equipe__pied {
+  margin: auto 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--filet);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--encre-2);
+}
+/* Mur des rapports : une pastille par personne, pleine quand le rapport est arrivé. */
+.mur-rapports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mur-rapports__pastille {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--retard);
+  border: 1.5px dashed var(--retard-point);
+  background: transparent;
+}
+.mur-rapports__pastille--recu {
+  color: var(--actif-encre);
+  background: var(--actif);
+  border: 1.5px solid var(--actif);
+}
+.mur-rapports__marque {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 16px;
+  height: 16px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #ffffff;
+  background: var(--retard-point);
+  box-shadow: 0 0 0 2px var(--surface);
+}
+.mur-rapports__pastille--recu .mur-rapports__marque {
+  background: var(--ok-point);
+}
+.mur-rapports__pastille:focus-visible {
+  outline: 2px solid var(--champ-focus);
+  outline-offset: 3px;
+}
+/* Répartition de l'équipe par niveau de charge : une barre par semaine. */
+.repartition-charge {
+  display: grid;
+  grid-template-columns: 124px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+.repartition-charge__libelle {
+  font-size: 13px;
+  color: var(--encre-2);
+}
+.repartition-charge__barre {
+  display: flex;
+  gap: 2px;
+  height: 24px;
+}
+.repartition-charge__part {
+  min-width: 24px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+}
+.repartition-charge__part:first-child {
+  border-radius: 3px 0 0 3px;
+}
+.repartition-charge__part:last-child {
+  border-radius: 0 3px 3px 0;
+}
+.repartition-charge__part:only-child {
+  border-radius: 3px;
+}
+.repartition-charge__part--surchargee {
+  background: var(--retard-point);
+}
+.repartition-charge__part--chargee {
+  background: var(--veille-point);
+  color: #2b1a00;
+}
+.repartition-charge__part--normale {
+  background: var(--ok-point);
+}
+.repartition-charge__part--libre {
+  background: var(--piste);
+  color: var(--discret);
+  box-shadow: inset 0 0 0 1px var(--filet-fort);
+}
+/* Tâches de la semaine en une barre : faites, en cours, à faire, en retard, bloquées. */
+.barre-taches {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  min-width: 0;
+  border-radius: 2px;
+}
+/* Sans tâche : la piste vide. Avec des tâches, pas de piste derrière, pour que « à faire » ne s'y confonde pas. */
+.barre-taches:empty {
+  background: var(--piste);
+}
+.barre-taches__part {
+  flex-basis: 0;
+  min-width: 4px;
+}
+.barre-taches__part:first-child {
+  border-radius: 2px 0 0 2px;
+}
+.barre-taches__part:last-child {
+  border-radius: 0 2px 2px 0;
+}
+.barre-taches__part:only-child {
+  border-radius: 2px;
+}
+.barre-taches__part--faites,
+.point-tache--faites {
+  background: var(--arc);
+}
+.barre-taches__part--en-cours,
+.point-tache--en-cours {
+  background: var(--arc-2);
+}
+.barre-taches__part--a-faire,
+.point-tache--a-faire {
+  background: var(--filet-fort);
+}
+.barre-taches__part--retard,
+.point-tache--retard {
+  background: var(--retard-point);
+}
+.barre-taches__part--bloquees,
+.point-tache--bloquees {
+  background: var(--veille-point);
+}
+.point-tache {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  display: inline-block;
+  border-radius: 2px;
+}
+.groupe-equipe {
+  margin-top: 28px;
+}
+.groupe-equipe__entete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin-bottom: 12px;
+}
+.groupe-equipe__entete .carte__titre {
+  margin: 0;
+}
+.grille-equipe {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.carte-personne {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 18px 16px;
+  background: var(--surface);
+  border: 1px solid var(--surface-filet);
+  min-width: 0;
+}
+.carte-personne--alerte {
+  box-shadow: inset 3px 0 0 var(--veille-point);
+}
+.carte-personne__tete {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+}
+.carte-personne__avatar {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--relief);
+  color: var(--relief-encre);
+}
+.carte-personne__avatar--recu {
+  outline: 2px solid var(--ok-point);
+  outline-offset: 2px;
+}
+.carte-personne__nom {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 20px;
+}
+.carte-personne__nom .rangee__sous {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pastille-rapport {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.pastille-rapport--recu {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok-point) 14%, transparent);
+}
+.pastille-rapport--attendu {
+  color: var(--retard);
+  background: color-mix(in srgb, var(--retard-point) 12%, transparent);
+}
+a.pastille-rapport:hover {
+  text-decoration: underline;
+}
+.carte-personne__corps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--filet);
+}
+.carte-personne__ligne {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+.carte-personne__etiquette {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--discret);
+}
+.carte-personne__valeur {
+  min-width: 0;
+  font-size: 13px;
+  line-height: 18px;
+}
+.carte-personne__valeur > .barre-taches {
+  margin-top: 4px;
+}
+.carte-personne__detail > span {
+  white-space: nowrap;
+}
+.carte-personne__detail {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--encre-2);
+}
+.carte-personne__jauges {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.jauge-charge {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+.jauge-charge__libelle {
+  color: var(--encre-2);
+}
+.jauge-charge__piste {
+  position: relative;
+  height: 8px;
+  background: var(--piste);
+  border-radius: 2px;
+}
+.jauge-charge__rempli {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+}
+.jauge-charge__rempli--normale {
+  background: var(--ok-point);
+}
+.jauge-charge__rempli--chargee {
+  background: var(--veille-point);
+}
+.jauge-charge__rempli--surchargee {
+  background: var(--retard-point);
+}
+/* Au-delà des heures disponibles : un trait marque où elles s'arrêtent. */
+.jauge-charge__capacite {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--encre);
+}
+.jauge-charge__chiffre {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }

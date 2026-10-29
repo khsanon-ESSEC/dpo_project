@@ -1,3 +1,4 @@
+import { ListeFiltrable } from "@/components/ListeFiltrable";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { acces } from "@/lib/acces";
@@ -133,16 +134,9 @@ export default async function PageOrganisation({ searchParams }: { searchParams:
                         <label className="visuellement-cache" htmlFor={`chef-${e.id}`}>
                           Responsable de {e.nom}
                         </label>
-                        <select id={`chef-${e.id}`} name="chefId" defaultValue={e.chefId ?? ""} className="saisie" style={{ flex: 1, minHeight: 44, fontSize: 15 }}>
-                          <option value="">Poste vacant</option>
-                          {personnesOptions.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.nom}
-                            </option>
-                          ))}
-                        </select>
+                        <ListeFiltrable id={`chef-${e.id}`} name="chefId" defaultValue={e.chefId ?? ""} vide="Poste vacant" placeholder="Tapez un nom" options={personnesOptions.map((p) => ({ value: p.id, label: p.nom }))} aucun="Personne ne correspond à" className="liste-filtrable--ligne" />
                         <button type="submit" className="bouton-contour">
-                          OK
+                          Changer
                         </button>
                       </form>
                     </details>

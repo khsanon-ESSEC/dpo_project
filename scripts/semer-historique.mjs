@@ -54,7 +54,7 @@ async function activite() {
     "Revue du cahier des charges",
     "Mise à jour du tableau de bord",
     "Préparation du comité de projet",
-    "Tests de recette",
+    "Tests de validation métier",
     "Note de synthèse pour la direction",
     "Formation des utilisateurs",
     "Analyse des écarts",
@@ -194,7 +194,72 @@ async function prevues() {
   messages.push(`Charges prévues de démonstration : ${lignes.length} (personnes × semaines).`);
 }
 
+// Rapports mensuels au conseil des trois derniers mois, approuvés (une fois) : pour relire les anciens rapports.
+async function conseil() {
+  const auj = process.env.DATE_DEMO || new Date().toISOString().slice(0, 10);
+  const premier = (n) => {
+    const d = new Date(`${auj.slice(0, 7)}-01T12:00:00Z`);
+    d.setUTCMonth(d.getUTCMonth() + n);
+    return d.toISOString().slice(0, 10);
+  };
+  const [{ n }] = await sql`select count(*)::int as n from rapports_conseil where genre = 'mensuel' and mois < ${premier(0)}`;
+  if (n) return;
+  const [exec] = await sql`select id from personnes where executif and actif and courriel like '%@demo.dpo.local' order by nom limit 1`;
+  const projets = await sql`
+    select id, code, date_entree::text as entree, date_fin_initiale::text as initiale, date_lancement_prevue::text as lancement
+    from projets where strategique and division = '' and statut not in ('requete', 'refuse', 'finalise') and archive_le is null order by cree_le`;
+  if (!projets.length) return;
+  const reportsFin = await sql`select projet_id, apres::text as apres, cree_le from reports_fin_projet order by cree_le`;
+  const historiques = await sql`select projet_id, mois::text as mois, date_fin_prevue::text as fin, etat_avancement as etat from historique_projet`;
+  const terminees = await sql`
+    select projet_id, to_char(date_trunc('month', terminee_le at time zone 'America/Port-au-Prince'), 'YYYY-MM-DD') as mois, count(*)::int as n
+    from taches where statut = 'faite' and annulee_le is null and projet_id is not null group by 1, 2`;
+  const finDuMois = (m) => jour(premier(0) > m ? new Date(Date.UTC(Number(m.slice(0, 4)), Number(m.slice(5, 7)), 1)).toISOString().slice(0, 10) : m, -1);
+  // Fin prévue telle qu'elle était à la fin d'un mois : le dernier report décidé avant, sinon la fin initiale.
+  // Jamais après celle d'un rapport plus récent déjà connu : les dates ne reculent pas d'un rapport à l'autre.
+  const finAu = (p, m) => {
+    const h = historiques.find((x) => x.projet_id === p.id && x.mois === m);
+    if (h) return h.fin;
+    const avant = reportsFin.filter((r) => r.projet_id === p.id && r.cree_le.toISOString().slice(0, 10) <= finDuMois(m));
+    const calculee = avant.length ? avant.at(-1).apres : p.initiale;
+    const plusTard = historiques.filter((x) => x.projet_id === p.id && x.mois > m && x.fin).sort((a, b) => a.mois.localeCompare(b.mois))[0];
+    return plusTard && calculee && plusTard.fin < calculee ? plusTard.fin : calculee;
+  };
+  const longue = (iso) => new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
+  const nomMois = (iso) => new Intl.DateTimeFormat("fr-FR", { month: "long", timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
+  let nbRapports = 0;
+  for (const k of [-3, -2, -1]) {
+    const m = premier(k);
+    const precedent = premier(k - 1);
+    const lignes = [];
+    for (const p of projets) {
+      if (p.entree && p.entree > finDuMois(m)) continue;
+      const fin = finAu(p, m);
+      const ancienne = finAu(p, precedent);
+      const faites = terminees.find((t) => t.projet_id === p.id && t.mois === m)?.n ?? 0;
+      const h = historiques.find((x) => x.projet_id === p.id && x.mois === m);
+      const etat =
+        h?.etat ||
+        `${faites ? `En ${nomMois(m)}, ${faites} tâche${faites > 1 ? "s" : ""} terminée${faites > 1 ? "s" : ""}.` : `Travaux ${/^[aeiouàâéèêîïôûœ]/i.test(nomMois(m)) ? "d'" : "de "}${nomMois(m)} conformes au plan du projet.`}${ancienne && fin && ancienne !== fin ? ` La fin prévue passe du ${longue(ancienne)} au ${longue(fin)}.` : ""}`;
+      lignes.push({ projet_id: p.id, ordre: lignes.length + 1, etat_avancement: etat, date_fin_dernier_rapport: ancienne, nouvelle_date_fin: fin, date_lancement: p.lancement });
+    }
+    if (!lignes.length) continue;
+    const [r] = await sql`
+      insert into rapports_conseil (genre, mois, statut, approuve_par_id, approuve_le, cree_le)
+      values ('mensuel', ${m}, 'approuve', ${exec?.id ?? null}, ${`${jour(premier(k + 1), 4)}T19:00:00Z`}, ${`${m}T12:00:00Z`})
+      on conflict (mois) do nothing returning id`;
+    if (!r) continue;
+    await sql`insert into lignes_conseil ${sql(lignes.map((l) => ({ ...l, rapport_id: r.id })))}`;
+    for (const l of lignes)
+      await sql`insert into historique_projet (projet_id, mois, date_fin_prevue, date_lancement_prevue, etat_avancement)
+        values (${l.projet_id}, ${m}, ${l.nouvelle_date_fin}, ${l.date_lancement}, ${l.etat_avancement}) on conflict do nothing`;
+    nbRapports += 1;
+  }
+  if (nbRapports) messages.push(`Rapports au conseil de démonstration : ${nbRapports} mois approuvés.`);
+}
+
 if (!deja) await activite();
 await reports();
 await prevues();
+await conseil();
 await fin(messages.join("\n"));

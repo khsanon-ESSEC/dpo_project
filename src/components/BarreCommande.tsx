@@ -34,7 +34,7 @@ const aller = (lien: string) => (window.location.href = lien);
  * - « # » une tâche, puis ce qui change (« faite », « bloquée … », une date, « relancer », « @ » pour la confier) ;
  * - « Réunion … » (participants avec « @ » ou « avec Fabienne et Daphnée »), en vérifiant qui est déjà pris ;
  * - « Décision : … », « Risque : … », « Fait marquant : … » vont dans le rapport du vendredi ;
- * - « /UR à surveiller : … », « /UR jalon recette 15/11 » mettent le projet à jour (chef de projet) ;
+ * - « /UR à surveiller : … », « /UR jalon validation métier 15/11 » mettent le projet à jour (chef de projet) ;
  * - une question (« en retard sur UR ? ») répond tout de suite ;
  * - en mode recherche : projets, tâches, personnes et écrans (« Gantt UR », « charge de Myriam ») ;
  * - la barre vide propose ce qui compte aujourd'hui ; « Annuler » suit chaque action.

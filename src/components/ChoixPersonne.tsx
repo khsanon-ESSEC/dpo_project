@@ -1,10 +1,19 @@
 /**
- * Choisir une personne dans un formulaire de projet : la division d'abord, puis les personnes hors
- * division ; et, repliée, la saisie de quelqu'un qui n'est pas dans la liste (autre département,
- * consultant). Le formulaire envoie `${name}` (l'identifiant choisi) et, s'ils sont remplis,
- * `${prefixe}NomExterne` et `${prefixe}OrgExterne`, qui l'emportent sur la liste.
+ * Choisir une personne dans un formulaire de projet : on tape le nom pour la trouver (la division d'abord,
+ * puis les personnes hors division) ; et, repliée, la saisie de quelqu'un qui n'est pas dans la liste
+ * (autre département, consultant). Le formulaire envoie `${name}` (l'identifiant choisi) et, s'ils sont
+ * remplis, `${prefixe}NomExterne` et `${prefixe}OrgExterne`, qui l'emportent sur la liste.
  */
-export type PersonneListe = { id: string; nom: string; externe: boolean; organisation: string };
+import { ListeFiltrable, type OptionListe } from "./ListeFiltrable";
+
+export type PersonneListe = { id: string; nom: string; externe: boolean; organisation: string; poste?: string };
+
+/** Les personnes en options de liste : la division, puis « Hors division » avec leur organisation. */
+export function optionsPersonnes(personnes: { id: string; nom: string; externe?: boolean; organisation?: string; poste?: string }[], horsDivision = true): OptionListe[] {
+  const internes = personnes.filter((p) => !p.externe).map((p) => ({ value: p.id, label: p.nom, detail: p.poste || undefined }));
+  const externes = horsDivision ? personnes.filter((p) => p.externe).map((p) => ({ value: p.id, label: p.nom, detail: p.organisation || undefined, groupe: "Hors division" })) : [];
+  return [...internes, ...externes];
+}
 
 export function ChoixPersonne({
   id,
@@ -23,35 +32,25 @@ export function ChoixPersonne({
   libelle: string;
   personnes: PersonneListe[];
   defaut?: string | null;
-  /** Libellé de l'option vide (« Choisir », « Aucun ») ; sans elle, pas d'option vide. */
+  /** Libellé du choix vide (« Choisir », « Aucun ») ; sans lui, pas de choix vide. */
   vide?: string;
   /** Proposer les personnes hors division et la saisie d'une nouvelle. */
   horsDivision?: boolean;
   aide?: string;
 }) {
-  const internes = personnes.filter((p) => !p.externe);
-  const externes = horsDivision ? personnes.filter((p) => p.externe) : [];
   return (
     <div className="champ">
       <label htmlFor={id}>{libelle}</label>
-      <select id={id} name={name} defaultValue={defaut ?? ""} aria-describedby={aide ? `${id}-aide` : undefined}>
-        {vide ? <option value="">{vide}</option> : null}
-        {internes.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.nom}
-          </option>
-        ))}
-        {externes.length ? (
-          <optgroup label="Hors division">
-            {externes.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nom}
-                {p.organisation ? ` · ${p.organisation}` : ""}
-              </option>
-            ))}
-          </optgroup>
-        ) : null}
-      </select>
+      <ListeFiltrable
+        id={id}
+        name={name}
+        options={optionsPersonnes(personnes, horsDivision)}
+        defaultValue={defaut ?? ""}
+        vide={vide}
+        placeholder={vide ? `${vide} (tapez un nom)` : "Tapez un nom"}
+        describedBy={aide ? `${id}-aide` : undefined}
+        aucun="Personne ne correspond à"
+      />
       {aide ? (
         <span className="aide" id={`${id}-aide`}>
           {aide}

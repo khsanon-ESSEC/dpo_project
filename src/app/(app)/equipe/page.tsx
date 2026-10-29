@@ -5,7 +5,7 @@ import { aujourdhui, dateCourte, dateLocale, heure, jourAbrege, jourComplet } fr
 import { monEquipe } from "@/lib/donnees/equipe";
 import { chargeDesPersonnes } from "@/lib/donnees/charge";
 import { Niveau } from "@/components/Charge";
-import { nombre } from "@/lib/charge";
+import { LIBELLE_NIVEAU, nombre } from "@/lib/charge";
 import { Anneau, Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { CodeProjet, LienPersonne, LienProjet } from "@/components/Liens";
@@ -96,6 +96,8 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
           ) : null}
         </div>
 
+        <ApercuEquipe personnes={e.personnes} semaines={e.personnes.map((p) => chargeDe.get(p.id) ?? [])} />
+
         {groupes.length > 1 ? (
           <nav className="filtres" aria-label="Équipes de la structure">
             {groupes.map((g) => (
@@ -106,8 +108,8 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
           </nav>
         ) : null}
         {groupes.map((g) => (
-          <section key={g.chefId} id={`g-${g.chefId}`} className="carte carte--liste carte--equipe" aria-labelledby={`g-${g.chefId}-t`}>
-            <div className="carte__entete">
+          <section key={g.chefId} id={`g-${g.chefId}`} className="groupe-equipe" aria-labelledby={`g-${g.chefId}-t`}>
+            <div className="groupe-equipe__entete">
               <h2 id={`g-${g.chefId}-t`} className="carte__titre">
                 {g.titre}
                 <span className="ton-discret" style={{ fontWeight: 400 }}>
@@ -117,12 +119,15 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
               </h2>
               {g.sous ? <span className="rangee__sous">{g.sous}</span> : null}
             </div>
-            <ul className="liste">
-              {g.visibles.map((p) => (
-                <LignePersonne key={p.id} p={p} semaines={chargeDe.get(p.id) ?? []} jour={jour} voit={voit} />
-              ))}
-              {g.visibles.length === 0 ? <li className="vide">Personne dans ce filtre.</li> : null}
-            </ul>
+            {g.visibles.length ? (
+              <ul className="grille-equipe">
+                {g.visibles.map((p) => (
+                  <CartePersonne key={p.id} p={p} semaines={chargeDe.get(p.id) ?? []} jour={jour} voit={voit} />
+                ))}
+              </ul>
+            ) : (
+              <p className="vide">Personne dans ce filtre.</p>
+            )}
           </section>
         ))}
         {groupes.length === 0 ? <p className="vide">Personne dans ce filtre.</p> : null}
@@ -191,63 +196,198 @@ type Personne = Awaited<ReturnType<typeof monEquipe>>["personnes"][number];
 
 type Semaines = Awaited<ReturnType<typeof chargeDesPersonnes>>["lignes"][number]["charge"]["semaines"];
 
-function LignePersonne({ p, semaines, jour, voit }: { p: Personne; semaines: Semaines; jour: string; voit: (id: string) => boolean }) {
+/** Une jauge de charge : le remplissage jusqu'aux heures prévues, un trait aux heures disponibles. */
+function Jauge({ heures, capacite, niveau, libelle }: { heures: number; capacite: number; niveau: Semaines[number]["niveau"]; libelle: string }) {
+  const max = Math.max(heures, capacite, 1);
+  const taux = capacite > 0 ? Math.round((heures / capacite) * 100) : null;
   return (
-    <li>
-      <div className="ligne-equipe">
-        <span className="mono" style={{ width: 36, height: 36, fontSize: 12 }} aria-hidden="true">
+    <span className="jauge-charge">
+      <span className="jauge-charge__libelle">{libelle}</span>
+      <span className="jauge-charge__piste" role="img" aria-label={`${libelle} : ${nombre(heures)} h prévues sur ${nombre(capacite)} h disponibles${taux !== null ? `, ${taux} %` : ""} (${LIBELLE_NIVEAU[niveau].toLowerCase()})`}>
+        <span className={`jauge-charge__rempli jauge-charge__rempli--${niveau}`} style={{ width: `${(heures / max) * 100}%` }} />
+        {heures > capacite && capacite > 0 ? <span className="jauge-charge__capacite" style={{ left: `${(capacite / max) * 100}%` }} /> : null}
+      </span>
+      <span className={`jauge-charge__chiffre niveau--${niveau}`}>
+        {nombre(heures)} / {nombre(capacite)} h
+      </span>
+    </span>
+  );
+}
+
+/** Les tâches de la semaine d'une personne (ou de l'équipe), en une barre : faites, en cours, à faire, en retard, bloquées. */
+function BarreTaches({ c, label }: { c: { faites: number; enCours: number; aFaire: number; retard: number; bloquees: number; total: number }; label: string }) {
+  const parts = [
+    { cle: "faites", n: c.faites, libelle: "faites" },
+    { cle: "en-cours", n: c.enCours, libelle: "en cours" },
+    { cle: "a-faire", n: c.aFaire - c.enCours, libelle: "à faire" },
+    { cle: "retard", n: c.retard, libelle: "en retard" },
+    { cle: "bloquees", n: c.bloquees, libelle: "bloquées" },
+  ].filter((x) => x.n > 0);
+  return (
+    <span className="barre-taches" role="img" aria-label={`${label} : ${c.total ? parts.map((x) => `${x.n} ${x.libelle}`).join(", ") : "aucune tâche"}`}>
+      {parts.map((x) => (
+        <span key={x.cle} className={`barre-taches__part barre-taches__part--${x.cle}`} style={{ flexGrow: x.n }} title={`${x.n} ${x.libelle}`} />
+      ))}
+    </span>
+  );
+}
+
+const LEGENDE_TACHES = [
+  { cle: "faites", libelle: "Faites" },
+  { cle: "en-cours", libelle: "En cours" },
+  { cle: "a-faire", libelle: "À faire" },
+  { cle: "retard", libelle: "En retard" },
+  { cle: "bloquees", libelle: "Bloquées" },
+];
+
+/** En un coup d'œil : les rapports reçus, la charge des deux semaines, les tâches de la semaine. */
+function ApercuEquipe({ personnes, semaines }: { personnes: Personne[]; semaines: Semaines[] }) {
+  const niveaux = ["surchargee", "chargee", "normale", "libre"] as const;
+  const repartition = [0, 1].map((k) => niveaux.map((n) => ({ niveau: n, n: semaines.filter((w) => w[k]?.niveau === n).length })));
+  const t = personnes.reduce(
+    (s, p) => ({ faites: s.faites + p.faites, enCours: s.enCours + p.enCours, aFaire: s.aFaire + p.aFaire, retard: s.retard + p.retard, bloquees: s.bloquees + p.bloquees, total: s.total + p.total }),
+    { faites: 0, enCours: 0, aFaire: 0, retard: 0, bloquees: 0, total: 0 },
+  );
+  const reunion = personnes.reduce((s, p) => s + p.minutesReunion, 0);
+  const recus = personnes.filter((p) => p.rapport);
+  const attendus = personnes.filter((p) => !p.rapport);
+  return (
+    <div className="apercu-equipe">
+      <section className="carte apercu-equipe__carte" aria-labelledby="a-rapports">
+        <h2 id="a-rapports" className="carte__titre">
+          Rapports du vendredi
+        </h2>
+        <p className="apercu-equipe__chiffre">
+          <strong>{recus.length}</strong> reçus{attendus.length ? <span className="ton-retard"> · {attendus.length} attendus</span> : null}
+        </p>
+        <ul className="mur-rapports">
+          {[...attendus, ...recus].map((p) => (
+            <li key={p.id}>
+              <a href={p.rapport ? `/rapports/${p.rapport.id}` : `/personnes/${p.id}`} className={`mur-rapports__pastille${p.rapport ? " mur-rapports__pastille--recu" : ""}`} title={`${p.nom} : ${p.rapport ? "rapport reçu" : "rapport pas encore envoyé"}`}>
+                {p.initiales}
+                <span className="visuellement-cache">
+                  {p.nom}, {p.rapport ? "rapport reçu" : "pas encore"}
+                </span>
+                <span className="mur-rapports__marque" aria-hidden="true">
+                  <Icone nom={p.rapport ? "coche" : "horloge"} taille={10} />
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section className="carte apercu-equipe__carte" aria-labelledby="a-charge">
+        <h2 id="a-charge" className="carte__titre">
+          Charge prévue
+        </h2>
+        {repartition.map((r, k) => (
+          <div key={k} className="repartition-charge">
+            <span className="repartition-charge__libelle">{k === 0 ? "Cette semaine" : "Semaine prochaine"}</span>
+            <span className="repartition-charge__barre" role="img" aria-label={`${k === 0 ? "Cette semaine" : "Semaine prochaine"} : ${r.filter((x) => x.n).map((x) => `${x.n} ${LIBELLE_NIVEAU[x.niveau].toLowerCase()}${x.n > 1 ? "s" : ""}`).join(", ")}`}>
+              {r
+                .filter((x) => x.n)
+                .map((x) => (
+                  <span key={x.niveau} className={`repartition-charge__part repartition-charge__part--${x.niveau}`} style={{ flexGrow: x.n }} title={`${x.n} ${LIBELLE_NIVEAU[x.niveau].toLowerCase()}${x.n > 1 ? "s" : ""}`}>
+                    {x.n}
+                  </span>
+                ))}
+            </span>
+          </div>
+        ))}
+        <div className="legende" aria-hidden="true">
+          <Niveau niveau="surchargee" texte="Surchargées" />
+          <Niveau niveau="chargee" texte="Chargées" />
+          <Niveau niveau="normale" texte="Normales" />
+          <Niveau niveau="libre" texte="Libres" />
+        </div>
+      </section>
+      <section className="carte apercu-equipe__carte" aria-labelledby="a-taches">
+        <h2 id="a-taches" className="carte__titre">
+          Tâches de la semaine
+        </h2>
+        <p className="apercu-equipe__chiffre">
+          <strong>{t.faites}</strong> faites sur {t.total}
+          {t.retard ? <span className="ton-retard"> · {t.retard} en retard</span> : null}
+          {t.bloquees ? <span className="ton-veille"> · {t.bloquees} bloquée{t.bloquees > 1 ? "s" : ""}</span> : null}
+        </p>
+        <BarreTaches c={t} label="Tâches de l'équipe cette semaine" />
+        <div className="legende" aria-hidden="true">
+          {LEGENDE_TACHES.map((l) => (
+            <span key={l.cle} className="niveau">
+              <span className={`point-tache point-tache--${l.cle}`} />
+              {l.libelle}
+            </span>
+          ))}
+        </div>
+        <p className="apercu-equipe__pied">
+          <Icone nom="reunion" taille={15} /> {reunion ? `${dureeTexte(reunion)} de réunions notées cette semaine` : "Aucune réunion notée cette semaine"}
+        </p>
+      </section>
+    </div>
+  );
+}
+
+function CartePersonne({ p, semaines, jour, voit }: { p: Personne; semaines: Semaines; jour: string; voit: (id: string) => boolean }) {
+  const envoi = p.rapport?.envoyeLe ? (dateLocale(p.rapport.envoyeLe) === jour ? heure(p.rapport.envoyeLe) : jourAbrege(dateLocale(p.rapport.envoyeLe)).toLowerCase()) : "";
+  const alerte = p.retard || p.bloquees;
+  return (
+    <li className={`carte-personne${alerte ? " carte-personne--alerte" : ""}`}>
+      <div className="carte-personne__tete">
+        <span className={`carte-personne__avatar${p.rapport ? " carte-personne__avatar--recu" : ""}`} aria-hidden="true">
           {p.initiales}
         </span>
-        <span className="rangee__texte ligne-equipe__nom">
-          <span className="rangee__titre">
-            <a href={`/personnes/${p.id}`} className="lien-nom" title={`Tâches, charge et rapports de ${p.nom}`}>
-              {p.nom}
-            </a>
-          </span>
+        <span className="carte-personne__nom">
+          <a href={`/personnes/${p.id}`} className="lien-nom" title={`Tâches, charge et rapports de ${p.nom}`}>
+            {p.nom}
+          </a>
           <span className="rangee__sous">{p.poste}</span>
-          {p.projets.length ? (
-            <span className="ligne-equipe__projets">
+        </span>
+        {p.rapport ? (
+          <a href={`/rapports/${p.rapport.id}`} className="pastille-rapport pastille-rapport--recu" aria-label={`Rapport de ${p.nom}, ${p.direct ? "reçu" : "envoyé"} ${envoi}`}>
+            <Icone nom="coche" taille={14} />
+            {p.direct ? "Reçu" : "Envoyé"} {envoi}
+          </a>
+        ) : (
+          <span className="pastille-rapport pastille-rapport--attendu">
+            <Icone nom="horloge" taille={14} />
+            Pas encore
+          </span>
+        )}
+      </div>
+      <div className="carte-personne__corps">
+        <div className="carte-personne__ligne">
+          <span className="carte-personne__etiquette">Tâches</span>
+          <span className="carte-personne__valeur">
+            <BarreTaches c={p} label={`Tâches de ${p.nom} cette semaine`} />
+            <span className="carte-personne__detail">
+              {p.total ? `${p.faites} faite${p.faites > 1 ? "s" : ""} sur ${p.total}` : "Aucune tâche cette semaine"}
+              {p.retard ? <span className="ton-retard"> · {p.retard} en retard</span> : null}
+              {p.bloquees ? <span className="ton-veille"> · {p.bloquees} bloquée{p.bloquees > 1 ? "s" : ""}</span> : null}
+            </span>
+          </span>
+        </div>
+        <div className="carte-personne__ligne">
+          <span className="carte-personne__etiquette">Charge</span>
+          <span className="carte-personne__valeur carte-personne__jauges">
+            {semaines.map((w, i) => (
+              <Jauge key={w.semaine} heures={w.heures} capacite={w.capacite} niveau={w.niveau} libelle={i === 0 ? "Cette sem." : "Sem. proch."} />
+            ))}
+          </span>
+        </div>
+        <div className="carte-personne__ligne">
+          <span className="carte-personne__etiquette">Réunions</span>
+          <span className={`carte-personne__valeur${p.minutesReunion ? "" : " ton-discret"}`}>{p.minutesReunion ? `${dureeTexte(p.minutesReunion)} cette semaine` : "Aucune notée"}</span>
+        </div>
+        {p.projets.length ? (
+          <div className="carte-personne__ligne">
+            <span className="carte-personne__etiquette">Projets</span>
+            <span className="carte-personne__valeur ligne-equipe__projets" style={{ marginTop: 0 }}>
               {p.projets.map((m) => (
                 <CodeProjet key={m.id} id={m.id} code={m.code} titre={m.titre} visible={voit(m.id)} />
               ))}
             </span>
-          ) : null}
-        </span>
-        {p.rapport ? (
-          <a href={`/rapports/${p.rapport.id}`} style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className="ligne-equipe__rapport ton-ok lien-nom" aria-label={`Rapport de ${p.nom}`}>
-            <Icone nom="coche" taille={16} />
-            {p.rapport.envoyeLe && dateLocale(p.rapport.envoyeLe) === jour ? `${p.direct ? "Reçu" : "Envoyé"} à ${heure(p.rapport.envoyeLe)}` : `${p.direct ? "Reçu" : "Envoyé"} ${p.rapport.envoyeLe ? jourAbrege(dateLocale(p.rapport.envoyeLe)).toLowerCase() : ""}`}
-          </a>
-        ) : (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 14 }} className="ligne-equipe__rapport ton-retard">
-            <Icone nom="horloge" taille={16} />
-            Pas encore
-          </span>
-        )}
-        <span role="img" aria-label={`${p.faites} tâches faites sur ${p.total}`} className="ligne-equipe__taches" style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span className="barre" style={{ width: 64 }}>
-            <span style={{ width: `${p.total ? Math.round((p.faites / p.total) * 100) : 0}%` }} />
-          </span>
-          <span className="rangee__meta">
-            {p.faites}/{p.total}
-          </span>
-        </span>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }} title="Réunions notées cette semaine" className={`ligne-equipe__reunions${p.minutesReunion ? "" : " ton-discret"}`}>
-          <Icone nom="reunion" taille={15} />
-          {p.minutesReunion ? dureeTexte(p.minutesReunion) : "—"}
-          <span className="visuellement-cache"> en réunion cette semaine</span>
-        </span>
-        <span className="ligne-equipe__alertes" style={{ fontSize: 13 }}>
-          {p.retard ? <span className="ton-retard">{p.retard} en retard</span> : null}
-          {p.retard && p.bloquees ? <span className="ton-discret"> · </span> : null}
-          {p.bloquees ? <span className="ton-veille">{p.bloquees} bloquée{p.bloquees > 1 ? "s" : ""}</span> : null}
-          {!p.retard && !p.bloquees ? <span className="ton-discret">—</span> : null}
-        </span>
-        <span className="ligne-equipe__charge" style={{ display: "flex", flexDirection: "column", gap: 4 }} aria-label="Charge">
-          {semaines.map((w, i) => (
-            <Niveau key={w.semaine} niveau={w.niveau} texte={`${i === 0 ? "Cette sem." : "Sem. proch."} ${nombre(w.heures)} / ${nombre(w.capacite)} h`} />
-          ))}
-        </span>
+          </div>
+        ) : null}
       </div>
     </li>
   );

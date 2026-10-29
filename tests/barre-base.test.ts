@@ -75,18 +75,27 @@ describe.skipIf(!URL_TEST)("la barre (base de démonstration)", () => {
     expect(await B.ajouterNoteAuRapport(qui("frantz.desrosiers"), { saisie: "Décision : x", projetId: "" })).not.toHaveProperty("ok");
   });
 
-  it("projet : santé et motif par le chef de projet ; refus pour une autre personne ; « Annuler » rétablit", async () => {
+  it("projet : la santé est calculée ; le chef signale un risque (qui ne fait qu'aggraver) ; « Annuler » le retire", async () => {
     const mv = qui("myriam.valcin"); // cheffe du projet UR
     const ur = projets.get("UR")!;
+    const S = await import("@/lib/donnees/sante");
+    await S.recalculerSante([ur]);
     const [avant] = await D.db.select().from(D.schema.projets).where(eq(D.schema.projets.id, ur));
-    expect(await B.mettreAJourProjetDepuisBarre(qui("daphnee.joseph"), await A.acces(qui("daphnee.joseph")), { saisie: "UR en retard : test", projetId: "" })).not.toHaveProperty("ok");
+    // Une autre personne ne touche pas au projet ; « en retard » ne s'impose pas, même par la cheffe.
+    expect(await B.mettreAJourProjetDepuisBarre(qui("daphnee.joseph"), await A.acces(qui("daphnee.joseph")), { saisie: "UR risque : test", projetId: "" })).not.toHaveProperty("ok");
+    const impose = await B.mettreAJourProjetDepuisBarre(mv, await A.acces(mv), { saisie: "UR en retard : test", projetId: "" });
+    expect(impose).not.toHaveProperty("ok");
+    expect(impose.message).toMatch(/calculée/);
     const r = await B.mettreAJourProjetDepuisBarre(mv, await A.acces(mv), { saisie: "UR à surveiller : retard du prestataire", projetId: "" });
     expect(r).toMatchObject({ ok: true });
     const [apres] = await D.db.select().from(D.schema.projets).where(eq(D.schema.projets.id, ur));
-    expect(apres).toMatchObject({ sante: "a_surveiller", santeMotif: "Retard du prestataire" });
+    expect(apres.risqueMotif).toBe("Retard du prestataire");
+    expect(apres.santeMotif).toContain("Risque signalé par Myriam Valcin : Retard du prestataire");
+    expect(apres.sante).not.toBe("dans_les_temps");
+    if (avant.sante === "en_retard") expect(apres.sante).toBe("en_retard"); // le signal n'améliore jamais
     expect(await N.annulerAction(await A.acces(mv), r.annulation!)).toMatchObject({ ok: true });
     const [retour] = await D.db.select().from(D.schema.projets).where(eq(D.schema.projets.id, ur));
-    expect({ sante: retour.sante, santeMotif: retour.santeMotif }).toEqual({ sante: avant.sante, santeMotif: avant.santeMotif });
+    expect({ risqueMotif: retour.risqueMotif, sante: retour.sante, santeMotif: retour.santeMotif }).toEqual({ risqueMotif: "", sante: avant.sante, santeMotif: avant.santeMotif });
   });
 
   it("jalon daté, avec « projet … » en toutes lettres ; « Annuler » le retire", async () => {

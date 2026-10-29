@@ -13,6 +13,7 @@ import { codeSuggere, codeValide, peutAssigner, projetOuvert, projetSupprimable,
 import { membresDeLaDirection, nomComplet, resoudreSuperieur } from "@/lib/regles";
 import { trouverOuCreerExterne } from "./externes";
 import { noterReportFin } from "./reports-fin";
+import { recalculerSante } from "./sante";
 
 const date = (v: unknown) => {
   const s = String(v ?? "").trim();
@@ -156,7 +157,6 @@ export type ModifProjet = {
   programme: string;
   strategique: boolean;
   statut: string;
-  sante: string;
   chefProjetId: string;
   referentId: string;
   division: string;
@@ -184,7 +184,6 @@ export async function modifierProjet(projetId: string, d: ModifProjet, parId: st
   if (incoherence && p.statut !== "requete" && p.statut !== "refuse") return { erreur: incoherence };
   // La demande et le refus se changent par la décision, pas par ce formulaire.
   const statut = p.statut === "requete" || p.statut === "refuse" ? p.statut : (STATUTS_ACCEPTES as string[]).includes(d.statut) ? (d.statut as StatutProjet) : p.statut;
-  const sante = ["dans_les_temps", "a_surveiller", "en_retard"].includes(d.sante) ? (d.sante as typeof p.sante) : p.sante;
   const valeurs = {
     code,
     titre,
@@ -192,7 +191,6 @@ export async function modifierProjet(projetId: string, d: ModifProjet, parId: st
     programme: texte(d.programme, 160),
     strategique: d.strategique,
     statut: statut as typeof p.statut,
-    sante,
     chefProjetId: chef,
     referentId: referent,
     division: texte(d.division, 120),
@@ -204,6 +202,8 @@ export async function modifierProjet(projetId: string, d: ModifProjet, parId: st
   };
   await db.update(schema.projets).set(valeurs).where(eq(schema.projets.id, projetId));
   await noterReportFin(projetId, p.dateFinPrevue, valeurs.dateFinPrevue, parId);
+  // Dates ou statut changés : la santé calculée suit.
+  await recalculerSante([projetId]);
   if (chef && chef !== p.chefProjetId && chef !== parId && !chefP?.externe)
     await db.insert(schema.notifications).values({ personneId: chef, type: "projet", texte: `Vous êtes chef du projet « ${titre} »`, lien: `/projets/${projetId}` });
   if (referent && referent !== p.referentId && referent !== parId)
@@ -292,18 +292,47 @@ export async function membresDuProjet(projetId: string) {
     .map((m) => ({ id: m.id, personneId: m.personneId, role: m.role, nom: nomComplet(m.personne!), poste: m.personne!.poste, actif: m.personne!.actif, externe: m.personne!.externe, organisation: m.personne!.organisation }));
 }
 
+/** Les rôles déjà donnés dans les équipes projet, les plus utilisés d'abord : proposés pendant la saisie. */
+export async function rolesDesEquipes(): Promise<string[]> {
+  const lignes = await db
+    .select({ role: schema.membresProjet.role, n: count() })
+    .from(schema.membresProjet)
+    .where(ne(schema.membresProjet.role, ""))
+    .groupBy(schema.membresProjet.role);
+  return lignes.sort((a, b) => b.n - a.n || a.role.localeCompare(b.role, "fr")).map((l) => l.role);
+}
+
+const plier = (t: string) =>
+  t
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
+/**
+ * Un rôle saisi : s'il existe déjà, aux accents, aux majuscules et aux espaces près, on reprend l'existant
+ * (pas de « analyste » à côté d'« Analyste ») ; sinon c'est un nouveau rôle, avec une majuscule.
+ */
+export async function roleNormalise(saisi: string): Promise<string> {
+  const r = texte(saisi, 80).replace(/\s+/g, " ");
+  if (!r) return "";
+  const existant = (await rolesDesEquipes()).find((x) => plier(x) === plier(r));
+  return existant ?? r.charAt(0).toUpperCase() + r.slice(1);
+}
+
 export async function ajouterMembre(projetId: string, personneId: string, role: string, parId: string) {
   const personne = await personneActuelle(personneId);
   if (!personne?.actif) return;
   const [p] = await db.select({ titre: schema.projets.titre, chef: schema.projets.chefProjetId }).from(schema.projets).where(eq(schema.projets.id, projetId));
   if (!p || p.chef === personneId) return;
-  const [n] = await db.insert(schema.membresProjet).values({ projetId, personneId, role: texte(role, 80), ajouteParId: parId }).onConflictDoNothing().returning({ id: schema.membresProjet.id });
+  const [n] = await db.insert(schema.membresProjet).values({ projetId, personneId, role: await roleNormalise(role), ajouteParId: parId }).onConflictDoNothing().returning({ id: schema.membresProjet.id });
   if (n && personneId !== parId && !personne.externe) await db.insert(schema.notifications).values({ personneId, type: "projet", texte: `Vous faites partie de l'équipe du projet « ${p.titre} »`, lien: `/projets/${projetId}` });
   if (n) await noter(parId, "membre_ajoute", projetId, { personne: personneId });
 }
 
 export async function changerRoleMembre(projetId: string, membreId: string, role: string) {
-  await db.update(schema.membresProjet).set({ role: texte(role, 80) }).where(and(eq(schema.membresProjet.id, membreId), eq(schema.membresProjet.projetId, projetId)));
+  await db.update(schema.membresProjet).set({ role: await roleNormalise(role) }).where(and(eq(schema.membresProjet.id, membreId), eq(schema.membresProjet.projetId, projetId)));
 }
 
 /** Retirer un membre : ses tâches ouvertes sur le projet restent à lui (le chef de projet les réassigne). */

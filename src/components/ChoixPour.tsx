@@ -1,11 +1,13 @@
 "use client";
 
 /**
- * « Pour » d'une tâche : les personnes de la division qu'on peut choisir, puis celles hors division
- * (autres départements, consultants) quand c'est permis, et « Quelqu'un d'autre » pour en ajouter une.
- * La nouvelle personne part avec le formulaire : pourNomExterne, pourOrgExterne.
+ * « Pour » d'une tâche : on tape le nom pour trouver la personne parmi celles de la division qu'on peut
+ * choisir, puis celles hors division (autres départements, consultants) quand c'est permis ; et
+ * « Quelqu'un d'autre » pour en ajouter une. La nouvelle personne part avec le formulaire : pourNomExterne,
+ * pourOrgExterne.
  */
 import { NOUVELLE_PERSONNE } from "@/lib/projets";
+import { ListeFiltrable } from "./ListeFiltrable";
 export { NOUVELLE_PERSONNE };
 
 export type PersonneChoix = { id: string; nom: string; externe?: boolean; organisation?: string };
@@ -31,28 +33,24 @@ export function ChoixPour({
 }) {
   const internes = personnes.filter((p) => !p.externe && permis.has(p.id));
   const externes = personnes.filter((p) => p.externe && (externesPermis || permis.has(p.id)));
+  const options = [
+    ...internes.map((p) => ({ value: p.id, label: p.nom })),
+    ...externes.map((p) => ({ value: p.id, label: p.nom, detail: p.organisation || undefined, groupe: "Hors division" })),
+  ];
   return (
     <>
       <div className="champ">
         <label htmlFor={id}>{libelle}</label>
-        <select id={id} name="assigneId" value={valeur} onChange={(e) => onChange(e.target.value)}>
-          {internes.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nom}
-            </option>
-          ))}
-          {externes.length ? (
-            <optgroup label="Hors division">
-              {externes.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nom}
-                  {p.organisation ? ` · ${p.organisation}` : ""}
-                </option>
-              ))}
-            </optgroup>
-          ) : null}
-          {externesPermis ? <option value={NOUVELLE_PERSONNE}>Quelqu&apos;un d&apos;autre, hors division…</option> : null}
-        </select>
+        <ListeFiltrable
+          id={id}
+          name="assigneId"
+          options={options}
+          value={valeur}
+          onChange={onChange}
+          placeholder="Tapez un nom"
+          aucun="Personne ne correspond à"
+          fin={externesPermis ? [{ value: NOUVELLE_PERSONNE, label: "Quelqu'un d'autre, hors division…", groupe: "Ajouter" }] : undefined}
+        />
       </div>
       {valeur === NOUVELLE_PERSONNE ? (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>

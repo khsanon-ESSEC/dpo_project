@@ -280,3 +280,54 @@ export async function projetsPourRapport(visibles: Set<string> | "tous") {
     .filter((p) => visibles === "tous" || visibles.has(p.id))
     .sort((a, b) => Number(b.strategique) - Number(a.strategique) || Number(a.statut === "finalise") - Number(b.statut === "finalise") || a.code.localeCompare(b.code, "fr"));
 }
+
+/**
+ * Tous les rapports au conseil déjà faits, mensuels et ponctuels, du plus récent au plus ancien : ceux qui
+ * touchent un projet visible (ou que la personne a créés). Le rapport du mois en cours n'y est que s'il est approuvé.
+ */
+export async function historiqueConseil(visibles: Set<string> | "tous", moiId: string) {
+  const courant = moisCourant();
+  const rapports = await db.select().from(schema.rapportsConseil);
+  if (!rapports.length) return [];
+  const lignes = await db
+    .select({ rapportId: schema.lignesConseil.rapportId, projetId: schema.lignesConseil.projetId, code: schema.projets.code, ancienne: schema.lignesConseil.dateFinDernierRapport, nouvelle: schema.lignesConseil.nouvelleDateFin })
+    .from(schema.lignesConseil)
+    .innerJoin(schema.projets, eq(schema.projets.id, schema.lignesConseil.projetId))
+    .where(inArray(schema.lignesConseil.rapportId, rapports.map((r) => r.id)))
+    .orderBy(asc(schema.lignesConseil.ordre));
+  const org = await chargerOrganisation();
+  const nom = (id: string | null) => (id && org.personnes.get(id) ? nomComplet(org.personnes.get(id)!) : null);
+  return rapports
+    .filter((r) => !(r.genre === "mensuel" && r.mois && r.mois >= courant && r.statut === "brouillon"))
+    .map((r) => {
+      const siennes = lignes.filter((l) => l.rapportId === r.id && (visibles === "tous" || visibles.has(l.projetId)));
+      return {
+        id: r.id,
+        genre: r.genre,
+        mois: r.mois,
+        titre: r.titre,
+        date: r.genre === "mensuel" ? r.mois! : (r.dateRapport ?? r.creeLe.toISOString().slice(0, 10)),
+        statut: r.statut,
+        approuveLe: r.approuveLe,
+        approuvePar: nom(r.approuveParId),
+        auteur: nom(r.creeParId),
+        creeParId: r.creeParId,
+        codes: siennes.map((l) => l.code),
+        datesChangees: siennes.filter((l) => l.ancienne && l.nouvelle && l.ancienne !== l.nouvelle).length,
+      };
+    })
+    .filter((r) => r.codes.length > 0 || r.creeParId === moiId)
+    .sort((x, y) => y.date.localeCompare(x.date));
+}
+
+/** Le rapport mensuel d'un mois, s'il existe (sans le créer). */
+export async function rapportDuMois(mois: string) {
+  const [r] = await db.select().from(schema.rapportsConseil).where(eq(schema.rapportsConseil.mois, mois)).limit(1);
+  return r ?? null;
+}
+
+/** Mois des rapports mensuels existants, du plus ancien au plus récent (pour aller de l'un à l'autre). */
+export async function moisDesRapports(): Promise<string[]> {
+  const l = await db.select({ mois: schema.rapportsConseil.mois }).from(schema.rapportsConseil).where(eq(schema.rapportsConseil.genre, "mensuel")).orderBy(asc(schema.rapportsConseil.mois));
+  return l.map((x) => x.mois!).filter(Boolean);
+}

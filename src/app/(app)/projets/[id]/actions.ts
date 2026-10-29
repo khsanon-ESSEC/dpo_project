@@ -8,6 +8,8 @@ import { db, schema } from "@/db";
 import { acces, exigerProjetVisible } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { mettreAJourIndicateur } from "@/lib/donnees/projets";
+import { noterReportFin } from "@/lib/donnees/reports-fin";
+import { recalculerSante, signalerRisque } from "@/lib/donnees/sante";
 import { noter } from "@/lib/journal";
 import { deposerDocuments, peutDeposerDocument, retirerDocument } from "@/lib/donnees/documents";
 import { estCategorie } from "@/lib/documents";
@@ -34,24 +36,36 @@ export async function changerIndicateur(projetId: string, indicateurId: string, 
   if (!i) return;
   await mettreAJourIndicateur(indicateurId, etat);
   await noter(u.id, "indicateur", indicateurId, { etat });
+  await recalculerSante([projetId]);
   revalidatePath(`/projets/${projetId}`);
 }
 
+/** Dates du projet. La santé n'est pas choisie : elle est calculée (src/lib/sante.ts), puis recalculée ici. */
 export async function mettreAJourProjet(projetId: string, form: FormData) {
   const { u, p } = await exigerDroitProjet(projetId);
-  const sante = String(form.get("sante") ?? "");
-  const nouvelle = (["dans_les_temps", "a_surveiller", "en_retard"].includes(sante) ? sante : p.sante) as typeof p.sante;
-  const motif = nouvelle === "dans_les_temps" ? "" : String(form.get("santeMotif") ?? p.santeMotif).trim().slice(0, 500);
   const valeurs = {
-    sante: nouvelle,
-    santeMotif: motif,
-    santeLe: nouvelle !== p.sante || motif !== p.santeMotif ? new Date() : p.santeLe,
     dateFinPrevue: date(form.get("dateFinPrevue")) ?? p.dateFinPrevue,
     dateLancementPrevue: date(form.get("dateLancementPrevue")),
     majLe: new Date(),
   };
   await db.update(schema.projets).set(valeurs).where(eq(schema.projets.id, projetId));
+  await noterReportFin(projetId, p.dateFinPrevue, valeurs.dateFinPrevue, u.id);
   await noter(u.id, "projet_modifie", projetId, { ...valeurs, majLe: undefined });
+  await recalculerSante([projetId]);
+  revalidatePath(`/projets/${projetId}`);
+}
+
+/**
+ * Signaler un risque que les données ne montrent pas (un prestataire qui lâche, un budget gelé), ou le retirer :
+ * le projet passe « à surveiller » pendant 30 jours ; un signal ne rend jamais un projet meilleur que le calcul.
+ */
+export async function signalerUnRisque(projetId: string, form: FormData) {
+  const { u } = await exigerDroitProjet(projetId);
+  const retirer = form.get("retirer") === "1";
+  const motif = retirer ? "" : String(form.get("motif") ?? "");
+  if (!retirer && !motif.trim()) return;
+  await signalerRisque(projetId, motif, u.id);
+  await noter(u.id, retirer ? "risque_retire" : "risque_signale", projetId, retirer ? {} : { motif: motif.trim().slice(0, 300) });
   revalidatePath(`/projets/${projetId}`);
 }
 

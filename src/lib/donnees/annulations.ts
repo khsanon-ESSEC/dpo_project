@@ -13,11 +13,11 @@ import { supprimerReunion } from "@/lib/donnees/reunions";
 import { noter } from "@/lib/journal";
 import { peutGererProjet } from "@/lib/projets";
 import { oublierReportFin } from "./reports-fin";
+import { recalculerSante } from "./sante";
 
 export const DUREE_ANNULATION_MINUTES = 3;
 
 type StatutTache = "a_faire" | "en_cours" | "bloquee" | "faite";
-type Sante = "dans_les_temps" | "a_surveiller" | "en_retard";
 
 export type Annulable =
   | { genre: "tache_creee"; tacheId: string; depuis: string }
@@ -32,7 +32,7 @@ export type Annulable =
   | { genre: "reunion"; reunionId: string; titre: string; participants: string[]; depuis: string; etat?: string }
   | { genre: "note_ligne"; ligneId: string }
   | { genre: "note_reponse"; rapportId: string; champId: string; avant: string | null; apres?: string }
-  | { genre: "projet"; projetId: string; apresMajLe: string; avant: { sante: Sante; santeMotif: string; santeLe: string | null; dateFinPrevue: string | null; dateLancementPrevue: string | null } }
+  | { genre: "projet"; projetId: string; apresMajLe: string; avant: { risqueMotif: string; risqueLe: string | null; risqueParId: string | null; dateFinPrevue: string | null; dateLancementPrevue: string | null } }
   | { genre: "jalon"; projetId: string; indicateurId: string };
 
 export async function enregistrerAnnulation(personneId: string, a: Annulable): Promise<string> {
@@ -204,9 +204,10 @@ async function defaire(a: Acces, d: Annulable): Promise<{ ok: true; message: str
       const v = d.avant;
       await db
         .update(schema.projets)
-        .set({ sante: v.sante, santeMotif: v.santeMotif, santeLe: v.santeLe ? new Date(v.santeLe) : null, dateFinPrevue: v.dateFinPrevue, dateLancementPrevue: v.dateLancementPrevue, majLe: new Date() })
+        .set({ risqueMotif: v.risqueMotif, risqueLe: v.risqueLe ? new Date(v.risqueLe) : null, risqueParId: v.risqueParId, dateFinPrevue: v.dateFinPrevue, dateLancementPrevue: v.dateLancementPrevue, majLe: new Date() })
         .where(eq(schema.projets.id, p.id));
       if (p.dateFinPrevue !== v.dateFinPrevue) await oublierReportFin(p.id, v.dateFinPrevue, p.dateFinPrevue);
+      await recalculerSante([p.id]);
       return { ok: true, message: `« ${p.titre} » est revenu comme avant.` };
     }
     case "jalon": {

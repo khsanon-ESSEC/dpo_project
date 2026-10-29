@@ -1,3 +1,4 @@
+import { ListeFiltrable } from "@/components/ListeFiltrable";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { acces } from "@/lib/acces";
@@ -179,18 +180,16 @@ function ChoixPersonne({ options, choisie }: { options: { id: string; prenom: st
       <label htmlFor="personne" className="note">
         Historique de
       </label>
-      <select id="personne" name="personne" defaultValue={choisie ?? ""} className="saisie" style={{ minHeight: 44, fontSize: 14, padding: "0 12px" }}>
-        {choisie ? null : (
-          <option value="" disabled>
-            Choisir une personne
-          </option>
-        )}
-        {options.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.prenom} {p.nom}
-          </option>
-        ))}
-      </select>
+      <ListeFiltrable
+        id="personne"
+        name="personne"
+        defaultValue={choisie ?? ""}
+        required
+        placeholder="Tapez un nom"
+        aucun="Personne ne correspond à"
+        className="liste-filtrable--ligne"
+        options={options.map((p) => ({ value: p.id, label: `${p.prenom} ${p.nom}` }))}
+      />
       <button type="submit" className="bouton-contour">
         Voir
       </button>

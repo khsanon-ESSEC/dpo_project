@@ -6,9 +6,14 @@
  */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  // Charge prévue de la semaine, notée une fois par semaine (le lundi ou au premier passage) : toutes les heures.
+  // Toutes les heures : la charge prévue de la semaine (notée une fois par semaine, le lundi ou au premier passage),
+  // et la santé calculée des projets (une fin prévue se dépasse aussi sans que personne ne touche au projet).
   const { noterChargesPrevues } = await import("@/lib/donnees/charge");
-  const noter = () => noterChargesPrevues().catch((e) => console.error("charge prévue :", (e as Error).message));
+  const { recalculerSante } = await import("@/lib/donnees/sante");
+  const noter = async () => {
+    await noterChargesPrevues().catch((e) => console.error("charge prévue :", (e as Error).message));
+    await recalculerSante().catch((e) => console.error("santé des projets :", (e as Error).message));
+  };
   setTimeout(noter, 60_000).unref();
   setInterval(noter, 60 * 60_000).unref();
 

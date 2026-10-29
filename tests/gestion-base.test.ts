@@ -99,6 +99,22 @@ describe.skipIf(!URL_TEST)("gestion des projets et des tâches", () => {
     expect((await G.membresDuProjet(projets.get("UR")!)).map((m) => m.nom)).toContain("Joël Dorval");
   });
 
+  it("rôles d'équipe : les rôles existants sont proposés, et un rôle saisi autrement reprend l'existant", async () => {
+    const roles = await G.rolesDesEquipes();
+    expect(roles[0]).toBe("Développeur"); // le plus donné d'abord
+    expect(roles).toContain("Analyste fonctionnel");
+    expect(await G.roleNormalise("  analyste   FONCTIONNEL ")).toBe("Analyste fonctionnel");
+    expect(await G.roleNormalise("developpeur")).toBe("Développeur");
+    expect(await G.roleNormalise("expert en paiements")).toBe("Expert en paiements");
+    expect(await G.roleNormalise("   ")).toBe("");
+    const mv = qui("myriam.valcin").id;
+    await G.ajouterMembre(projets.get("UR")!, qui("fabienne.michel").id, "analyste fonctionnel", mv);
+    const fm = (await G.membresDuProjet(projets.get("UR")!)).find((m) => m.personneId === qui("fabienne.michel").id);
+    expect(fm?.role).toBe("Analyste fonctionnel");
+    await G.changerRoleMembre(projets.get("UR")!, fm!.id, "pilote de la migration");
+    expect(await G.rolesDesEquipes()).toContain("Pilote de la migration");
+  });
+
   it("assigner : la cheffe de projet confie des tâches à son équipe projet, sur son projet seulement", async () => {
     const mv = await acces("myriam.valcin");
     const base = { description: "", echeance: null, debut: null, estimationHeures: null };
@@ -169,7 +185,7 @@ describe.skipIf(!URL_TEST)("gestion des projets et des tâches", () => {
   it("modifier : code unique, chef obligatoire pour un projet accepté ; indicateurs réordonnés", async () => {
     const ex = qui("frantz.desrosiers").id;
     const p = await projet(projets.get("CR")!);
-    const base = { code: p.code, titre: p.titre, description: p.description, programme: p.programme, strategique: p.strategique, statut: p.statut, sante: p.sante, chefProjetId: p.chefProjetId ?? "", referentId: p.referentId ?? "", division: p.division, dateEntree: p.dateEntree ?? "", dateFinInitiale: p.dateFinInitiale ?? "", dateFinPrevue: p.dateFinPrevue ?? "", dateLancementPrevue: "" };
+    const base = { code: p.code, titre: p.titre, description: p.description, programme: p.programme, strategique: p.strategique, statut: p.statut, chefProjetId: p.chefProjetId ?? "", referentId: p.referentId ?? "", division: p.division, dateEntree: p.dateEntree ?? "", dateFinInitiale: p.dateFinInitiale ?? "", dateFinPrevue: p.dateFinPrevue ?? "", dateLancementPrevue: "" };
     expect(await G.modifierProjet(p.id, { ...base, code: "UN" }, ex)).toEqual({ erreur: "Le code UN est déjà pris." });
     expect(await G.modifierProjet(p.id, { ...base, chefProjetId: "" }, ex)).toHaveProperty("erreur");
     expect(await G.modifierProjet(p.id, { ...base, titre: "Refonte de Credos", statut: "requete" }, ex)).toEqual({ ok: true });

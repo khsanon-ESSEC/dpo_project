@@ -1,3 +1,4 @@
+import { ListeFiltrable } from "@/components/ListeFiltrable";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { exigerUtilisateur } from "@/lib/auth/session";
@@ -279,19 +280,15 @@ export default async function PageModele({ params, searchParams }: { params: Pro
                 <label className="visuellement-cache" htmlFor="m-personne">
                   Personne à affecter
                 </label>
-                <select id="m-personne" name="personneId" defaultValue="" className="saisie" style={{ flex: "1 1 200px", minWidth: 0, maxWidth: "100%", minHeight: 44, fontSize: 15 }}>
-                  <option value="" disabled>
-                    Choisir une personne
-                  </option>
-                  {d.personnesOptions
-                    .filter((p) => !d.personnes.some((x) => x.id === p.id))
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nom}
-                        {p.ailleurs ? ` (aujourd'hui : ${p.ailleurs})` : ""}
-                      </option>
-                    ))}
-                </select>
+                <ListeFiltrable
+                  id="m-personne"
+                  name="personneId"
+                  required
+                  placeholder="Tapez un nom"
+                  aucun="Personne ne correspond à"
+                  className="liste-filtrable--ligne"
+                  options={d.personnesOptions.filter((p) => !d.personnes.some((x) => x.id === p.id)).map((p) => ({ value: p.id, label: p.nom, detail: p.ailleurs ? `aujourd'hui : ${p.ailleurs}` : undefined }))}
+                />
                 <button type="submit" className="bouton-contour">
                   <Icone nom="ajouter" taille={16} /> Affecter
                 </button>

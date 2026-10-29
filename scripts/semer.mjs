@@ -122,37 +122,37 @@ await sql.begin(async (tx) => {
       k: "UR", titre: "Nouvelle version UNIBANKOnline Retail", strat: true, pm: "mv", sante: "en_retard",
       description: "La nouvelle plateforme propose une meilleure présentation des fonctionnalités et permettra aux clients d'accéder plus facilement aux services de banque en ligne.",
       entree: "2024-06-25", initiale: "2025-07-31", fin: "2026-11-26", lancement: "2026-12-10",
-      ind: [["Conception graphique réalisée", "atteint"], ["Modèle conceptuel validé", "atteint"], ["Consultant pour le développement sélectionné et contrat signé", "atteint"], ["Application développée", "atteint"], ["Planification de la stratégie commerciale", "atteint"], ["Audit de sécurité effectué et passé", "en_cours"], ["Plan de lancement finalisé et approuvé", "atteint"], ["Plan de communication approuvé", "atteint"], ["Application mise en ligne", "a_venir"]],
+      ind: [["Conception graphique réalisée", "atteint"], ["Modèle conceptuel validé", "atteint"], ["Consultant pour le développement sélectionné et contrat signé", "atteint"], ["Application développée", "atteint"], ["Planification de la stratégie commerciale", "atteint"], ["Audit de sécurité effectué et passé", "en_cours", -38], ["Plan de lancement finalisé et approuvé", "atteint"], ["Plan de communication approuvé", "atteint"], ["Application mise en ligne", "a_venir"]],
       dernier: { fin: "2026-10-29", lancement: "2026-11-12", etat: "Un déploiement en mode « Early adopter » a été effectué le 15 avril 2026. Plus de 2000 clients l'utilisent actuellement. Le déploiement a dû être suspendu afin de procéder à certains renforcements de la sécurité du système face aux nouvelles menaces de cyberattaques." },
     },
     {
       k: "CE", titre: "Compte d'épargne sans livret", strat: true, pm: "wb", sante: "a_surveiller",
       description: "Permettre aux succursales d'offrir aux nouveaux déposants un compte d'épargne sans livret, et aux détenteurs de la carte de débit UNIBANK de ne plus utiliser de livret.",
       entree: "2023-05-13", initiale: "2025-09-26", fin: "2026-11-26", lancement: "2026-12-10",
-      ind: [["Concept du nouveau produit validé", "atteint"], ["Exigences de développement informatique définies", "atteint"], ["Stratégie d'implémentation mise en place", "atteint"], ["Formations réalisées", "en_cours"], ["Plan de communication défini", "a_venir"]],
+      ind: [["Concept du nouveau produit validé", "atteint"], ["Exigences de développement informatique définies", "atteint"], ["Stratégie d'implémentation mise en place", "atteint"], ["Formations réalisées", "en_cours", -9], ["Plan de communication défini", "a_venir"]],
       dernier: { fin: "2026-11-26", lancement: "2026-12-10", etat: "Les phases de conception et d'implémentation ont été achevées. Le produit a été présenté aux responsables du réseau. Des séances de travail sont en cours avec le Réseau en vue de planifier une phase pilote." },
     },
     {
       k: "UC", titre: "Nouvelle version UNIBANKOnline Corporate", strat: true, pm: "ml", sante: "dans_les_temps",
       description: "La nouvelle version vise à offrir une meilleure expérience aux utilisateurs avec une interface plus conviviale et avec plus de fonctionnalités.",
       entree: "2024-12-19", initiale: "2025-12-19", fin: "2026-12-18", lancement: "2027-02-27",
-      ind: [["Maquettes graphiques validées", "atteint"], ["Architecture du système validée", "atteint"], ["Développeurs affectés", "atteint"], ["Développement terminé", "en_cours"], ["Tests utilisateurs réalisés", "a_venir"], ["Audit de sécurité passé", "a_venir"], ["Formation des chargés de clientèle", "a_venir"], ["Plan de communication approuvé", "a_venir"], ["Application mise en ligne", "a_venir"]],
+      ind: [["Maquettes graphiques validées", "atteint"], ["Architecture du système validée", "atteint"], ["Développeurs affectés", "atteint"], ["Développement terminé", "en_cours", 21], ["Tests utilisateurs réalisés", "a_venir"], ["Audit de sécurité passé", "a_venir"], ["Formation des chargés de clientèle", "a_venir"], ["Plan de communication approuvé", "a_venir"], ["Application mise en ligne", "a_venir"]],
       dernier: { fin: "2026-12-18", lancement: "2027-02-27", etat: "Les phases de conception des maquettes graphiques, de l'architecture du système ainsi que le développement sont en cours." },
     },
     {
       k: "UN", titre: "Refonte Uninet", strat: false, pm: "lp", sante: "a_surveiller",
       description: "Refonte du portail intranet Uninet.", entree: "2025-03-03", initiale: "2026-12-31", fin: "2027-01-15", lancement: null,
-      ind: [["Refonte graphique", "atteint"], ["Refonte de la base de données", "atteint"], ["Intégration avec TMS", "en_cours"], ["Migration des données existantes", "a_venir"], ["Statistiques (rapports et tableau de bord Uninet)", "a_venir"]],
+      ind: [["Refonte graphique", "atteint"], ["Refonte de la base de données", "atteint"], ["Intégration avec TMS", "en_cours", 25], ["Migration des données existantes", "a_venir"], ["Statistiques (rapports et tableau de bord Uninet)", "a_venir"]],
     },
     {
       k: "CR", titre: "Refonte Credos", strat: false, pm: "wb", sante: "dans_les_temps",
       description: "Nouvelle version de l'application de suivi des dossiers de crédit.", entree: "2025-06-02", initiale: "2026-12-04", fin: "2026-12-04", lancement: null,
-      ind: [["Besoins validés avec le Crédit", "atteint"], ["Maquettes validées", "atteint"], ["Développement terminé", "atteint"], ["Recette réalisée", "en_cours"], ["Mise en production", "a_venir"], ["Formation des utilisateurs", "a_venir"]],
+      ind: [["Besoins validés avec le Crédit", "atteint"], ["Maquettes validées", "atteint"], ["Développement terminé", "atteint"], ["Validation métier réalisée", "en_cours", 14], ["Mise en production", "a_venir"], ["Formation des utilisateurs", "a_venir"]],
     },
     {
       k: "PR", titre: "Plateforme de recrutement", strat: false, pm: "dj", sante: "dans_les_temps",
       description: "Plateforme de dépôt et de suivi des candidatures.", entree: "2026-05-04", initiale: "2027-01-29", fin: "2027-01-29", lancement: null,
-      ind: [["Cahier des charges validé", "en_cours"], ["Maquettes du formulaire de candidature", "atteint"], ["Choix de la solution", "atteint"], ["Développement terminé", "a_venir"], ["Tests avec la DRH", "a_venir"], ["Mise en ligne", "a_venir"]],
+      ind: [["Cahier des charges validé", "en_cours", 7], ["Maquettes du formulaire de candidature", "atteint"], ["Choix de la solution", "atteint"], ["Développement terminé", "a_venir"], ["Tests avec la DRH", "a_venir"], ["Mise en ligne", "a_venir"]],
     },
     {
       k: "AE", titre: "Système d'archivage électronique", strat: false, pm: "fm", sante: "dans_les_temps", statut: "continu",
@@ -164,7 +164,7 @@ await sql.begin(async (tx) => {
   projets.push({
     k: "OC", titre: "Ouverture de compte en ligne", strat: true, pm: "ms", referent: "wb", division: "Division Réseau et succursales", sante: "a_surveiller",
     description: "Permettre aux nouveaux clients d'ouvrir un compte depuis le site, avec une vérification d'identité à distance.", entree: "2026-09-01", initiale: "2027-03-31", fin: "2027-03-31", lancement: null,
-    ind: [["Parcours client validé", "en_cours"], ["Pièces justificatives définies par type de client", "a_venir"], ["Pilote dans trois succursales", "a_venir"]],
+    ind: [["Parcours client validé", "en_cours", -12], ["Pièces justificatives définies par type de client", "a_venir"], ["Pilote dans trois succursales", "a_venir"]],
   });
   const PJ = {};
   for (const p of projets) {
@@ -172,9 +172,10 @@ await sql.begin(async (tx) => {
     await tx`insert into projets (id, code, titre, description, programme, strategique, statut, sante, chef_projet_id, referent_id, division, date_entree, date_fin_initiale, date_fin_prevue, date_lancement_prevue)
       values (${PJ[p.k]}, ${p.k}, ${p.titre}, ${p.description}, ${p.strat ? "Amélioration de l'expérience client" : ""}, ${p.strat}, ${p.statut ?? "en_cours"}, ${p.sante}, ${P[p.pm]}, ${p.referent ? P[p.referent] : null}, ${p.division ?? ""}, ${p.entree}, ${p.initiale}, ${p.fin}, ${p.lancement})`;
     let i = 0;
-    for (const [libelle, etat] of p.ind) {
+    for (const [libelle, etat, prevu] of p.ind) {
       i += 1;
-      await tx`insert into indicateurs (projet_id, ordre, libelle, etat) values (${PJ[p.k]}, ${i}, ${libelle}, ${etat})`;
+      // Une date prévue (en jours depuis aujourd'hui) sur quelques jalons : la santé calculée en tient compte.
+      await tx`insert into indicateurs (projet_id, ordre, libelle, etat, prevu_le) values (${PJ[p.k]}, ${i}, ${libelle}, ${etat}, ${prevu === undefined ? null : jour(prevu)})`;
     }
     if (p.dernier) {
       await tx`insert into historique_projet (projet_id, mois, date_fin_prevue, date_lancement_prevue, etat_avancement)
@@ -210,7 +211,7 @@ await sql.begin(async (tx) => {
   await tache("dj", "PR", "Ateliers avec les utilisateurs de la DRH", "a_faire", jour(10), [], null, { debut: jour(8), h: 16 });
   await tache("dj", "PR", "Maquettes des écrans de suivi des candidatures", "a_faire", jour(11), [], null, { debut: jour(9), h: 12 });
   await tache("dj", "PR", "Démonstration à la DRH", "a_faire", jour(11), [], null, { h: 6 });
-  await tache("dj", "UR", "Recette des correctifs de l'audit", "a_faire", jour(16), [], null, { debut: jour(14), h: 12 });
+  await tache("dj", "UR", "Validation métier des correctifs de l'audit", "a_faire", jour(16), [], null, { debut: jour(14), h: 12 });
   await tache("dj", "UN", "Charte graphique de l'intranet", "a_faire", jour(18), [], null, { debut: jour(15), h: 10 });
   await tache("dj", "UR", "Préparation de l'audit de sécurité", "faite", jour(-8), fait(-8), null, { debut: jour(-14), h: 16 });
 
@@ -224,10 +225,10 @@ await sql.begin(async (tx) => {
   await tache("re", "UR", "Module de virements", "faite", jour(-5), fait(-5), null, { debut: jour(-25), h: 80 });
 
   // Ludovic Pierre : chargé dans deux semaines.
-  await tache("lp", "CR", "Serveur de recette", "bloquee", jour(1), [[0, "statut", "a_faire", "bloquee", "En attente de la DTI"]], "Serveur de recette demandé à la DTI lundi.", { h: 4 });
+  await tache("lp", "CR", "Serveur de test", "bloquee", jour(1), [[0, "statut", "a_faire", "bloquee", "En attente de la DTI"]], "Serveur de test demandé à la DTI lundi.", { h: 4 });
   await tache("lp", "UN", "Plan de migration des données", "en_cours", jour(4), [[1, "statut", "a_faire", "en_cours"]], null, { debut: jour(1), h: 6 });
   await tache("lp", "UN", "Migration des contenus de l'intranet", "a_faire", jour(18), [], null, { debut: jour(7), h: 40 });
-  await tache("lp", "CR", "Recette fonctionnelle de Credos", "a_faire", jour(25), [], null, { debut: jour(14), h: 30 });
+  await tache("lp", "CR", "Validation métier de Credos", "a_faire", jour(25), [], null, { debut: jour(14), h: 30 });
   await tache("lp", "UN", "Formation des contributeurs", "a_faire", jour(30), [], null, { debut: jour(28), h: 12 });
   await tache("lp", "UN", "Point hebdomadaire avec la DTI", "a_faire", jour(9));
 
@@ -239,14 +240,14 @@ await sql.begin(async (tx) => {
 
   // Jean-Robert Noël : 32 h par semaine.
   await tache("jn", "UC", "Spécifications du module de paie", "en_cours", jour(4), [[0, "statut", "a_faire", "en_cours"]], null, { debut: jour(0), h: 5 });
-  await tache("jn", "CR", "Jeux de données de recette", "faite", jour(3), [[3, "statut", "en_cours", "faite"]], null, { h: 6 });
+  await tache("jn", "CR", "Jeux de données de test", "faite", jour(3), [[3, "statut", "en_cours", "faite"]], null, { h: 6 });
   await tache("jn", "UC", "Spécifications des virements de masse", "a_faire", jour(11), [], null, { debut: jour(7), h: 16 });
   await tache("jn", "UC", "Tests d'intégration du module de paie", "a_faire", jour(22), [], null, { debut: jour(14), h: 24 });
   await tache("jn", "UC", "Maquettes graphiques des écrans de paie", "faite", jour(-10), fait(-10), null, { debut: jour(-21), h: 30 });
 
   // Wesner Bazile : surchargé la semaine prochaine.
   await tache("wb", "CE", "Planning de la phase pilote", "faite", jour(3), [[3, "statut", "en_cours", "faite"]], null, { debut: jour(0), h: 12 });
-  await tache("wb", "CR", "Validation de la recette avec le Crédit", "en_cours", jour(4), [[2, "statut", "a_faire", "en_cours"]], null, { debut: jour(2), h: 4 });
+  await tache("wb", "CR", "Validation métier avec le Crédit", "en_cours", jour(4), [[2, "statut", "a_faire", "en_cours"]], null, { debut: jour(2), h: 4 });
   await tache("wb", "CE", "Lancement de la phase pilote", "a_faire", jour(18), [], null, { debut: jour(7), h: 50 });
   await tache("wb", "CR", "Rédaction des procédures Credos", "a_faire", jour(11), [], null, { debut: jour(8), h: 20 });
   await tache("wb", "CE", "Bilan de la phase pilote", "a_faire", jour(32), [], null, { debut: jour(28), h: 16 });
@@ -269,7 +270,7 @@ await sql.begin(async (tx) => {
       values (${id}, ${pj ? PJ[pj] : null}, ${titre}, ${P[qui]}, ${statut}, ${jour(echeance)}, ${h}, ${P[par]}, ${moment(-6, 10)})`;
     await tx`insert into evenements_tache (tache_id, auteur_id, type, cree_le) values (${id}, ${P[par]}, 'creation', ${moment(-6, 10)})`;
   };
-  await tacheConfiee("mv", "pd", "UR", "Ouvrir les flux du pare-feu pour la recette", "a_faire", 6, 4);
+  await tacheConfiee("mv", "pd", "UR", "Ouvrir les flux du pare-feu pour l'environnement de test", "a_faire", 6, 4);
   await tacheConfiee("mv", "nc", "UR", "Contre-audit de sécurité (points 4 à 6)", "en_cours", 12, 24);
   await tacheConfiee("dj", "pd", "PR", "Accès VPN pour le prestataire de la plateforme", "a_faire", 3, 2);
   // Projet OC (Réseau) : des membres de la DPO y travaillent.
@@ -282,11 +283,11 @@ await sql.begin(async (tx) => {
   let graine = 7;
   const hasard = () => ((graine = (graine * 1103515245 + 12345) % 2147483648) / 2147483648);
   const TRAVAUX = {
-    UR: ["Compte rendu du comité", "Correctifs de recette", "Tests de non-régression", "Mise à jour du plan de lancement", "Revue des écrans avec le métier"],
+    UR: ["Compte rendu du comité", "Correctifs de la validation métier", "Tests de non-régression", "Mise à jour du plan de lancement", "Revue des écrans avec le métier"],
     UN: ["Gabarits de pages", "Migration d'une rubrique", "Revue des contenus", "Tests d'accessibilité"],
     PR: ["Revue du cahier des charges", "Maquette d'un écran", "Atelier avec la DRH", "Compte rendu d'atelier"],
     CE: ["Support de formation", "Point avec une succursale", "Fiche produit révisée"],
-    CR: ["Scénarios de recette", "Recette d'un module", "Procédure révisée"],
+    CR: ["Scénarios de validation métier", "Validation métier d'un module", "Procédure révisée"],
     UC: ["Spécification d'un écran", "Revue d'architecture", "Jeu de données de test"],
     AE: ["Lot d'archives indexé", "Registre numérisé", "Contrôle qualité d'un lot"],
   };
@@ -336,7 +337,7 @@ await sql.begin(async (tx) => {
 
   // ---------- Équipes projet (établies par chaque chef de projet) ----------
   // Les personnes qui ont des tâches sur le projet, avec un rôle pour quelques-unes ; Joël rejoint UR sans tâche encore.
-  const roles = { "UR:re": "Développeur", "UR:dj": "Audit de sécurité", "CE:sc": "Formation du Réseau", "UC:jn": "Analyste fonctionnel", "PR:re": "Développeur", "CR:jn": "Recette", "UR:pd": "Réseau (DTI)", "UR:nc": "Contre-audit de sécurité", "OC:sc": "Parcours client", "OC:jd": "Pièces justificatives" };
+  const roles = { "UR:re": "Développeur", "UR:dj": "Audit de sécurité", "CE:sc": "Formation du Réseau", "UC:jn": "Analyste fonctionnel", "PR:re": "Développeur", "CR:jn": "Validation métier", "UR:pd": "Réseau (DTI)", "UR:nc": "Contre-audit de sécurité", "OC:sc": "Parcours client", "OC:jd": "Pièces justificatives" };
   const membres = await tx`select distinct t.projet_id, t.assigne_id from taches t join projets p on p.id = t.projet_id
     where p.chef_projet_id is distinct from t.assigne_id and p.referent_id is distinct from t.assigne_id`;
   const cleDe = Object.fromEntries([...Object.entries(PJ).map(([k, v]) => [v, k]), ...Object.entries(P).map(([k, v]) => [v, k])]);
@@ -487,17 +488,17 @@ await sql.begin(async (tx) => {
   await rapport("lp", "ml", 9, ST_V2, V.st2, [
     ["ligne", "en_cours", "UN", "Plan de migration des données"],
     // Un blocage qui dure : signalé il y a deux semaines, reconduit depuis.
-    ["ligne", "bloque", "CR", "Serveur de recette demandé à la DTI lundi", { depuis: jour(-14) }],
+    ["ligne", "bloque", "CR", "Serveur de test demandé à la DTI lundi", { depuis: jour(-14) }],
     ["ligne", "prochaine", "UN", "Valider le plan de migration avec la DTI"],
     ["feu", "UN", "a_surveiller", "Plan de migration à valider avec la DTI", "sante", "a_surveiller"],
-    ["feu", "CR", "en_retard", "Le serveur de recette n'est toujours pas là", "sante", "dans_les_temps"],
+    ["feu", "CR", "en_retard", "Le serveur de test n'est toujours pas là", "sante", "dans_les_temps"],
     ["charge", "trop_lourde", "normale", "24 h sur 40 h"],
-    ["texte", "decision", "Valider le report de la recette Credos au 13 novembre"],
-    ["piece", "pieces", "Demande-serveur-recette-Credos.pdf", pdfSimple("Demande de serveur de recette - Credos", ["Demande adressée à la DTI le lundi.", "Serveur attendu pour la recette du module de garanties.", "Sans serveur, la recette passe au 13 novembre."])],
+    ["texte", "decision", "Valider le report de la validation métier de Credos au 13 novembre"],
+    ["piece", "pieces", "Demande-serveur-test-Credos.pdf", pdfSimple("Demande de serveur de test - Credos", ["Demande adressée à la DTI le lundi.", "Serveur attendu pour la validation métier du module de garanties.", "Sans serveur, la validation métier passe au 13 novembre."])],
   ]);
   await rapport("wb", "ml", 8, ST_V2, V.st2, [
     ["ligne", "fait", "CE", "Planning de la phase pilote"],
-    ["ligne", "en_cours", "CR", "Validation de la recette avec le Crédit"],
+    ["ligne", "en_cours", "CR", "Validation métier avec le Crédit"],
     ["ligne", "bloque", "CE", "Date de la phase pilote : le Réseau n'a pas répondu"],
     ["ligne", "prochaine", "CE", "Présenter le planning au Réseau"],
     ["feu", "CE", "a_surveiller", "Date de la phase pilote à obtenir du Réseau"],
@@ -505,7 +506,7 @@ await sql.begin(async (tx) => {
     ["charge", "lourde", "trop_lourde", "45 h sur 40 h"],
   ]);
   await rapport("jn", "ml", 12, ST_V2, V.st2, [
-    ["ligne", "fait", "CR", "Jeux de données de recette"],
+    ["ligne", "fait", "CR", "Jeux de données de test"],
     ["ligne", "en_cours", "UC", "Spécifications du module de paie"],
     ["ligne", "prochaine", "UC", "Spécifications des virements de masse"],
     ["feu", "UC", "dans_les_temps"],
@@ -563,19 +564,19 @@ await sql.begin(async (tx) => {
       prochaine: [["Finaliser le parcours du candidat", "PR"], ["Présenter les maquettes à la DRH", "PR"], ["Préparer l'audit de sécurité", "UR"]],
     },
     re: {
-      fait: [["Écrans de saisie du module de virements", "UR"], ["Correction des anomalies de recette", "UR"], ["Revue de code avec le prestataire", "UR"], ["Tests unitaires du module de virements", "UR"], ["Intégration continue en place", "PR"]],
+      fait: [["Écrans de saisie du module de virements", "UR"], ["Correction des anomalies de la validation métier", "UR"], ["Revue de code avec le prestataire", "UR"], ["Tests unitaires du module de virements", "UR"], ["Intégration continue en place", "PR"]],
       en_cours: [["Module de virements", "UR"], ["Environnement de développement de la plateforme", "PR"]],
       bloque: [],
       prochaine: [["Terminer les tests du module de virements", "UR"], ["Démarrer le formulaire de candidature", "PR"]],
     },
     lp: {
-      fait: [["Inventaire des contenus de l'intranet", "UN"], ["Réunion de cadrage avec la DTI", "UN"], ["Plan de migration, première version", "UN"], ["Recette du module de garanties", "CR"]],
+      fait: [["Inventaire des contenus de l'intranet", "UN"], ["Réunion de cadrage avec la DTI", "UN"], ["Plan de migration, première version", "UN"], ["Validation métier du module de garanties", "CR"]],
       en_cours: [["Plan de migration des données", "UN"], ["Spécifications de la recherche dans l'intranet", "UN"]],
-      bloque: [["Serveur de recette Credos : demande en cours à la DTI", "CR"]],
-      prochaine: [["Valider le plan de migration", "UN"], ["Préparer la recette de Credos", "CR"]],
+      bloque: [["Serveur de test Credos : demande en cours à la DTI", "CR"]],
+      prochaine: [["Valider le plan de migration", "UN"], ["Préparer la validation métier de Credos", "CR"]],
     },
     wb: {
-      fait: [["Présentation du produit aux responsables du Réseau", "CE"], ["Planning de la phase pilote, version de travail", "CE"], ["Recette des écrans Credos avec le Crédit", "CR"], ["Choix des succursales pilotes", "CE"]],
+      fait: [["Présentation du produit aux responsables du Réseau", "CE"], ["Planning de la phase pilote, version de travail", "CE"], ["Validation des écrans Credos avec le Crédit", "CR"], ["Choix des succursales pilotes", "CE"]],
       en_cours: [["Planning de la phase pilote", "CE"], ["Procédures Credos", "CR"]],
       bloque: [],
       prochaine: [["Valider les succursales pilotes", "CE"], ["Rédiger les procédures Credos", "CR"]],
@@ -587,7 +588,7 @@ await sql.begin(async (tx) => {
       prochaine: [["Supports de formation, module 2", "CE"]],
     },
     jn: {
-      fait: [["Spécifications des virements de masse, première partie", "UC"], ["Jeux de données de recette", "CR"], ["Maquettes des écrans de paie validées", "UC"]],
+      fait: [["Spécifications des virements de masse, première partie", "UC"], ["Jeux de données de test", "CR"], ["Maquettes des écrans de paie validées", "UC"]],
       en_cours: [["Spécifications du module de paie", "UC"]],
       bloque: [],
       prochaine: [["Spécifications du module de paie, suite", "UC"]],
@@ -657,9 +658,9 @@ await sql.begin(async (tx) => {
       }
       // La semaine dernière de Daphnée : son accès de test était déjà bloqué (il revient, « 2ᵉ semaine »).
       if (qui === "dj" && w === 1) lignes.push(["bloque", "Accès de test DTI : identifiants demandés à la DTI", "UN", T.acces]);
-      // La semaine dernière de Ludovic : le serveur de recette déjà bloqué, et ses feux (la tendance se lit cette semaine).
+      // La semaine dernière de Ludovic : le serveur de test déjà bloqué, et ses feux (la tendance se lit cette semaine).
       if (qui === "lp" && w === 1) {
-        lignes.push(["bloque", "Serveur de recette Credos : relance faite à la DTI", "CR", null, jour(-14)]);
+        lignes.push(["bloque", "Serveur de test Credos : relance faite à la DTI", "CR", null, jour(-14)]);
         await tx`update rapports_hebdo set formulaire = ${sql.json(DEFAUT_V2)}, version_modele_id = ${V.st1} where id = ${id}`;
         await tx`insert into reponses_rapport (rapport_id, champ_id, projet_id, valeur, commentaire, propose) values (${id}, 'sante', ${PJ.CR}, 'dans_les_temps', '', 'dans_les_temps'), (${id}, 'sante', ${PJ.UN}, 'a_surveiller', 'Plan de migration à valider avec la DTI', 'a_surveiller')`;
       }

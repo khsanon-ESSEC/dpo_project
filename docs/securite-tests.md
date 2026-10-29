@@ -233,6 +233,13 @@ Nouvelles lectures de données, vérifiées à la lecture du code et par des tes
 - **Charge réalisée et prévue** : calculées pour les mêmes personnes que la charge à venir (celles qu'on suit). La table `charges_prevues` n'est écrite que par le serveur (tournée horaire, ouverture de la page Charge), jamais à partir d'une saisie. **[vérifié par tests]**
 - **Fiche d'une personne** (même jour) : la charge, les tâches, les réunions et l'évolution n'y paraissent que pour soi-même ou pour qui suit la personne (même règle que l'ancienne page, qui y renvoie désormais) ; jamais pour une personne hors division, ni pour un visiteur hors division. Vérifié par un parcours avec cinq profils (directrice, chargée de projets, directeur d'une autre direction, exécutif, consultante hors division), paramètres d'adresse compris. **[vérifié par parcours]**
 
+## Santé calculée, rapports soumis, listes où l'on tape (28 octobre 2026, soir)
+
+- **Santé calculée** : la santé d'un projet n'est plus une saisie. Le seul apport du chef de projet est le **signal de risque**, accepté seulement de qui gère le projet (même contrôle `exigerGestion` que l'ancienne saisie, sur la fiche comme dans la barre) ; le motif est raccourci à 300 caractères ; un signal ne peut qu'aggraver la santé calculée, jamais l'améliorer, et tombe après 30 jours. « Annuler » remet le signal d'avant. **[vérifié par tests]**
+- **Rapports soumis** (*Conseil*) : même accès que le reste du conseil (`exigerAccesConseil` : directeurs et exécutifs, jamais une personne hors division) ; un rapport n'y paraît que s'il touche un projet que la personne voit (ou qu'elle l'a créé), et seuls les codes de ces projets sont montrés. Un mois passé sans rapport s'affiche vide : la navigation ne crée plus de rapport. **[déduction]**
+- **Rôles proposés** : à qui gère un projet, la saisie du rôle propose les rôles déjà donnés dans toutes les équipes projet (« Développeur », « Analyste fonctionnel »), sans nom de personne ni de projet. **[Faible]** C'est un choix : ces libellés ne disent rien de qui fait quoi. **[déduction]**
+- **Listes où l'on tape** : elles proposent les mêmes personnes qu'avant et envoient le même identifiant ; tous les contrôles restent côté serveur (qui peut être chef, recevoir une tâche, entrer dans une équipe). Taper un nom ne fait aucune recherche au serveur. **[déduction]**
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.

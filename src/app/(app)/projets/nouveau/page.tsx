@@ -17,7 +17,7 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
   const personnes = [...org.personnes.values()]
     .filter((p) => p.actif)
     .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
-    .map((p) => ({ id: p.id, nom: p.id === u.id ? `Moi (${nomComplet(p)})` : nomComplet(p), externe: p.externe, organisation: p.organisation }));
+    .map((p) => ({ id: p.id, nom: p.id === u.id ? `Moi (${nomComplet(p)})` : nomComplet(p), externe: p.externe, organisation: p.organisation, poste: p.poste }));
   return (
     <>
       <Bandeau

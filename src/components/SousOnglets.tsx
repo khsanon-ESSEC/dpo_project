@@ -50,4 +50,5 @@ export const ONGLETS_ORGANISATION: SousOnglet[] = [
 export const ONGLETS_CONSEIL: SousOnglet[] = [
   { href: "/conseil", libelle: "Rapport du mois", icone: "calendrier" },
   { href: "/conseil/ponctuels", libelle: "Rapports ponctuels", icone: "eclair" },
+  { href: "/conseil/historique", libelle: "Rapports soumis", icone: "historique" },
 ];

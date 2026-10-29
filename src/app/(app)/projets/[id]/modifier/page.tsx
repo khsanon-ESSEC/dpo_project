@@ -33,7 +33,7 @@ export default async function PageModifierProjet({ params, searchParams }: { par
   const personnes = [...org.personnes.values()]
     .filter((x) => x.actif || x.id === p.chefProjetId || x.id === p.referentId)
     .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
-    .map((x) => ({ id: x.id, nom: nomComplet(x), externe: x.externe, organisation: x.organisation }));
+    .map((x) => ({ id: x.id, nom: nomComplet(x), externe: x.externe, organisation: x.organisation, poste: x.poste }));
   const supprimable = projetSupprimable(activite);
   const demande = p.statut === "requete" || p.statut === "refuse";
 
@@ -125,14 +125,6 @@ export default async function PageModifierProjet({ params, searchParams }: { par
                 </select>
               )}
             </div>
-            <div className="champ" style={{ flex: "1 1 180px" }}>
-              <label htmlFor="mp-sante">Santé</label>
-              <select id="mp-sante" name="sante" defaultValue={p.sante}>
-                <option value="dans_les_temps">Dans les temps</option>
-                <option value="a_surveiller">À surveiller</option>
-                <option value="en_retard">En retard</option>
-              </select>
-            </div>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
             {(
@@ -208,7 +200,7 @@ export default async function PageModifierProjet({ params, searchParams }: { par
             <label className="visuellement-cache" htmlFor="mp-nouvel-ind">
               Nouvel indicateur
             </label>
-            <input id="mp-nouvel-ind" name="libelle" required maxLength={200} placeholder="Ex. : Recette réalisée avec le métier" className="saisie" style={{ flex: "1 1 260px", minWidth: 0, minHeight: 44, padding: "0 12px", fontSize: 15 }} />
+            <input id="mp-nouvel-ind" name="libelle" required maxLength={200} placeholder="Ex. : Validation métier réalisée avec le métier" className="saisie" style={{ flex: "1 1 260px", minWidth: 0, minHeight: 44, padding: "0 12px", fontSize: 15 }} />
             <button type="submit" className="bouton-contour">
               <Icone nom="ajouter" taille={16} /> Ajouter
             </button>

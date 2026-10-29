@@ -246,8 +246,8 @@ export function LigneEditable({
 }
 
 /**
- * Ajouter une ligne au rapport en une seule saisie, comme dans la barre : « Recette validée UR »,
- * « Recette validée projet retail » ou « / » pour choisir le projet. Sans projet reconnu, la ligne reste sans projet.
+ * Ajouter une ligne au rapport en une seule saisie, comme dans la barre : « Validation métier faite UR »,
+ * « Validation métier faite projet retail » ou « / » pour choisir le projet. Sans projet reconnu, la ligne reste sans projet.
  */
 export function AjoutLigne({
   rapportId,
@@ -297,7 +297,7 @@ export function AjoutLigne({
         key={n}
         id={`ajout-${champId}`}
         libelle={`Ajouter une ligne à « ${libelle} »`}
-        placeholder={parProjet ? "Ajouter une ligne : « Recette validée UR », « / » pour le projet" : "Ajouter une ligne"}
+        placeholder={parProjet ? "Ajouter une ligne : « Validation métier faite UR », « / » pour le projet" : "Ajouter une ligne"}
         projets={parProjet ? projets : undefined}
         noms={{ texte: "texte", projet: parProjet ? "projetId" : undefined }}
         autoFocus={n > 0 || replie}

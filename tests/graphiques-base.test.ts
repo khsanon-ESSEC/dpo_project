@@ -77,7 +77,7 @@ describe.skipIf(!URL_TEST)("données des graphiques (base de démonstration)", (
   it("la fiche du projet note chaque changement de la fin prévue, pas les autres modifications", async () => {
     const ex = qui("frantz.desrosiers").id;
     const p = await projet(projets.get("CR")!);
-    const base = { code: p.code, titre: p.titre, description: p.description, programme: p.programme, strategique: p.strategique, statut: p.statut, sante: p.sante, chefProjetId: p.chefProjetId ?? "", referentId: p.referentId ?? "", division: p.division, dateEntree: p.dateEntree ?? "", dateFinInitiale: p.dateFinInitiale ?? "", dateFinPrevue: p.dateFinPrevue ?? "", dateLancementPrevue: p.dateLancementPrevue ?? "" };
+    const base = { code: p.code, titre: p.titre, description: p.description, programme: p.programme, strategique: p.strategique, statut: p.statut, chefProjetId: p.chefProjetId ?? "", referentId: p.referentId ?? "", division: p.division, dateEntree: p.dateEntree ?? "", dateFinInitiale: p.dateFinInitiale ?? "", dateFinPrevue: p.dateFinPrevue ?? "", dateLancementPrevue: p.dateLancementPrevue ?? "" };
     expect(await G.modifierProjet(p.id, { ...base, description: `${p.description} ` }, ex)).toEqual({ ok: true });
     expect(await R.reportsFinDe(p.id)).toEqual([]);
     expect(await G.modifierProjet(p.id, { ...base, dateFinPrevue: "2027-03-31" }, ex)).toEqual({ ok: true });

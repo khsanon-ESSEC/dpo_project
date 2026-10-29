@@ -4,7 +4,7 @@ import { acces, auteursLignesVisibles, exigerProjetVisible } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { aujourdhui, dateCourte, dateLocale, dateLongue, echeanceRelative, ecartJours, heure } from "@/lib/dates";
 import { ficheProjet } from "@/lib/donnees/projets";
-import { membresDuProjet } from "@/lib/donnees/gestion";
+import { membresDuProjet, rolesDesEquipes } from "@/lib/donnees/gestion";
 import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet } from "@/lib/regles";
 import { LigneMiseAJour } from "@/components/LigneMiseAJour";
@@ -18,7 +18,10 @@ import { CocheSeule } from "@/components/CaseTache";
 import { Icone } from "@/components/Icone";
 import { LienPersonne } from "@/components/Liens";
 import { ChoixPersonne } from "@/components/ChoixPersonne";
-import { changerIndicateur, mettreAJourProjet } from "./actions";
+import { ListeFiltrable } from "@/components/ListeFiltrable";
+import { changerIndicateur, mettreAJourProjet, signalerUnRisque } from "./actions";
+import { recalculerSante } from "@/lib/donnees/sante";
+import { signalActif } from "@/lib/sante";
 import { OngletsVues } from "./commun";
 import { avancementParPeriode } from "@/lib/donnees/graphiques";
 import { ecart, moisDebutExercice, planBilan } from "@/lib/bilan";
@@ -45,6 +48,8 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const u = await exigerUtilisateur();
   const a = await acces(u);
   await exigerProjetVisible(a, id);
+  // La santé est calculée : à jour à chaque ouverture de la fiche.
+  await recalculerSante([id]);
   const f = await ficheProjet(id);
   const p = f.projet;
   // Chef du projet, directeur de la direction concernée (le projet lui est visible), exécutifs.
@@ -53,12 +58,12 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const refuse = p.statut === "refuse";
   const actif = !demande && !refuse && !p.archiveLe;
   const org = await chargerOrganisation();
-  const membres = await membresDuProjet(id);
+  const [membres, roles] = await Promise.all([membresDuProjet(id), peutModifier && actif ? rolesDesEquipes() : Promise.resolve([] as string[])]);
   const nom = (pid: string | null) => (pid && org.personnes.get(pid) ? nomComplet(org.personnes.get(pid)!) : null);
   const personnesActives = [...org.personnes.values()]
     .filter((x) => x.actif)
     .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
-    .map((x) => ({ id: x.id, nom: nomComplet(x), externe: x.externe, organisation: x.organisation }));
+    .map((x) => ({ id: x.id, nom: nomComplet(x), externe: x.externe, organisation: x.organisation, poste: x.poste }));
   const chefP = p.chefProjetId ? org.personnes.get(p.chefProjetId) : undefined;
   const referentP = p.referentId ? org.personnes.get(p.referentId) : undefined;
   /** « hors division · DTI » sous le nom d'une personne hors division. */
@@ -281,10 +286,18 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
           </div>
         ) : null}
         {p.sante !== "dans_les_temps" && p.santeMotif ? (
-          <p className={`note-sante ${p.sante === "en_retard" ? "note-sante--retard" : ""}`}>
-            <strong>{SANTE[p.sante].texte}</strong>
-            {p.santeLe ? ` depuis le ${dateCourte(dateLocale(p.santeLe))}` : ""} : {p.santeMotif}
-          </p>
+          <div className={`note-sante ${p.sante === "en_retard" ? "note-sante--retard" : ""}`}>
+            <p style={{ margin: 0 }}>
+              <strong>{SANTE[p.sante].texte}</strong>
+              {p.santeLe ? ` depuis le ${dateCourte(dateLocale(p.santeLe))}` : ""}
+              <span className="ton-discret"> · calculée par l&apos;application</span>
+            </p>
+            <ul className="note-sante__raisons">
+              {p.santeMotif.split(" · ").map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          </div>
         ) : null}
         <div className="ligne-actions">
           <OngletsVues projetId={p.id} vue="apercu" sansCharge={!!u.externe} />
@@ -526,24 +539,12 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                   cible={{ genre: "projet", projetId: p.id }}
                   aujourdhui={aujourdhui()}
                   libelle="Mettre à jour le projet en une ligne"
-                  placeholder="« à surveiller : retard du prestataire », « jalon recette 15/11 », « fin prévue 20/12 »"
+                  placeholder="« risque : retard du prestataire », « jalon validation métier 15/11 », « fin prévue 20/12 »"
                 />
                 <p className="note" style={{ margin: "16px 0 12px" }}>
                   Ou champ par champ :
                 </p>
                 <form key={`maj-${p.majLe.toISOString()}`} action={mettreAJourProjet.bind(null, p.id)} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                  <div className="champ">
-                    <label htmlFor="sante">Santé</label>
-                    <select id="sante" name="sante" defaultValue={p.sante}>
-                      <option value="dans_les_temps">Dans les temps</option>
-                      <option value="a_surveiller">À surveiller</option>
-                      <option value="en_retard">En retard</option>
-                    </select>
-                  </div>
-                  <div className="champ">
-                    <label htmlFor="sante-motif">Pourquoi (si à surveiller ou en retard)</label>
-                    <input id="sante-motif" name="santeMotif" type="text" maxLength={500} defaultValue={p.santeMotif} placeholder="ex. : retard du prestataire" />
-                  </div>
                   <div className="champ">
                     <label htmlFor="fin">Fin prévue</label>
                     <input id="fin" name="dateFinPrevue" type="date" defaultValue={p.dateFinPrevue ?? ""} />
@@ -556,6 +557,37 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                     Enregistrer
                   </button>
                 </form>
+                <div className="risque-projet">
+                  <h3 className="carte__titre" style={{ margin: "0 0 6px" }}>
+                    Santé : {SANTE[p.sante].texte.toLowerCase()}
+                  </h3>
+                  <p className="note" style={{ margin: "0 0 12px" }}>
+                    Calculée par l&apos;application : fin prévue, jalons, tâches en retard ou bloquées, fin repoussée, rythme des dernières semaines. Un risque que les données ne montrent pas (un prestataire qui
+                    lâche, un budget gelé) se signale ici : le projet passe « à surveiller » pendant 30 jours ; un signal ne peut pas l&apos;améliorer.
+                  </p>
+                  {signalActif(p.risqueMotif && p.risqueLe ? { motif: p.risqueMotif, le: dateLocale(p.risqueLe), par: null } : null, aujourdhui()) ? (
+                    <form action={signalerUnRisque.bind(null, p.id)} className="risque-projet__actif">
+                      <input type="hidden" name="retirer" value="1" />
+                      <p style={{ margin: 0 }}>
+                        <strong>Risque signalé</strong> le {dateCourte(dateLocale(p.risqueLe!))}
+                        {p.risqueParId && nom(p.risqueParId) ? ` par ${nom(p.risqueParId)}` : ""} : {p.risqueMotif}
+                      </p>
+                      <button type="submit" className="bouton-mini">
+                        Retirer le signal
+                      </button>
+                    </form>
+                  ) : (
+                    <form action={signalerUnRisque.bind(null, p.id)} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div className="champ">
+                        <label htmlFor="risque-motif">Signaler un risque</label>
+                        <input id="risque-motif" name="motif" type="text" maxLength={300} required placeholder="ex. : le prestataire ne livre pas le module de virements" />
+                      </div>
+                      <button type="submit" className="bouton-contour" style={{ alignSelf: "flex-start" }}>
+                        Signaler
+                      </button>
+                    </form>
+                  )}
+                </div>
               </section>
             ) : null}
 
@@ -624,7 +656,10 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                   />
                   <div className="champ">
                     <label htmlFor="m-role">Son rôle dans le projet (facultatif)</label>
-                    <input id="m-role" name="role" maxLength={80} placeholder="Ex. : analyste, consultant sécurité" />
+                    <ListeFiltrable id="m-role" name="role" libre options={roles.map((r) => ({ value: r, label: r }))} maxLength={80} placeholder="Ex. : analyste, consultant sécurité" nouveau="Nouveau rôle" describedBy="m-role-aide" />
+                    <span className="aide" id="m-role-aide">
+                      Tapez pour retrouver un rôle déjà donné ; un rôle nouveau sera ajouté à la liste.
+                    </span>
                   </div>
                   <button type="submit" className="bouton-contour" style={{ alignSelf: "flex-start" }}>
                     <Icone nom="ajouter" taille={16} /> Ajouter

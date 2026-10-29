@@ -171,7 +171,7 @@ export default async function PageRapportRecu({ params }: { params: Promise<{ id
                 <Repondre
                   rapportId={rapport.id}
                   aide={moi ? `Un mot à ${destinataire?.prenom ?? "votre supérieur"} sur ce rapport, reçu en alerte.` : `Un mot à ${auteur.prenom} sur ce rapport, reçu en alerte.`}
-                  exemple={moi ? "Par exemple : la DTI a répondu, je relance mardi." : "Par exemple : licence validée, la recette peut commencer."}
+                  exemple={moi ? "Par exemple : la DTI a répondu, je relance mardi." : "Par exemple : licence validée, la validation métier peut commencer."}
                 />
               </section>
             ) : complet ? (

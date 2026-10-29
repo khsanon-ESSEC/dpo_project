@@ -322,7 +322,9 @@ const SANTES = [
   { id: "en_retard", libelle: "En retard" },
 ] as const;
 
-export function RepartitionSante({ compte }: { compte: Record<"dans_les_temps" | "a_surveiller" | "en_retard", number> }) {
+export type ProjetARegarder = { id: string; code: string; titre: string; sante: "a_surveiller" | "en_retard"; motif: string | null };
+
+export function RepartitionSante({ compte, aRegarder = [] }: { compte: Record<"dans_les_temps" | "a_surveiller" | "en_retard", number>; aRegarder?: ProjetARegarder[] }) {
   const total = SANTES.reduce((s, x) => s + compte[x.id], 0);
   if (!total) return null;
   const texte = SANTES.map((x) => `${compte[x.id]} ${x.libelle.toLowerCase()}`).join(", ");
@@ -341,6 +343,32 @@ export function RepartitionSante({ compte }: { compte: Record<"dans_les_temps" |
           </li>
         ))}
       </ul>
+      {aRegarder.length ? (
+        <div className="sante-barre__aregarder">
+          <h3 className="sante-barre__titre">À regarder</h3>
+          <ul>
+            {aRegarder.map((p) => (
+              <li key={p.id}>
+                <a href={`/projets/${p.id}`} className="sante-barre__projet">
+                  <i className={`sante-barre__cle sante-barre__part--${p.sante}`} aria-hidden="true" />
+                  <span className="etiquette-projet">{p.code}</span>
+                  <span className="sante-barre__nom">
+                    <span className="sante-barre__titre-projet">{p.titre}</span>
+                    <small>
+                      {p.sante === "en_retard" ? "En retard" : "À surveiller"}
+                      {p.motif ? ` · ${p.motif}` : ""}
+                    </small>
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="note" style={{ margin: 0 }}>
+          Aucun projet en retard ni à surveiller.
+        </p>
+      )}
     </div>
   );
 }

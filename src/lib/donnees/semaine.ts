@@ -52,6 +52,8 @@ export function compter(taches: TacheListe[], jour = aujourdhui()) {
     retard,
     bloquees,
     aFaire: ouvertes.length - retard - bloquees,
+    /** Parmi « à faire » : celles déjà commencées. */
+    enCours: ouvertes.filter((t) => t.statut === "en_cours" && !(t.echeance !== null && t.echeance < jour)).length,
   };
 }
 

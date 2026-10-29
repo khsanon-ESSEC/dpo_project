@@ -97,7 +97,6 @@ export async function enregistrerProjet(projetId: string, form: FormData) {
       programme: champ("programme"),
       strategique: form.get("strategique") === "on",
       statut: champ("statut"),
-      sante: champ("sante"),
       chefProjetId: (await externeDuFormulaire(form, "chef", u.id)) ?? champ("chefProjetId"),
       referentId: champ("referentId"),
       division: champ("division"),

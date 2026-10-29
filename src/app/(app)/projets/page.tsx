@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { recalculerSante } from "@/lib/donnees/sante";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { aujourdhui, dateCourte, dateLocale, moisAnnee } from "@/lib/dates";
@@ -24,6 +25,8 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
   const u = await exigerUtilisateur();
   const a = await acces(u);
   const archives = filtre === "archives";
+  // La santé est calculée : à jour à chaque ouverture du portefeuille.
+  await recalculerSante();
   const [tous, nArchives, demandes] = await Promise.all([portefeuille(a, { archives }), archives ? Promise.resolve(null) : portefeuille(a, { archives: true }).then((l) => l.length), demandesDeProjet(a, await idsProjetsVisibles(a))]);
   const projets = tous.filter((p) => filtre === "tous" || archives || (filtre === "strat" && p.strategique) || (filtre === "glisse" && p.glissementSemaines > 0));
   const decideur = peutDecider(a);
@@ -129,6 +132,11 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
                   a_surveiller: tous.filter((p) => p.sante === "a_surveiller").length,
                   en_retard: tous.filter((p) => p.sante === "en_retard").length,
                 }}
+                aRegarder={tous
+                  .filter((p) => p.sante === "en_retard" || p.sante === "a_surveiller")
+                  .sort((x, y) => Number(y.sante === "en_retard") - Number(x.sante === "en_retard") || x.code.localeCompare(y.code))
+                  .slice(0, 6)
+                  .map((p) => ({ id: p.id, code: p.code, titre: p.titre, sante: p.sante as "a_surveiller" | "en_retard", motif: p.santeMotif }))}
               />
             </section>
             <section className="carte" aria-labelledby="p-glissements">

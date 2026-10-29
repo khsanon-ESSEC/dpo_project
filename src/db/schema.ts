@@ -98,10 +98,14 @@ export const projets = pgTable("projets", {
   programme: text().notNull().default(""),
   strategique: boolean().notNull().default(false),
   statut: statutProjet().notNull().default("en_cours"),
+  /** Santé calculée par l'application (src/lib/sante.ts), son motif en clair, et depuis quand elle est à ce niveau. */
   sante: santeProjet().notNull().default("dans_les_temps"),
-  /** Pourquoi le projet est « à surveiller » ou « en retard » (dit par le chef de projet), et depuis quand. */
   santeMotif: text("sante_motif").notNull().default(""),
   santeLe: timestamp("sante_le", { withTimezone: true }),
+  /** Risque signalé par le chef de projet (ce que les données ne montrent pas) : il ne peut qu'aggraver la santé. */
+  risqueMotif: text("risque_motif").notNull().default(""),
+  risqueLe: timestamp("risque_le", { withTimezone: true }),
+  risqueParId: uuid("risque_par_id").references((): AnyPgColumn => personnes.id, { onDelete: "set null" }),
   chefProjetId: uuid("chef_projet_id").references(() => personnes.id, { onDelete: "set null" }),
   /** Projet d'une autre division : son nom (vide = la DPO). */
   division: text().notNull().default(""),

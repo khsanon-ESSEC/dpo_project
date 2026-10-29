@@ -17,6 +17,7 @@ import type { Champ } from "@/lib/modeles";
 import { peutGererProjet } from "@/lib/projets";
 import { redigeUnRapport } from "@/lib/regles";
 import { noterReportFin } from "./reports-fin";
+import { recalculerSante } from "./sante";
 
 export type ResultatBarre = { message: string; ok?: boolean; annulation?: string; lien?: string; projetId?: string };
 
@@ -94,7 +95,7 @@ export async function ajouterNoteAuRapport(u: Utilisateur, o: { saisie: string; 
 
 /**
  * Le chef de projet (ou le référent DPO, sa direction, les exécutifs) met le projet à jour depuis la barre :
- * « à surveiller : retard du prestataire », « jalon recette 15/11 », « fin prévue 20/12 », « lancement 5/1 ».
+ * « à surveiller : retard du prestataire », « jalon validation métier 15/11 », « fin prévue 20/12 », « lancement 5/1 ».
  */
 export async function mettreAJourProjetDepuisBarre(u: Utilisateur, a: Acces, o: { saisie: string; projetId: string }): Promise<ResultatBarre> {
   const projets = await projetsPourSaisie(u);
@@ -106,7 +107,10 @@ export async function mettreAJourProjetDepuisBarre(u: Utilisateur, a: Acces, o: 
   const projetVu = choisi ? projets.find((p) => p.id === choisi) : (enTete?.projet ?? mots?.projet ?? null);
   if (!projetVu || (choisi && !UUID.test(choisi))) return { message: "Projet introuvable." };
   const m = analyserMajProjet(enTete ? enTete.reste : (mots?.texte ?? saisie), aujourdhui());
-  if (!m) return { message: "Écrivez « à surveiller : … », « en retard : … », « dans les temps », « jalon … 15/11 » ou « fin prévue 20/12 »." };
+  if (!m) return { message: "Écrivez « risque : … », « jalon … 15/11 », « fin prévue 20/12 » ou « lancement 15/01 »." };
+  if (m.genre === "sante" && m.sante === "en_retard")
+    return { message: "La santé d'un projet est calculée par l'application (fin prévue, jalons, tâches). Pour signaler un risque que les données ne montrent pas : « risque : … »." };
+  if (m.genre === "sante" && m.sante === "a_surveiller" && !m.motif) return { message: "Dites quel risque : « risque : le prestataire ne livre pas »." };
   const [p] = await db.select().from(schema.projets).where(eq(schema.projets.id, projetVu.id));
   if (!p || !peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir, suivis: a.suivis }, p))
     return { message: "Seuls le chef de projet (ou le référent DPO), sa direction et les exécutifs mettent ce projet à jour." };
@@ -114,7 +118,7 @@ export async function mettreAJourProjetDepuisBarre(u: Utilisateur, a: Acces, o: 
 
   let annulation: string;
   if (m.genre === "jalon") {
-    if (!m.libelle) return { message: "Donnez un nom au jalon : « jalon recette 15/11 »." };
+    if (!m.libelle) return { message: "Donnez un nom au jalon : « jalon validation métier 15/11 »." };
     const [{ dernier }] = await db.select({ dernier: max(schema.indicateurs.ordre) }).from(schema.indicateurs).where(eq(schema.indicateurs.projetId, p.id));
     const [i] = await db
       .insert(schema.indicateurs)
@@ -123,10 +127,13 @@ export async function mettreAJourProjetDepuisBarre(u: Utilisateur, a: Acces, o: 
     await noter(u.id, "indicateur_ajoute", p.id, { libelle: m.libelle, prevuLe: m.prevuLe, barre: true });
     annulation = await enregistrerAnnulation(u.id, { genre: "jalon", projetId: p.id, indicateurId: i.id });
   } else {
-    const avant = { sante: p.sante, santeMotif: p.santeMotif, santeLe: p.santeLe ? p.santeLe.toISOString() : null, dateFinPrevue: p.dateFinPrevue, dateLancementPrevue: p.dateLancementPrevue };
+    if (m.genre === "sante" && m.sante === "dans_les_temps" && !p.risqueMotif) return { message: "Aucun risque signalé sur ce projet : sa santé est calculée par l'application." };
+    const avant = { risqueMotif: p.risqueMotif, risqueLe: p.risqueLe ? p.risqueLe.toISOString() : null, risqueParId: p.risqueParId, dateFinPrevue: p.dateFinPrevue, dateLancementPrevue: p.dateLancementPrevue };
     const valeurs: Partial<typeof schema.projets.$inferInsert> =
       m.genre === "sante"
-        ? { sante: m.sante, santeMotif: m.sante === "dans_les_temps" ? "" : m.motif, santeLe: new Date() }
+        ? m.sante === "a_surveiller"
+          ? { risqueMotif: m.motif, risqueLe: new Date(), risqueParId: u.id }
+          : { risqueMotif: "", risqueLe: null, risqueParId: null }
         : m.genre === "fin"
           ? { dateFinPrevue: m.date }
           : { dateLancementPrevue: m.date };
@@ -137,10 +144,11 @@ export async function mettreAJourProjetDepuisBarre(u: Utilisateur, a: Acces, o: 
       .returning({ majLe: schema.projets.majLe });
     await noter(u.id, "projet_modifie", p.id, { ...valeurs, barre: true });
     if (m.genre === "fin") await noterReportFin(p.id, p.dateFinPrevue, m.date, u.id);
+    await recalculerSante([p.id]);
     annulation = await enregistrerAnnulation(u.id, { genre: "projet", projetId: p.id, apresMajLe: apres.majLe.toISOString(), avant });
   }
   return {
-    message: `${p.code} · ${texteMajProjet(m)}${m.genre === "fin" && p.dateFinPrevue && p.dateFinPrevue !== m.date ? ` (au lieu du ${dateCourte(p.dateFinPrevue)})` : ""}.`,
+    message: `${p.code} · ${m.genre === "sante" ? (m.sante === "a_surveiller" ? `Risque signalé : ${m.motif}` : "Risque retiré") : texteMajProjet(m)}${m.genre === "fin" && p.dateFinPrevue && p.dateFinPrevue !== m.date ? ` (au lieu du ${dateCourte(p.dateFinPrevue)})` : ""}.`,
     ok: true,
     annulation,
     lien: `/projets/${p.id}`,
