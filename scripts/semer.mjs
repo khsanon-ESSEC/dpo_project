@@ -31,7 +31,19 @@ const jour = (decalage) => {
   d.setUTCDate(d.getUTCDate() + decalage);
   return d.toISOString().slice(0, 10);
 };
-const moment = (decalage, heure) => `${jour(decalage)}T${String(heure).padStart(2, "0")}:00:00-04:00`;
+const maintenant = Date.now();
+const SEMAINE_MS = 7 * 24 * 3600e3;
+/**
+ * Un instant passé (création, fin d'une tâche, envoi d'un rapport…), en heure de Port-au-Prince. La démonstration
+ * suppose qu'on est vendredi (jour 4). Sans DATE_DEMO, si on la lance plus tôt dans la semaine, ce qui « s'est passé »
+ * après maintenant est ramené dans l'heure qui précède, dans le même ordre : jamais de rapport envoyé demain.
+ */
+const moment = (decalage, heure) => {
+  const iso = `${jour(decalage)}T${String(heure).padStart(2, "0")}:00:00-04:00`;
+  const t = new Date(iso).getTime();
+  if (process.env.DATE_DEMO || t <= maintenant) return iso;
+  return new Date(maintenant - 60 * 60e3 + Math.min(1, (t - maintenant) / SEMAINE_MS) * 59 * 60e3).toISOString();
+};
 /** Un PDF d'une page, en texte simple (pièces jointes de démonstration). */
 function pdfSimple(titre, lignes) {
   const esc = (t) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[()\\]/g, (c) => `\\${c}`);
@@ -216,17 +228,17 @@ await sql.begin(async (tx) => {
   await tache("dj", "UR", "Préparation de l'audit de sécurité", "faite", jour(-8), fait(-8), null, { debut: jour(-14), h: 16 });
 
   // Ricardo Étienne : développement, charge normale.
-  await tache("re", "UR", "Tests du module de virements", "faite", jour(3), [[3, "statut", "en_cours", "faite"]], null, { debut: jour(-4), h: 16 });
+  T.reTests = await tache("re", "UR", "Tests du module de virements", "faite", jour(3), [[3, "statut", "en_cours", "faite"]], null, { debut: jour(-4), h: 16 });
   await tache("re", "UR", "Correctifs du module de virements", "a_faire", jour(7), [], null, { h: 12 });
-  await tache("re", "PR", "Environnement de développement", "faite", jour(2), [[2, "statut", "en_cours", "faite"]], null, { debut: jour(1), h: 8 });
+  T.reEnv = await tache("re", "PR", "Environnement de développement", "faite", jour(2), [[2, "statut", "en_cours", "faite"]], null, { debut: jour(1), h: 8 });
   await tache("re", "UR", "Correctifs de sécurité (points 4 à 6)", "a_faire", jour(11), [], null, { debut: jour(8), h: 24 });
   await tache("re", "PR", "Développement du formulaire de candidature", "a_faire", jour(25), [], null, { debut: jour(14), h: 50 });
   await tache("re", "UR", "Mise en ligne d'UNIBANKOnline Retail", "a_faire", jour(31), [], null, { debut: jour(30), h: 12 });
   await tache("re", "UR", "Module de virements", "faite", jour(-5), fait(-5), null, { debut: jour(-25), h: 80 });
 
   // Ludovic Pierre : chargé dans deux semaines.
-  await tache("lp", "CR", "Serveur de test", "bloquee", jour(1), [[0, "statut", "a_faire", "bloquee", "En attente de la DTI"]], "Serveur de test demandé à la DTI lundi.", { h: 4 });
-  await tache("lp", "UN", "Plan de migration des données", "en_cours", jour(4), [[1, "statut", "a_faire", "en_cours"]], null, { debut: jour(1), h: 6 });
+  T.lpServeur = await tache("lp", "CR", "Serveur de test", "bloquee", jour(1), [[0, "statut", "a_faire", "bloquee", "En attente de la DTI"]], "Serveur de test demandé à la DTI lundi.", { h: 4 });
+  T.lpPlan = await tache("lp", "UN", "Plan de migration des données", "en_cours", jour(4), [[1, "statut", "a_faire", "en_cours"]], null, { debut: jour(1), h: 6 });
   await tache("lp", "UN", "Migration des contenus de l'intranet", "a_faire", jour(18), [], null, { debut: jour(7), h: 40 });
   await tache("lp", "CR", "Validation métier de Credos", "a_faire", jour(25), [], null, { debut: jour(14), h: 30 });
   await tache("lp", "UN", "Formation des contributeurs", "a_faire", jour(30), [], null, { debut: jour(28), h: 12 });
@@ -239,18 +251,19 @@ await sql.begin(async (tx) => {
   await tache("sc", null, "Glossaire des produits du Réseau");
 
   // Jean-Robert Noël : 32 h par semaine.
-  await tache("jn", "UC", "Spécifications du module de paie", "en_cours", jour(4), [[0, "statut", "a_faire", "en_cours"]], null, { debut: jour(0), h: 5 });
-  await tache("jn", "CR", "Jeux de données de test", "faite", jour(3), [[3, "statut", "en_cours", "faite"]], null, { h: 6 });
+  T.jnPaie = await tache("jn", "UC", "Spécifications du module de paie", "en_cours", jour(4), [[0, "statut", "a_faire", "en_cours"]], null, { debut: jour(0), h: 5 });
+  T.jnJeux = await tache("jn", "CR", "Jeux de données de test", "faite", jour(3), [[3, "statut", "en_cours", "faite"]], null, { h: 6 });
   await tache("jn", "UC", "Spécifications des virements de masse", "a_faire", jour(11), [], null, { debut: jour(7), h: 16 });
   await tache("jn", "UC", "Tests d'intégration du module de paie", "a_faire", jour(22), [], null, { debut: jour(14), h: 24 });
   await tache("jn", "UC", "Maquettes graphiques des écrans de paie", "faite", jour(-10), fait(-10), null, { debut: jour(-21), h: 30 });
 
   // Wesner Bazile : surchargé la semaine prochaine.
-  await tache("wb", "CE", "Planning de la phase pilote", "faite", jour(3), [[3, "statut", "en_cours", "faite"]], null, { debut: jour(0), h: 12 });
-  await tache("wb", "CR", "Validation métier avec le Crédit", "en_cours", jour(4), [[2, "statut", "a_faire", "en_cours"]], null, { debut: jour(2), h: 4 });
+  T.wbPlanning = await tache("wb", "CE", "Planning de la phase pilote", "faite", jour(3), [[3, "statut", "en_cours", "faite"]], null, { debut: jour(0), h: 12 });
+  T.wbValidation = await tache("wb", "CR", "Validation métier avec le Crédit", "en_cours", jour(4), [[2, "statut", "a_faire", "en_cours"]], null, { debut: jour(2), h: 4 });
   await tache("wb", "CE", "Lancement de la phase pilote", "a_faire", jour(18), [], null, { debut: jour(7), h: 50 });
   await tache("wb", "CR", "Rédaction des procédures Credos", "a_faire", jour(11), [], null, { debut: jour(8), h: 20 });
   await tache("wb", "CE", "Bilan de la phase pilote", "a_faire", jour(32), [], null, { debut: jour(28), h: 16 });
+  T.wbDate = await tache("wb", "CE", "Date de la phase pilote", "bloquee", jour(3), [[1, "statut", "a_faire", "bloquee", "Le Réseau n'a pas répondu"]], "Le Réseau n'a pas répondu à la demande de date.", { h: 1 });
 
   // Myriam Valcin (cheffe du projet UR) et son équipe.
   await tache("mv", "UR", "Date du nouveau passage d'audit", "a_faire", jour(4), [], null, { h: 2 });
@@ -258,7 +271,16 @@ await sql.begin(async (tx) => {
   await tache("mv", "UR", "Communication aux clients « Early adopters »", "a_faire", jour(25), [], null, { debut: jour(21), h: 12 });
   await tache("fm", "AE", "Transfert des archives du 2e étage", "en_cours", jour(18), [[-7, "statut", "a_faire", "en_cours"]], null, { debut: jour(-7), h: 60 });
   await tache("fm", "AE", "Indexation des dossiers de crédit 2019", "a_faire", jour(32), [], null, { debut: jour(21), h: 40 });
-  await tache("jd", "AE", "Numérisation des registres", "a_faire", jour(11), [], null, { debut: jour(7), h: 12 });
+  T.jd2017 = await tache("jd", "AE", "Numérisation des registres 2017", "faite", jour(2), [[2, "statut", "en_cours", "faite"]], null, { debut: jour(-4), h: 12 });
+  T.jd2018 = await tache("jd", "AE", "Numérisation des registres 2018", "bloquee", jour(11), [[2, "statut", "a_faire", "bloquee", "Scanner en panne"]], "Scanner du 3e étage en panne depuis mercredi.", { debut: jour(7), h: 12 });
+  T.fmMoitie = await tache("fm", "AE", "Transfert des archives du 2e étage : première moitié", "faite", jour(3), [[3, "statut", "en_cours", "faite"]], null, { debut: jour(0), h: 8 });
+  // Myriam : son rapport parle du compte rendu du comité de pilotage (la réunion du mercredi) et du nouveau passage d'audit.
+  T.mvCompteRendu = await tache("mv", "UR", "Compte rendu du comité de pilotage", "faite", jour(2), [[2, "statut", "a_faire", "faite"]], null, { h: 2 });
+  T.mvAudit = await tache("mv", "UR", "Préparation du nouveau passage d'audit", "en_cours", jour(9), [[1, "statut", "a_faire", "en_cours"]], null, { debut: jour(1), h: 6 });
+  // Organisation et méthodes (sans chef d'équipe) : ce que disent leurs rapports.
+  T.gpProcedure = await tache("gp", null, "Procédure d'ouverture de compte, version 2", "en_cours", jour(8), [[0, "statut", "a_faire", "en_cours"]], null, { debut: jour(0), h: 12 });
+  T.gpValidation = await tache("gp", null, "Validation de la procédure par la Conformité", "bloquee", jour(1), [[-10, "statut", "a_faire", "bloquee", "En attente de la Conformité"]], "En attente de la Conformité depuis deux semaines.", { h: 2 });
+  T.tlCarto = await tache("tl", null, "Cartographie des processus du Crédit : première partie", "faite", jour(3), [[3, "statut", "en_cours", "faite"]], null, { debut: jour(-3), h: 16 });
 
   // Marc-Antoine Louis (chef du projet UC).
   await tache("ml", "UC", "Revue d'architecture avec le prestataire", "a_faire", jour(8), [], null, { h: 4 });
@@ -614,8 +636,8 @@ await sql.begin(async (tx) => {
         const c = formulaire.find((f) => f.id === champ);
         const lid = randomUUID();
         lignes[extra.cle ?? lid] = lid;
-        await tx`insert into lignes_rapport (id, rapport_id, champ_id, partie, texte, projet_id, ordre, origines, auteurs_origine, remonte, visibilite, depuis_semaine)
-          values (${lid}, ${id}, ${champ}, ${extra.partie ?? (c.rubrique && c.rubrique !== "autre" ? c.rubrique : null)}, ${texte}, ${pj ? PJ[pj] : null}, ${o},
+        await tx`insert into lignes_rapport (id, rapport_id, champ_id, partie, texte, projet_id, tache_id, ordre, origines, auteurs_origine, remonte, visibilite, depuis_semaine)
+          values (${lid}, ${id}, ${champ}, ${extra.partie ?? (c.rubrique && c.rubrique !== "autre" ? c.rubrique : null)}, ${texte}, ${pj ? PJ[pj] : null}, ${extra.tache ?? null}, ${o},
                   ${`{${(extra.origines ?? []).join(",")}}`}::text[], ${`{${(extra.auteurs ?? []).map((k) => P[k]).join(",")}}`}::uuid[], ${extra.remonte ?? false}, ${extra.visibilite ?? null}, ${extra.depuis ?? null})`;
       } else if (x[0] === "feu") {
         const [, pj, valeur, phrase = "", champ = "sante", propose = valeur] = x;
@@ -640,17 +662,17 @@ await sql.begin(async (tx) => {
   };
   // Solutions technologiques : trois rapports reçus par Marc-Antoine sur six (Daphnée, Sophonie et lui-même pas encore).
   await rapport("re", "ml", 11, ST_V2, V.st2, [
-    ["ligne", "fait", "UR", "Tests du module de virements"],
-    ["ligne", "fait", "PR", "Environnement de développement"],
+    ["ligne", "fait", "UR", "Tests du module de virements", { tache: T.reTests }],
+    ["ligne", "fait", "PR", "Environnement de développement", { tache: T.reEnv }],
     ["ligne", "prochaine", "UR", "Correctifs du module de virements, lundi"],
     ["feu", "UR", "dans_les_temps"],
     ["feu", "PR", "dans_les_temps"],
     ["charge", "normale", "normale", "30 h sur 40 h"],
   ]);
   await rapport("lp", "ml", 9, ST_V2, V.st2, [
-    ["ligne", "en_cours", "UN", "Plan de migration des données"],
+    ["ligne", "en_cours", "UN", "Plan de migration des données", { tache: T.lpPlan }],
     // Un blocage qui dure : signalé il y a deux semaines, reconduit depuis.
-    ["ligne", "bloque", "CR", "Serveur de test demandé à la DTI lundi", { depuis: jour(-14) }],
+    ["ligne", "bloque", "CR", "Serveur de test demandé à la DTI lundi", { depuis: jour(-14), tache: T.lpServeur }],
     ["ligne", "prochaine", "UN", "Valider le plan de migration avec la DTI"],
     ["feu", "UN", "a_surveiller", "Plan de migration à valider avec la DTI", "sante", "a_surveiller"],
     ["feu", "CR", "en_retard", "Le serveur de test n'est toujours pas là", "sante", "dans_les_temps"],
@@ -659,17 +681,17 @@ await sql.begin(async (tx) => {
     ["piece", "pieces", "Demande-serveur-test-Credos.pdf", pdfSimple("Demande de serveur de test - Credos", ["Demande adressée à la DTI le lundi.", "Serveur attendu pour la validation métier du module de garanties.", "Sans serveur, la validation métier passe au 13 novembre."])],
   ]);
   await rapport("wb", "ml", 8, ST_V2, V.st2, [
-    ["ligne", "fait", "CE", "Planning de la phase pilote"],
-    ["ligne", "en_cours", "CR", "Validation métier avec le Crédit"],
-    ["ligne", "bloque", "CE", "Date de la phase pilote : le Réseau n'a pas répondu"],
+    ["ligne", "fait", "CE", "Planning de la phase pilote", { tache: T.wbPlanning }],
+    ["ligne", "en_cours", "CR", "Validation métier avec le Crédit", { tache: T.wbValidation }],
+    ["ligne", "bloque", "CE", "Date de la phase pilote : le Réseau n'a pas répondu", { tache: T.wbDate }],
     ["ligne", "prochaine", "CE", "Présenter le planning au Réseau"],
     ["feu", "CE", "a_surveiller", "Date de la phase pilote à obtenir du Réseau"],
     ["feu", "CR", "dans_les_temps"],
     ["charge", "lourde", "trop_lourde", "45 h sur 40 h"],
   ]);
   await rapport("jn", "ml", 12, ST_V2, V.st2, [
-    ["ligne", "fait", "CR", "Jeux de données de test"],
-    ["ligne", "en_cours", "UC", "Spécifications du module de paie"],
+    ["ligne", "fait", "CR", "Jeux de données de test", { tache: T.jnJeux }],
+    ["ligne", "en_cours", "UC", "Spécifications du module de paie", { tache: T.jnPaie }],
     ["ligne", "prochaine", "UC", "Spécifications des virements de masse"],
     ["feu", "UC", "dans_les_temps"],
     ["feu", "CR", "dans_les_temps"],
@@ -677,21 +699,21 @@ await sql.begin(async (tx) => {
   ]);
   // Projets organisationnels : Fabienne et Joël ont envoyé ; Myriam a envoyé son rapport de cheffe d'équipe à Nadège.
   const fm = await rapport("fm", "mv", 10, DEFAUT_V2, V.defaut2, [
-    ["ligne", "fait", "AE", "Archives du 2e étage : 60 % transférées", { cle: "fait" }],
+    ["ligne", "fait", "AE", "Archives du 2e étage : 60 % transférées", { cle: "fait", tache: T.fmMoitie }],
     ["ligne", "prochaine", "AE", "Poursuivre le transfert du 2e étage", { cle: "prochaine" }],
     ["feu", "AE", "dans_les_temps"],
   ]);
   const jd = await rapport("jd", "mv", 9, DEFAUT_V2, V.defaut2, [
-    ["ligne", "fait", "AE", "Numérisation des registres 2017", { cle: "fait" }],
-    ["ligne", "bloque", "AE", "Scanner du 3e étage en panne depuis mercredi", { cle: "bloque" }],
+    ["ligne", "fait", "AE", "Numérisation des registres 2017", { cle: "fait", tache: T.jd2017 }],
+    ["ligne", "bloque", "AE", "Scanner du 3e étage en panne depuis mercredi", { cle: "bloque", tache: T.jd2018 }],
     ["ligne", "prochaine", "AE", "Registres 2018", { cle: "prochaine" }],
     ["feu", "AE", "a_surveiller", "Scanner en panne : la numérisation est arrêtée"],
   ]);
   const MV = deplier(CHEF_V1, DEFAUT_V2);
   const chargePO = JSON.stringify({ calcule: { libre: 0, normale: 2, chargee: 0, surchargee: 0 }, ressenti: { legere: 0, normale: 0, lourde: 0, trop_lourde: 0, aucun: 2 } });
   await rapport("mv", "na", 14, MV, V.chef1, [
-    ["ligne", "fait", "UR", "Comité de projet UNIBANKOnline Retail"],
-    ["ligne", "en_cours", "UR", "Plan de lancement révisé"],
+    ["ligne", "fait", "UR", "Compte rendu du comité de pilotage", { tache: T.mvCompteRendu }],
+    ["ligne", "en_cours", "UR", "Préparation du nouveau passage d'audit", { tache: T.mvAudit }],
     ["ligne", "prochaine", "UR", "Plan de lancement révisé : version pour la direction"],
     ["feu", "UR", "a_surveiller", "Audit de sécurité à repasser avant le lancement"],
     ["ligne", "a_decider", "AE", "Scanner du 3e étage en panne depuis mercredi", { partie: "bloque", origines: [`l:${jd.lignes.bloque}`], auteurs: ["jd"], remonte: true }],
@@ -703,16 +725,16 @@ await sql.begin(async (tx) => {
     ["feu", "UR", "a_surveiller", "MV : à surveiller", "sante_equipe", "a_surveiller"],
     ["charge", chargePO, null, "2 personne(s)", "charge_equipe"],
     ["synthese", "AE", "Le transfert du 2e étage atteint 60 % et les registres 2017 sont numérisés. La numérisation est arrêtée depuis mercredi : le scanner du 3e étage est en panne."],
-    ["synthese", "UR", "Le plan de lancement révisé est en cours. L'audit de sécurité est à repasser avant le lancement."],
+    ["synthese", "UR", "Le nouveau passage de l'audit de sécurité se prépare : il est à repasser avant le lancement. Le plan de lancement révisé suit la semaine prochaine."],
   ]);
   // Organisation et méthodes : pas de chef d'équipe, les rapports vont directement à Nadège.
   await rapport("gp", "na", 13, DEFAUT_V2, V.defaut2, [
-    ["ligne", "en_cours", null, "Procédure d'ouverture de compte, version 2"],
-    ["ligne", "bloque", null, "Validation de la procédure : en attente de la Conformité depuis deux semaines"],
+    ["ligne", "en_cours", null, "Procédure d'ouverture de compte, version 2", { tache: T.gpProcedure }],
+    ["ligne", "bloque", null, "Validation de la procédure : en attente de la Conformité depuis deux semaines", { tache: T.gpValidation }],
     ["ligne", "prochaine", null, "Procédure d'ouverture de compte : présentation au Réseau"],
   ]);
   await rapport("tl", "na", 15, DEFAUT_V2, V.defaut2, [
-    ["ligne", "fait", null, "Cartographie des processus du Crédit : première partie"],
+    ["ligne", "fait", null, "Cartographie des processus du Crédit : première partie", { tache: T.tlCarto }],
     ["ligne", "prochaine", null, "Cartographie : ateliers avec le Crédit"],
   ]);
 
@@ -756,7 +778,7 @@ await sql.begin(async (tx) => {
       prochaine: [["Spécifications du module de paie, suite", "UC"]],
     },
     mv: {
-      fait: [["Point d'avancement avec le prestataire", "UR"], ["Comité de projet UNIBANKOnline Retail", "UR"], ["Plan de communication validé", "UR"]],
+      fait: [["Point d'avancement avec le prestataire", "UR"], ["Compte rendu du comité de pilotage", "UR"], ["Plan de communication validé", "UR"]],
       en_cours: [["Plan de lancement révisé", "UR"]],
       bloque: [["Nouvelle date d'audit : réponse de l'auditeur attendue", "UR"]],
       prochaine: [["Fixer la date du nouveau passage d'audit", "UR"]],
