@@ -176,6 +176,13 @@
       "when": 1793294917268,
       "tag": "0024_avancement-conseil",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793296533591,
+      "tag": "0025_alertes-demandes",
+      "breakpoints": true
     }
   ]
 }

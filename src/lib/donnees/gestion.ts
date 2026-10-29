@@ -5,7 +5,7 @@
  */
 import "server-only";
 import { priorite as lirePriorite } from "@/lib/suivi";
-import { and, asc, count, eq, isNull, max, ne, or } from "drizzle-orm";
+import { and, asc, count, eq, isNull, like, max, ne, or } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { idsProjetsVisibles, type Acces } from "@/lib/acces";
 import { noter } from "@/lib/journal";
@@ -130,6 +130,14 @@ export async function proposerProjet(d: DemandeProjet, parId: string, direct?: C
   return { id: p.id };
 }
 
+/**
+ * Une demande décidée (acceptée ou refusée) ou supprimée n'attend plus personne : les alertes « … propose un projet »
+ * envoyées aux directeurs et aux exécutifs disparaissent (29 octobre 2026). Le demandeur reçoit ensuite la décision.
+ */
+async function retirerAlertesDeDemande(projetId: string) {
+  await db.delete(schema.notifications).where(and(eq(schema.notifications.type, "demande_projet"), eq(schema.notifications.lien, `/projets/${projetId}`)));
+}
+
 /** Accepter une demande : statut de départ, chef de projet, dates. Refuser : un motif. Le demandeur est prévenu. */
 export async function deciderDemande(
   projetId: string,
@@ -141,6 +149,7 @@ export async function deciderDemande(
   const motif = texte(d.motif, 1000);
   if (!d.accepte) {
     if (!motif) return { erreur: "Dites pourquoi la demande est refusée : le demandeur le lira." };
+    await retirerAlertesDeDemande(projetId);
     await db.update(schema.projets).set({ statut: "refuse", decisionParId: parId, decisionLe: new Date(), motifDecision: motif, majLe: new Date() }).where(eq(schema.projets.id, projetId));
   } else {
     const org = await chargerOrganisation();
@@ -155,6 +164,7 @@ export async function deciderDemande(
     const fin = date(d.dateFinPrevue) ?? p.dateFinPrevue;
     const division = d.division !== undefined ? await valeurDeListe("division", d.division, p.division) : p.division;
     if (division === null) return { erreur: MESSAGE_HORS_LISTE.division };
+    await retirerAlertesDeDemande(projetId);
     await db
       .update(schema.projets)
       .set({
@@ -331,6 +341,8 @@ export async function archiverProjet(projetId: string, archiver: boolean, parId:
 export async function supprimerProjet(projetId: string, parId: string): Promise<{ ok: true } | { erreur: string }> {
   if (!projetSupprimable(await activiteDuProjet(projetId))) return { erreur: "Ce projet a une histoire (tâches, rapports, réunions, documents, décisions, risques ou reports) : archivez-le plutôt." };
   const [p] = await db.delete(schema.projets).where(eq(schema.projets.id, projetId)).returning({ titre: schema.projets.titre, code: schema.projets.code });
+  // Plus de projet : ses alertes (demande, chef nommé…) ne mèneraient nulle part.
+  await db.delete(schema.notifications).where(or(eq(schema.notifications.lien, `/projets/${projetId}`), like(schema.notifications.lien, `/projets/${projetId}/%`), like(schema.notifications.lien, `/projets/${projetId}#%`), like(schema.notifications.lien, `/projets/${projetId}?%`)));
   await noter(parId, "projet_supprime", projetId, p ?? {});
   return { ok: true };
 }

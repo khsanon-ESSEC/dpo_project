@@ -1,0 +1,1 @@
+DELETE FROM "notifications" n WHERE n."type" = 'demande_projet' AND n."texte" LIKE '% propose un projet : %' AND NOT EXISTS (SELECT 1 FROM "projets" p WHERE '/projets/' || p."id"::text = n."lien" AND p."statut"::text = 'requete');

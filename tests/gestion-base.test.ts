@@ -114,6 +114,29 @@ describe.skipIf(!URL_TEST)("gestion des projets et des tâches", () => {
     expect(await G.deciderDemande(r.id, { accepte: false, motif: "Finalement non" }, qui("nadege.augustin").id)).toHaveProperty("erreur");
   });
 
+  it("une demande décidée ou supprimée : les alertes « … propose un projet » disparaissent chez tous (29 octobre 2026)", async () => {
+    const proposees = async (id: string) => (await D.db.select().from(D.schema.notifications).where(and(eq(D.schema.notifications.type, "demande_projet"), eq(D.schema.notifications.lien, `/projets/${id}`)))).filter((n) => /propose un projet/.test(n.texte));
+    // Acceptée : plus d'alerte de proposition ; le demandeur reçoit la décision.
+    const a1 = (await G.proposerProjet(demande("Archivage électronique des dossiers"), qui("ludovic.pierre").id)) as { id: string };
+    expect((await proposees(a1.id)).length).toBeGreaterThanOrEqual(2);
+    expect(await G.deciderDemande(a1.id, { accepte: true, motif: "", chefProjetId: qui("wesner.bazile").id, statut: "en_cours" }, qui("nadege.augustin").id)).toEqual({ ok: true });
+    expect(await proposees(a1.id)).toEqual([]);
+    expect((await notifications("ludovic.pierre", "demande_projet")).some((n) => n.lien === `/projets/${a1.id}` && /acceptée/.test(n.texte))).toBe(true);
+    // Refusée : pareil.
+    const a2 = (await G.proposerProjet(demande("Bornes interactives en agence"), qui("ludovic.pierre").id)) as { id: string };
+    expect(await G.deciderDemande(a2.id, { accepte: false, motif: "Pas cette année." }, qui("frantz.desrosiers").id)).toEqual({ ok: true });
+    expect(await proposees(a2.id)).toEqual([]);
+    // Supprimée : toutes ses alertes partent.
+    const a3 = (await G.proposerProjet(demande("Doublon"), qui("ludovic.pierre").id)) as { id: string };
+    expect(await G.supprimerProjet(a3.id, qui("frantz.desrosiers").id)).toEqual({ ok: true });
+    expect((await D.db.select().from(D.schema.notifications).where(eq(D.schema.notifications.lien, `/projets/${a3.id}`))).length).toBe(0);
+    // Une erreur (pas de chef) ne retire rien : la demande attend toujours.
+    const a4 = (await G.proposerProjet(demande("Toujours en attente"), qui("ludovic.pierre").id)) as { id: string };
+    expect(await G.deciderDemande(a4.id, { accepte: true, motif: "", chefProjetId: "" }, qui("nadege.augustin").id)).toEqual({ erreur: "Nommez le chef de projet." });
+    expect((await proposees(a4.id)).length).toBeGreaterThanOrEqual(2);
+    for (const id of [a1.id, a2.id, a4.id]) await D.db.delete(D.schema.projets).where(eq(D.schema.projets.id, id));
+  });
+
   it("les membres de l'équipe projet voient le projet", async () => {
     // Joël Dorval a rejoint l'équipe d'UR sans y avoir de tâche.
     const visibles = await A.idsProjetsVisibles(await acces("joel.dorval"));
