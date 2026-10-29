@@ -59,6 +59,22 @@ async function etatParRegles(projet: typeof schema.projets.$inferSelect, ancienn
   return phrases.join(" ");
 }
 
+/** Un projet du rapport mensuel : stratégique, de la DPO, accepté, ni finalisé ni archivé. */
+export function entreAuRapportMensuel(p: Pick<typeof schema.projets.$inferSelect, "strategique" | "division" | "statut" | "archiveLe">): boolean {
+  return p.strategique && p.division === "" && p.statut !== "finalise" && p.statut !== "requete" && p.statut !== "refuse" && !p.archiveLe;
+}
+
+/** Le texte automatique d'un projet pour le rapport d'un mois (livrables, reports de la fin). */
+export async function texteAutomatique(p: typeof schema.projets.$inferSelect, mois: string): Promise<string> {
+  return etatParRegles(p, (await finAuDernierRapport(p.id, mois))?.dateFinPrevue ?? null);
+}
+
+/** Les états d'avancement écrits par les chefs de projet pour un mois (src/lib/donnees/avancement-conseil.ts). */
+async function avancementsDuMois(mois: string) {
+  const l = await db.select().from(schema.avancementsConseil).where(eq(schema.avancementsConseil.mois, mois));
+  return new Map(l.map((x) => [x.projetId, x]));
+}
+
 export async function obtenirOuCreerRapportConseil(mois = moisCourant()) {
   let [r] = await db.select().from(schema.rapportsConseil).where(eq(schema.rapportsConseil.mois, mois)).limit(1);
   if (!r) {
@@ -71,20 +87,24 @@ export async function obtenirOuCreerRapportConseil(mois = moisCourant()) {
       .where(and(eq(schema.projets.strategique, true), eq(schema.projets.division, ""), ne(schema.projets.statut, "finalise"), ne(schema.projets.statut, "requete"), ne(schema.projets.statut, "refuse"), isNull(schema.projets.archiveLe)))
       .orderBy(asc(schema.projets.creeLe));
     let ordre = 0;
+    // Ce que les chefs de projet ont déjà écrit pour ce mois, sur la fiche de leur projet.
+    const ecrits = await avancementsDuMois(mois);
     for (const p of projets) {
       ordre += 1;
       const dernier = await finAuDernierRapport(p.id, mois);
+      const chef = ecrits.get(p.id);
       await db
         .insert(schema.lignesConseil)
         .values({
           rapportId: r.id,
           projetId: p.id,
           ordre,
-          etatAvancement: await etatParRegles(p, dernier?.dateFinPrevue ?? null),
+          etatAvancement: chef ? chef.texte : await etatParRegles(p, dernier?.dateFinPrevue ?? null),
           dateFinDernierRapport: dernier?.dateFinPrevue ?? null,
           nouvelleDateFin: p.dateFinPrevue,
           dateLancement: p.dateLancementPrevue,
           redigeParIa: false,
+          ...(chef ? { source: "chef" as const, sourceParId: chef.majParId, sourceLe: chef.majLe } : {}),
         })
         .onConflictDoNothing();
     }
@@ -99,8 +119,18 @@ export async function lignesConseil(rapportId: string, statut: string) {
     .innerJoin(schema.projets, eq(schema.projets.id, schema.lignesConseil.projetId))
     .where(eq(schema.lignesConseil.rapportId, rapportId))
     .orderBy(asc(schema.lignesConseil.ordre));
-  // Tant que le rapport est un brouillon, les dates suivent les fiches projet.
+  // Tant que le rapport est un brouillon, les dates suivent les fiches projet ; et, dans le rapport mensuel, l'état
+  // d'avancement suit ce que le chef de projet a écrit pour le mois, sauf si la direction l'a corrigé ici.
   if (statut === "brouillon") {
+    const [r] = await db.select({ genre: schema.rapportsConseil.genre, mois: schema.rapportsConseil.mois }).from(schema.rapportsConseil).where(eq(schema.rapportsConseil.id, rapportId));
+    const ecrits = r?.genre === "mensuel" && r.mois ? await avancementsDuMois(r.mois) : new Map<string, typeof schema.avancementsConseil.$inferSelect>();
+    for (const { ligne } of lignes) {
+      const chef = ecrits.get(ligne.projetId);
+      if (!chef || (ligne.source !== "regles" && ligne.source !== "chef")) continue;
+      if (ligne.source === "chef" && ligne.etatAvancement === chef.texte && ligne.sourceParId === chef.majParId) continue;
+      await db.update(schema.lignesConseil).set({ etatAvancement: chef.texte, source: "chef", sourceParId: chef.majParId, sourceLe: chef.majLe, redigeParIa: false }).where(eq(schema.lignesConseil.id, ligne.id));
+      Object.assign(ligne, { etatAvancement: chef.texte, source: "chef", sourceParId: chef.majParId, sourceLe: chef.majLe, redigeParIa: false });
+    }
     for (const { ligne, projet } of lignes) {
       if (ligne.nouvelleDateFin !== projet.dateFinPrevue || ligne.dateLancement !== projet.dateLancementPrevue) {
         await db
@@ -112,11 +142,18 @@ export async function lignesConseil(rapportId: string, statut: string) {
       }
     }
   }
-  return lignes;
+  // Qui a écrit l'état d'avancement (le chef de projet, la direction, l'assistant à sa demande).
+  const ids = new Set(lignes.map((l) => l.ligne.sourceParId).filter((x): x is string => !!x));
+  const org = ids.size ? await chargerOrganisation() : null;
+  return lignes.map((l) => {
+    const x = l.ligne.sourceParId ? org?.personnes.get(l.ligne.sourceParId) : undefined;
+    return { ...l, auteurEtat: x ? nomComplet(x) : null };
+  });
 }
 
-export async function modifierEtat(ligneId: string, texte: string) {
-  await db.update(schema.lignesConseil).set({ etatAvancement: texte.trim(), redigeParIa: false }).where(eq(schema.lignesConseil.id, ligneId));
+/** La direction corrige l'état d'avancement dans le rapport : sa version l'emporte sur celle du chef de projet. */
+export async function modifierEtat(ligneId: string, texte: string, parId: string | null = null) {
+  await db.update(schema.lignesConseil).set({ etatAvancement: texte.trim(), redigeParIa: false, source: "direction", sourceParId: parId, sourceLe: new Date() }).where(eq(schema.lignesConseil.id, ligneId));
 }
 
 /**

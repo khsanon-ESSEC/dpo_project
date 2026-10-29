@@ -3,7 +3,8 @@ import { objectifsDesProjets } from "@/lib/donnees/objectifs";
 import type { Metadata } from "next";
 import { acces, exigerAccesConseil, idsProjetsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
-import { deMois, moisAnnee } from "@/lib/dates";
+import { aujourdhui, dateLongue, deMois, moisAnnee } from "@/lib/dates";
+import { calendrierConseil, moisDuConseil } from "@/lib/calendrier-conseil";
 import { lignesConseil, moisCourant, moisDesRapports, moisValide, obtenirOuCreerRapportConseil, rapportDuMois } from "@/lib/donnees/conseil";
 import { iaDisponible } from "@/lib/ia";
 import { Bandeau } from "@/components/Bandeau";
@@ -19,13 +20,16 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
   const u = await exigerUtilisateur();
   const a = await acces(u);
   exigerAccesConseil(a);
+  // Après le dernier jeudi du mois, le rapport du mois est parti : les chefs préparent celui du mois suivant, qu'on
+  // peut ouvrir d'ici (29 octobre 2026).
+  const enPreparation = moisDuConseil(aujourdhui());
   const courant = moisCourant();
   const mois = moisValide(moisDemande) ? moisDemande : courant;
   // Un mois passé se relit tel qu'il a été fait : on ne crée pas après coup le rapport d'un mois qui n'en a pas eu.
   const existant = mois < courant ? await rapportDuMois(mois) : null;
-  const tousLesMois = [...new Set([...(await moisDesRapports()), courant])].sort();
+  const tousLesMois = [...new Set([...(await moisDesRapports()), courant, enPreparation])].sort();
   const precedent = [...tousLesMois].reverse().find((m) => m < mois) ?? null;
-  const suivant = tousLesMois.find((m) => m > mois && m <= courant) ?? null;
+  const suivant = tousLesMois.find((m) => m > mois && m <= enPreparation) ?? null;
   const rapportPrecedent = precedent ? await rapportDuMois(precedent) : null;
   const navigation = (rapportId?: string) => (
     <nav className="bilan-periode__nav" aria-label="Autre mois" style={{ marginBottom: 12 }}>
@@ -70,6 +74,9 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
   const acteur = { moiId: a.moi.id, directeur: a.directeur, toutVoir: a.toutVoir, suivis: a.suivis };
   const redigeables = new Set(lignes.filter((l) => peutGererProjet(acteur, l.projet)).map((l) => l.projet.id));
   const changees = lignes.filter((l) => l.ligne.dateFinDernierRapport && l.ligne.nouvelleDateFin !== l.ligne.dateFinDernierRapport).length;
+  // Écrits par leur chef de projet (sur la fiche du projet), et le calendrier du mois (29 octobre 2026).
+  const parLeChef = lignes.filter((l) => l.ligne.source === "chef").length;
+  const cal = calendrierConseil(mois);
 
   return (
     <>
@@ -91,6 +98,12 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
               </dd>
               <dt className="note">date{changees > 1 ? "s" : ""} changée{changees > 1 ? "s" : ""} depuis le dernier rapport</dt>
             </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+              <dd className={brouillon && parLeChef < lignes.length ? "ton-veille" : undefined} style={{ margin: 0, fontSize: 32, lineHeight: "36px", fontWeight: 200 }}>
+                {parLeChef}/{lignes.length}
+              </dd>
+              <dt className="note">états d&apos;avancement écrits par le chef de projet</dt>
+            </div>
           </dl>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
             <a href={`/api/conseil/${mois}/word`} className={brouillon ? "bouton-contour" : "bouton-ambre"}>
@@ -107,7 +120,7 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
         </div>
         {brouillon ? (
           <p className="note">
-            Les états d'avancement sont préparés à partir des fiches projet. Relisez-les : ce sont eux qui partent au conseil. Les dates suivent les fiches projet jusqu'à l'approbation.
+            Chaque chef de projet écrit l'état d'avancement de son projet sur la fiche du projet, jusqu'au {dateLongue(cal.limiteChefs)} au soir ; à défaut, le rapport garde un texte automatique. Relisez-les et corrigez au besoin (votre version l'emporte) : ce sont eux qui partent au conseil, avant le {dateLongue(cal.dernierJeudi)}. Les dates suivent les fiches projet jusqu'à l'approbation.
             {a.toutVoir ? "" : " Vous voyez les projets stratégiques de votre direction ; un exécutif approuve le rapport complet."}
           </p>
         ) : (
@@ -118,6 +131,7 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
           objectifs={await objectifsDesProjets(lignes.map((l) => l.projet.id))}
           visibles={visibles}
           redigeables={redigeables}
+          mensuel
           brouillon={brouillon}
           ia={iaDisponible()}
           entete={

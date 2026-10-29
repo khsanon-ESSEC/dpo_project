@@ -56,7 +56,7 @@ async function ligneModifiable(ligneId: string, a: Acces) {
 export async function enregistrerEtat(ligneId: string, form: FormData) {
   const { u, a } = await exigerConseil();
   await ligneModifiable(ligneId, a);
-  await modifierEtat(ligneId, String(form.get("etat") ?? "").slice(0, 2000));
+  await modifierEtat(ligneId, String(form.get("etat") ?? "").slice(0, 2000), u.id);
   await noter(u.id, "conseil_etat_modifie", ligneId);
   revalider();
 }
@@ -96,7 +96,7 @@ export async function redigerAvecAssistant(ligneId: string) {
       ? "Tu rédiges l'« état d'avancement » d'un projet pour un rapport ponctuel au conseil d'administration d'une banque, demandé pour l'objet indiqué. Deux ou trois phrases, en français, ton factuel, sans titre : ce qui compte pour cet objet d'abord. N'utilise que les données fournies ; n'invente ni date ni chiffre."
       : "Tu rédiges l'« état d'avancement » d'un projet pour le rapport mensuel au conseil d'administration d'une banque. Deux ou trois phrases, en français, ton factuel, sans titre. N'utilise que les données fournies ; n'invente ni date ni chiffre.";
   const texte = await demanderIA(consigne, [{ role: "user", contenu: `<donnees>\n${donnees.join("\n")}\n</donnees>` }], 300);
-  if (texte) await db.update(schema.lignesConseil).set({ etatAvancement: texte.slice(0, 2000), redigeParIa: true }).where(eq(schema.lignesConseil.id, ligneId));
+  if (texte) await db.update(schema.lignesConseil).set({ etatAvancement: texte.slice(0, 2000), redigeParIa: true, source: "ia", sourceParId: u.id, sourceLe: new Date() }).where(eq(schema.lignesConseil.id, ligneId));
   await noter(u.id, "conseil_etat_ia", ligneId);
   revalider();
 }

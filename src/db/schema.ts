@@ -752,8 +752,34 @@ export const lignesConseil = pgTable(
     nouvelleDateFin: date("nouvelle_date_fin"),
     dateLancement: date("date_lancement"),
     redigeParIa: boolean("redige_par_ia").notNull().default(false),
+    /**
+     * D'où vient l'état d'avancement (29 octobre 2026) : « regles » (texte automatique), « chef » (écrit par le chef
+     * de projet sur la fiche du projet, repris tant que le rapport est un brouillon), « direction » (corrigé dans le
+     * rapport : il l'emporte), « ia » (proposé par l'assistant à la demande de la direction). Qui, et quand.
+     */
+    source: text().$type<"regles" | "chef" | "direction" | "ia">().notNull().default("regles"),
+    sourceParId: uuid("source_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    sourceLe: timestamp("source_le", { withTimezone: true }),
   },
   (t) => [unique("ligne_conseil_projet").on(t.rapportId, t.projetId)],
+);
+
+/**
+ * L'état d'avancement d'un projet pour le rapport mensuel au conseil, écrit par son chef de projet sur la fiche du
+ * projet (29 octobre 2026) : un texte par projet et par mois, figé 5 jours ouvrables avant le dernier jeudi du mois
+ * (src/lib/calendrier-conseil.ts). Le rapport le reprend.
+ */
+export const avancementsConseil = pgTable(
+  "avancements_conseil",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    projetId: uuid("projet_id").notNull().references(() => projets.id, { onDelete: "cascade" }),
+    mois: date().notNull(),
+    texte: text().notNull(),
+    majParId: uuid("maj_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("avancement_conseil_projet_mois").on(t.projetId, t.mois)],
 );
 
 export const notifications = pgTable(

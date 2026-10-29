@@ -48,6 +48,8 @@ import { peutNoterConstat } from "@/lib/objectifs";
 import { TableauRaci } from "@/components/Raci";
 import { CarteObjectifs } from "./CarteObjectifs";
 import { ecarterLeKit } from "./kit/actions";
+import { CarteConseil } from "./CarteConseil";
+import { avancementPourProjet } from "@/lib/donnees/avancement-conseil";
 import { kitDuProjet, projetPourKit } from "@/lib/donnees/kit";
 import { tailleDuKit } from "@/lib/kit";
 import { cadrageValide, lignesCadrage } from "@/lib/cadrage";
@@ -83,6 +85,10 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const listesDivision = demande && peutDeciderDemande(a, p) ? (await choixListes()).division : [];
   // Kit de démarrage : proposé à qui gère le projet, une fois accepté, tant qu'il n'a été ni utilisé ni écarté.
   const kitPropose = peutModifier && !p.kitLe && projetPourKit(p) ? await kitDuProjet(p) : null;
+  // Rapport mensuel au conseil : l'état d'avancement que le chef écrit ici ; en tête tant qu'il n'est pas écrit.
+  const avConseil = await avancementPourProjet(a, p);
+  const conseilEnTete = !!avConseil && !avConseil.ecrit && !avConseil.fige;
+  const carteConseil = avConseil ? <CarteConseil projetId={p.id} av={avConseil} message={fait === "conseil" ? "Enregistré : le rapport au conseil reprend ce texte." : null} /> : null;
   const kitBilan = /^\d+-\d+-\d+-\d+-\d+$/.test(kitFait ?? "") ? kitFait!.split("-").map(Number) : null;
   const cadrage = cadrageValide(p.cadrage);
   const personnesActives = [...org.personnes.values()]
@@ -475,6 +481,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
             . Les livrables et les risques sont confiés au chef de projet.
           </p>
         ) : null}
+        {conseilEnTete ? carteConseil : null}
         {kitPropose && tailleDuKit(kitPropose) > 0 ? (
           <section className="carte kit-bandeau" aria-labelledby="p-kit">
             <div className="kit-bandeau__texte">
@@ -1066,6 +1073,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 </section>
               ) : null}
 
+              {avConseil && !conseilEnTete ? carteConseil : null}
               {pointsAv.some((x) => !x.avant) ? (
                 <section className="carte" aria-labelledby="p-avancement" id="avancement" style={{ scrollMarginTop: 80 }}>
                   <h2 id="p-avancement" className="carte__titre" style={{ marginBottom: 4 }}>

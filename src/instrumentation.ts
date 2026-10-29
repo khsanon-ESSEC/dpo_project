@@ -12,7 +12,10 @@ export async function register() {
   const { noterChargesPrevues } = await import("@/lib/donnees/charge");
   const { recalculerSante } = await import("@/lib/donnees/sante");
   const { genererOccurrences } = await import("@/lib/donnees/recurrence");
+  const { rappelsConseil } = await import("@/lib/donnees/avancement-conseil");
   const noter = async () => {
+    // Rapport mensuel au conseil : rappels aux chefs de projet, puis « prêt à valider » aux exécutifs (29 octobre 2026).
+    await rappelsConseil().catch((e) => console.error("rappels du rapport au conseil :", (e as Error).message));
     await noterChargesPrevues().catch((e) => console.error("charge prévue :", (e as Error).message));
     // Tâches récurrentes : la prochaine occurrence, quelques jours avant son échéance.
     await genererOccurrences().catch((e) => console.error("tâches récurrentes :", (e as Error).message));

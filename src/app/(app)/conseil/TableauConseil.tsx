@@ -1,6 +1,6 @@
 /** Le tableau du rapport au conseil, au format du document Word habituel (rapport mensuel et rapports ponctuels). */
 import type { ReactNode } from "react";
-import { dateLongue } from "@/lib/dates";
+import { dateCourte, dateLocale, dateLongue } from "@/lib/dates";
 import type { lignesConseil } from "@/lib/donnees/conseil";
 import { LienProjet } from "@/components/Liens";
 import { enregistrerEtat, redigerAvecAssistant, retirerLigne } from "./actions";
@@ -18,6 +18,7 @@ export function TableauConseil({
   visibles,
   redigeables,
   objectifs,
+  mensuel,
 }: {
   lignes: Lignes;
   brouillon: boolean;
@@ -32,6 +33,8 @@ export function TableauConseil({
   redigeables?: Set<string>;
   /** Les objectifs écrits de chaque projet (29 octobre 2026), rappelés sous sa description. */
   objectifs?: Map<string, string[]>;
+  /** Rapport mensuel : dire, sous chaque état d'avancement, s'il vient du chef de projet (29 octobre 2026). */
+  mensuel?: boolean;
 }) {
   return (
     <div className="papier">
@@ -56,7 +59,7 @@ export function TableauConseil({
             </tr>
           </thead>
           <tbody>
-            {lignes.map(({ ligne, projet }, i) => {
+            {lignes.map(({ ligne, projet, auteurEtat }, i) => {
               const change = !!ligne.dateFinDernierRapport && ligne.nouvelleDateFin !== ligne.dateFinDernierRapport;
               return (
                 <tr key={ligne.id}>
@@ -91,7 +94,7 @@ export function TableauConseil({
                           État d'avancement de {projet.titre}
                         </label>
                         <textarea id={`etat-${ligne.id}`} name="etat" defaultValue={ligne.etatAvancement} maxLength={2000} />
-                        {ligne.redigeParIa ? <span style={{ fontSize: 11, color: "#5f5e5e" }}>Rédigé par l'assistant, à relire</span> : null}
+                        <SourceEtat source={ligne.source} auteur={auteurEtat} le={ligne.sourceLe} mensuel={!!mensuel} />
                         <span style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                           <button type="submit" style={petitBouton}>
                             Enregistrer
@@ -104,7 +107,10 @@ export function TableauConseil({
                         </span>
                       </form>
                     ) : (
-                      ligne.etatAvancement
+                      <>
+                        {ligne.etatAvancement}
+                        {brouillon ? <SourceEtat source={ligne.source} auteur={auteurEtat} le={ligne.sourceLe} mensuel={!!mensuel} /> : null}
+                      </>
                     )}
                   </td>
                   <td>{dateLongue(projet.dateEntree)}</td>
@@ -159,4 +165,14 @@ export function EtapesConseil({ statut }: { statut: string }) {
       ))}
     </ol>
   );
+}
+
+/** D'où vient l'état d'avancement : le chef de projet, la direction, l'assistant, ou le texte automatique. */
+function SourceEtat({ source, auteur, le, mensuel }: { source: string; auteur: string | null; le: Date | null; mensuel: boolean }) {
+  const quand = le ? ` le ${dateCourte(dateLocale(le))}` : "";
+  const style = { display: "block", fontSize: 11, lineHeight: "15px", color: "#5f5e5e" } as const;
+  if (source === "chef") return <span style={style}>Écrit par {auteur ?? "le chef de projet"} (chef de projet){quand}</span>;
+  if (source === "direction") return <span style={style}>Corrigé par {auteur ?? "la direction"}{quand}</span>;
+  if (source === "ia") return <span style={style}>Rédigé par l&apos;assistant{auteur ? ` à la demande de ${auteur}` : ""}, à relire</span>;
+  return mensuel ? <span style={{ ...style, color: "#9a6a00" }}>Texte automatique : le chef de projet ne l&apos;a pas mis à jour</span> : null;
 }

@@ -169,6 +169,13 @@
       "when": 1793293538102,
       "tag": "0023_cadrage-kit",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793294917268,
+      "tag": "0024_avancement-conseil",
+      "breakpoints": true
     }
   ]
 }
