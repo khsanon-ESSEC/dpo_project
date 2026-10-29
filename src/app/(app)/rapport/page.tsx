@@ -167,7 +167,7 @@ export default async function PageRapport({ searchParams }: { searchParams: Prom
           }
         >
           <p className="discret tete-lecture">
-            <span className="pastille-envoi pastille-envoi--apercu">Aperçu · pas encore envoyé</span>
+            <span className="pastille-envoi pastille-envoi--apercu">Aperçu · brouillon, pas encore transmis</span>
             <span>{sup ? `Tel que ${sup.nom} le lira` : "Aucun supérieur désigné"}</span>
             {limite ? <span>À envoyer avant {limite}</span> : null}
           </p>
@@ -258,6 +258,8 @@ export default async function PageRapport({ searchParams }: { searchParams: Prom
     <>
       <Bandeau surtitre={surtitre} titre="Mon rapport">
         <p className="discret tete-rapport">
+          {/* Statut du rapport, en clair (29 octobre 2026) : tant qu'il n'est pas envoyé, c'est un brouillon. */}
+          <span className="pastille-envoi pastille-envoi--brouillon">Brouillon · pas encore transmis</span>
           <span>
             {sup ? (
               <>

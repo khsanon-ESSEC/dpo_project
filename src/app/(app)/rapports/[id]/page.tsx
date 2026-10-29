@@ -96,8 +96,11 @@ export default async function PageRapportRecu({ params, searchParams }: { params
       >
         {auteur.poste ? <p className="discret tete-lecture__poste">{auteur.poste}</p> : null}
         <p className="discret tete-lecture">
-          {complet && aLHeure !== null ? <span className={`pastille-envoi${aLHeure ? "" : " pastille-envoi--retard"}`}>{aLHeure ? "✓ Envoyé à l'heure" : "Envoyé en retard"}</span> : null}
-          <span>{rapport.envoyeLe ? `Envoyé le ${dateCourte(dateLocale(rapport.envoyeLe))} à ${heure(rapport.envoyeLe)}` : "Brouillon"}</span>
+          {/* Statut du rapport, en clair (29 octobre 2026) : brouillon ou transmis, et à l'heure ou non. */}
+          <span className={`pastille-envoi${complet && aLHeure === false ? " pastille-envoi--retard" : ""}`}>
+            {complet && aLHeure === false ? "Transmis en retard" : complet && aLHeure ? "✓ Transmis à l'heure" : "✓ Transmis"}
+          </span>
+          <span>{rapport.envoyeLe ? `Transmis le ${dateCourte(dateLocale(rapport.envoyeLe))} à ${heure(rapport.envoyeLe)}` : null}</span>
           {complet && rapport.luLe && lecteurDuRapport && rapport.luPar !== u.id ? (
             <span>
               Lu par <strong>{nomComplet(lecteurDuRapport)}</strong>

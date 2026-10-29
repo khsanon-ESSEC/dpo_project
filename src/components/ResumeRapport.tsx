@@ -11,7 +11,7 @@ export function semaineTexte(semaine: string) {
 export function envoiTexte(r: Pick<ResumeRapport, "statut" | "envoyeLe">) {
   if (r.statut !== "envoye" || !r.envoyeLe) return "Brouillon";
   const j = dateLocale(r.envoyeLe);
-  return `Envoyé ${jourAbrege(j).toLowerCase()} ${Number(j.slice(8))} à ${heure(r.envoyeLe)}`;
+  return `Transmis ${jourAbrege(j).toLowerCase()} ${Number(j.slice(8))} à ${heure(r.envoyeLe)}`;
 }
 
 /** Une ligne d'historique : la semaine, ce qui a été fait, et le nombre de lignes par partie. */

@@ -235,8 +235,8 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
                   Mes rapports →
                 </a>
               </div>
-              <span style={{ fontSize: 26, lineHeight: "32px", fontWeight: 200 }}>{envoye ? "Envoyé" : "Brouillon prêt"}</span>
-              <span className="note">{rapport.superieur ? `Pour ${rapport.superieur}` : "Aucun supérieur désigné"}</span>
+              <span style={{ fontSize: 26, lineHeight: "32px", fontWeight: 200 }}>{envoye ? "Transmis" : "Brouillon"}</span>
+              <span className="note">{rapport.superieur ? (envoye ? `Transmis à ${rapport.superieur}` : `Pas encore transmis à ${rapport.superieur}`) : "Aucun supérieur désigné"}</span>
               <a href="/rapport" className={envoye ? "bouton-contour" : "bouton-ambre"} style={{ alignSelf: "flex-start", marginTop: 6 }}>
                 {envoye ? "Revoir" : "Relire et envoyer"}
               </a>

@@ -5159,6 +5159,10 @@ a.lien-projet:focus-visible {
   background: rgba(244, 178, 45, 0.22);
   color: #ffe2a8;
 }
+.pastille-envoi--brouillon {
+  background: rgba(244, 178, 45, 0.22);
+  color: #ffe2a8;
+}
 .nav-lecture {
   justify-content: space-between;
 }
