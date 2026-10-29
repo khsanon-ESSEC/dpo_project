@@ -170,7 +170,7 @@ export default async function PageRapportRecu({ params }: { params: Promise<{ id
                 ) : null}
                 <Repondre
                   rapportId={rapport.id}
-                  aide={moi ? `Un mot à ${destinataire?.prenom ?? "votre supérieur"} sur ce rapport, reçu en alerte.` : `Un mot à ${auteur.prenom} sur ce rapport, reçu en alerte.`}
+                  aide={`Écrire à ${moi ? (destinataire?.prenom ?? "votre supérieur") : auteur.prenom} au sujet de ce rapport : votre message lui arrive dans ses alertes${messages.length ? "." : ", et vos échanges s'afficheront ici."}`}
                   exemple={moi ? "Par exemple : la DTI a répondu, je relance mardi." : "Par exemple : licence validée, la validation métier peut commencer."}
                 />
               </section>
