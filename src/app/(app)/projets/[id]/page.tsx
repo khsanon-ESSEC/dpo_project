@@ -19,8 +19,12 @@ import { Icone } from "@/components/Icone";
 import { LienPersonne } from "@/components/Liens";
 import { ChoixPersonne } from "@/components/ChoixPersonne";
 import { ListeFiltrable } from "@/components/ListeFiltrable";
-import { agirLivrable, corrigerDecision, mettreAJourProjet, noterUneDecision, retirerUneDecision, signalerUnRisque } from "./actions";
+import { agirLivrable, corrigerDecision, enregistrerUnRisque, mettreAJourProjet, noterUneDecision, retirerUneDecision, retirerUnRisque, signalerUnRisque, statutDuRisque, terminerUnePhase } from "./actions";
 import { decisionsDuProjet, instancesConnues } from "@/lib/donnees/decisions";
+import { phasesDuProjet, risquesDuProjet } from "@/lib/donnees/risques";
+import { tempsDuProjet } from "@/lib/donnees/temps";
+import { criticite, gravite, LIBELLE_GRAVITE, LIBELLE_IMPACT, LIBELLE_PROBABILITE, LIBELLE_STATUT_RISQUE, phaseDepassee, phaseEnCours, type Niveau, type StatutRisque } from "@/lib/risques";
+import { dureeTexte } from "@/lib/projets";
 import { livrablesDuProjet } from "@/lib/donnees/livrables";
 import { recalculerSante } from "@/lib/donnees/sante";
 import { signalActif } from "@/lib/sante";
@@ -42,9 +46,9 @@ const SANTE = {
   dans_les_temps: { texte: "Dans les temps", classe: "ton-ok" },
 } as const;
 
-export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string; decision?: string }> }) {
+export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string; decision?: string; risque?: string }> }) {
   const { id } = await params;
-  const { propose, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut, decision: decisionBrut } = await searchParams;
+  const { propose, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut, decision: decisionBrut, risque: risqueBrut } = await searchParams;
   const livrableFait = livrableBrut === "pret" || livrableBrut === "valider" || livrableBrut === "renvoyer" || livrableBrut === "rouvrir" ? livrableBrut : null;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
@@ -84,6 +88,11 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const decisions = await decisionsDuProjet(id);
   const noteDecisions = actif && peutNoterDecision(u.id, peutModifier, { chefProjetId: p.chefProjetId, referentId: p.referentId, membres: new Set(membres.map((m) => m.personneId)) });
   const instances = noteDecisions ? await instancesConnues() : [];
+  const [phases, risques, temps] = await Promise.all([phasesDuProjet(id), risquesDuProjet(id), tempsDuProjet(id)]);
+  const phaseCourante = phaseEnCours(phases, jour);
+  const nomPhase = new Map(phases.map((ph) => [ph.id, ph.nom]));
+  const risquesOuverts = risques.filter((r) => r.statut === "ouvert");
+  const risqueFait = risqueBrut ? ({ note: "Risque noté au registre.", modifie: "Risque mis à jour.", ouvert: "Risque rouvert.", maitrise: "Risque marqué maîtrisé.", clos: "Risque clos.", retire: "Risque retiré du registre." } as Record<string, string>)[risqueBrut] ?? null : null;
   const decisionFaite = decisionBrut === "notee" ? "Décision notée au registre." : decisionBrut === "corrigee" ? "Décision corrigée." : decisionBrut === "retiree" ? "Décision retirée du registre." : null;
   const valides = lv.livrables.filter((l) => l.etat === "atteint").length;
   const lvMessage = livrableFait ? { pret: "Livrable déclaré prêt à valider : le chef de projet est prévenu.", valider: "Livrable validé : son responsable est prévenu.", renvoyer: "Livrable renvoyé à reprendre : son responsable est prévenu.", rouvrir: "Livrable rouvert." }[livrableFait] : null;
@@ -121,6 +130,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
           <span className="livrable__texte">
             <span className="livrable__nom">{l.libelle}</span>
             <span className="livrable__sous">
+              {l.phaseId && nomPhase.get(l.phaseId) ? `${nomPhase.get(l.phaseId)} · ` : ""}
               {l.responsableId ? (
                 <>
                   <LienPersonne id={l.responsableId}>{l.responsable}</LienPersonne>
@@ -291,6 +301,58 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
       </div>
     </li>
   );
+  const equipeOptions = [
+    ...(chefP ? [{ value: chefP.id, label: nomComplet(chefP), groupe: "Équipe du projet" }] : []),
+    ...(referentP ? [{ value: referentP.id, label: nomComplet(referentP), groupe: "Équipe du projet" }] : []),
+    ...membres.filter((m) => m.personneId !== chefP?.id && m.personneId !== referentP?.id).map((m) => ({ value: m.personneId, label: m.nom, groupe: "Équipe du projet" })),
+  ];
+  // Formulaire d'un risque (nouveau, ou à modifier).
+  const formulaireRisque = (r: (typeof risques)[number] | null) => {
+    const k = r ? r.id : "nouveau";
+    return (
+      <form action={enregistrerUnRisque.bind(null, p.id, r ? r.id : null)} className="decision__form">
+        <div className="champ">
+          <label htmlFor={`rq-t-${k}`}>Risque</label>
+          <input id={`rq-t-${k}`} name="titre" required maxLength={200} defaultValue={r?.titre ?? ""} placeholder="Ex. : le prestataire ne livre pas le module de virements à temps" />
+        </div>
+        <div className="risque-form__niveaux">
+          {(
+            [
+              ["probabilite", "Probabilité", LIBELLE_PROBABILITE, r?.probabilite ?? 2],
+              ["impact", "Impact", LIBELLE_IMPACT, r?.impact ?? 2],
+            ] as const
+          ).map(([nom, libelle, libelles, valeur]) => (
+            <fieldset key={nom} className="segmente">
+              <legend>{libelle}</legend>
+              {([1, 2, 3] as Niveau[]).map((n) => (
+                <label key={n} className="segmente__choix">
+                  <input type="radio" name={nom} value={n} defaultChecked={valeur === n} />
+                  <span>{libelles[n]}</span>
+                </label>
+              ))}
+            </fieldset>
+          ))}
+        </div>
+        <div className="decision__form-ligne">
+          <div className="champ">
+            <label htmlFor={`rq-rv-${k}`}>Prochaine revue</label>
+            <input id={`rq-rv-${k}`} name="revueLe" type="date" defaultValue={r?.revueLe ?? ""} />
+          </div>
+          <div className="champ">
+            <label htmlFor={`rq-r-${k}`}>Qui le suit</label>
+            <ListeFiltrable id={`rq-r-${k}`} name="responsableId" defaultValue={r?.responsableId ?? ""} vide="Personne" placeholder="Tapez un nom" options={equipeOptions} aucun="Personne ne correspond à" />
+          </div>
+        </div>
+        <div className="champ">
+          <label htmlFor={`rq-rep-${k}`}>Réponse prévue (facultatif)</label>
+          <input id={`rq-rep-${k}`} name="reponse" maxLength={1000} defaultValue={r?.reponse ?? ""} placeholder="Ex. : une deuxième équipe chez le prestataire à partir du 10 novembre" />
+        </div>
+        <button type="submit" className="bouton-contour" style={{ alignSelf: "flex-start" }}>
+          <Icone nom={r ? "coche" : "ajouter"} taille={16} /> {r ? "Enregistrer" : "Ajouter le risque"}
+        </button>
+      </form>
+    );
+  };
   const actifs = lv.livrables.filter((l) => l.etat !== "atteint");
   const livrablesValides = lv.livrables.filter((l) => l.etat === "atteint");
 
@@ -527,6 +589,52 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
         </div>
         <div className="colonnes colonnes--tablette">
           <div className="colonne-large">
+            {phases.length ? (
+              <section className="carte phases-projet" id="phases" aria-labelledby="p-phases" style={{ scrollMarginTop: 80 }}>
+                <div className="carte__entete">
+                  <h2 id="p-phases" className="carte__titre">
+                    Phases{phaseCourante ? ` · ${phaseCourante.nom} en cours` : " · toutes terminées"}
+                  </h2>
+                  {peutModifier && actif ? (
+                    <a href={`/projets/${p.id}/modifier#phases`} className="lien-discret">
+                      Gérer les phases →
+                    </a>
+                  ) : null}
+                </div>
+                <ol className="phases-projet__frise">
+                  {phases.map((ph) => {
+                    const etat = ph.termineeLe ? "terminee" : ph.id === phaseCourante?.id ? (phaseDepassee(ph, jour) ? "depassee" : "en-cours") : phaseDepassee(ph, jour) ? "depassee" : "a-venir";
+                    return (
+                      <li key={ph.id} className={`phases-projet__etape phases-projet__etape--${etat}`} aria-current={ph.id === phaseCourante?.id ? "step" : undefined}>
+                        <span className="phases-projet__point" aria-hidden="true">
+                          {ph.termineeLe ? <CocheSeule /> : null}
+                        </span>
+                        <span className="phases-projet__nom">{ph.nom}</span>
+                        <span className="phases-projet__dates">
+                          {ph.termineeLe ? `terminée le ${dateCourte(ph.termineeLe)}` : ph.fin ? `${phaseDepassee(ph, jour) ? "fin dépassée : " : "jusqu'au "}${dateCourte(ph.fin)}` : ph.debut ? `dès le ${dateCourte(ph.debut)}` : ""}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ol>
+                {peutModifier && actif && phaseCourante ? (
+                  <form action={terminerUnePhase.bind(null, p.id, phaseCourante.id, true, "fiche")} style={{ marginTop: 10 }}>
+                    <button type="submit" className="bouton-mini">
+                      <Icone nom="coche" taille={14} /> Terminer « {phaseCourante.nom} »
+                    </button>
+                  </form>
+                ) : null}
+              </section>
+            ) : peutModifier && actif ? (
+              <p className="note" style={{ margin: 0 }}>
+                Pas encore de phases :{" "}
+                <a href={`/projets/${p.id}/modifier#phases`} className="lien-discret">
+                  découper le projet en phases
+                </a>
+                .
+              </p>
+            ) : null}
+
             <section className="carte carte--liste livrables" id="livrables" aria-labelledby="p-livrables" style={{ scrollMarginTop: 80 }}>
               <div className="carte__entete">
                 <h2 id="p-livrables" className="carte__titre">
@@ -636,6 +744,98 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
               ) : null}
             </section>
 
+            <section className="carte carte--liste" id="risques" aria-labelledby="p-risques" style={{ scrollMarginTop: 80 }}>
+              <h2 id="p-risques" className="carte__titre">
+                Risques · {risquesOuverts.length} ouvert{risquesOuverts.length > 1 ? "s" : ""}
+              </h2>
+              {risqueFait ? (
+                <p className="succes" role="status" style={{ margin: "8px 0" }}>
+                  {risqueFait}
+                </p>
+              ) : null}
+              {risques.length ? (
+                <div className="risques__tete">
+                  <div className="matrice-risques" role="img" aria-label={`Risques ouverts par probabilité et impact : ${risquesOuverts.map((r) => `${r.titre}, probabilité ${LIBELLE_PROBABILITE[r.probabilite as Niveau].toLowerCase()}, impact ${LIBELLE_IMPACT[r.impact as Niveau].toLowerCase()}`).join(" ; ") || "aucun"}`}>
+                    {([3, 2, 1] as Niveau[]).map((pr) =>
+                      ([1, 2, 3] as Niveau[]).map((im) => {
+                        const n = risquesOuverts.filter((r) => r.probabilite === pr && r.impact === im).length;
+                        return (
+                          <span key={`${pr}-${im}`} className={`matrice-risques__case matrice-risques__case--${gravite(pr, im)}${n ? " matrice-risques__case--pleine" : ""}`}>
+                            {n || ""}
+                          </span>
+                        );
+                      }),
+                    )}
+                    <span className="matrice-risques__axe matrice-risques__axe--y" aria-hidden="true">
+                      Probabilité
+                    </span>
+                    <span className="matrice-risques__axe matrice-risques__axe--x" aria-hidden="true">
+                      Impact
+                    </span>
+                  </div>
+                  <p className="note" style={{ margin: 0 }}>
+                    Probabilité × impact : critique à partir de 6 (rouge). Un risque critique ouvert met le projet à surveiller.
+                  </p>
+                </div>
+              ) : (
+                <p className="note" style={{ margin: "4px 0 8px" }}>Ce qui pourrait empêcher le projet d&apos;aboutir, à quel point c&apos;est probable et grave, qui le suit et ce qui est prévu.</p>
+              )}
+              <ol className="decisions">
+                {risques.map((r) => {
+                  const g = gravite(r.probabilite, r.impact);
+                  return (
+                    <li key={r.id} id={`risque-${r.id}`} className={`decision risque risque--${r.statut}`} style={{ scrollMarginTop: 80 }}>
+                      <span className={`risque__note risque__note--${g}`} title={`Criticité ${criticite(r.probabilite, r.impact)} sur 9`}>
+                        {LIBELLE_GRAVITE[g]} · {criticite(r.probabilite, r.impact)}
+                      </span>
+                      <div className="decision__corps">
+                        <p className="decision__texte">{r.titre}</p>
+                        <p className="decision__sous">
+                          Probabilité {LIBELLE_PROBABILITE[r.probabilite as Niveau].toLowerCase()} · impact {LIBELLE_IMPACT[r.impact as Niveau].toLowerCase()}
+                          {r.responsable ? ` · suivi par ${r.responsable}` : ""}
+                          {r.revueLe ? ` · revue le ${dateCourte(r.revueLe)}` : ""}
+                          {r.statut !== "ouvert" ? ` · ${LIBELLE_STATUT_RISQUE[r.statut as StatutRisque].toLowerCase()}` : ""}
+                        </p>
+                        {r.reponse ? <p className="decision__contexte">Réponse : {r.reponse}</p> : null}
+                        {actif && noteDecisions ? (
+                          <div className="livrable__actions" style={{ marginLeft: 0 }}>
+                            {(["ouvert", "maitrise", "clos"] as StatutRisque[])
+                              .filter((st) => st !== r.statut)
+                              .map((st) => (
+                                <form key={st} action={statutDuRisque.bind(null, p.id, r.id, st)}>
+                                  <button type="submit" className="bouton-mini">
+                                    {st === "ouvert" ? "Rouvrir" : st === "maitrise" ? "Maîtrisé" : "Clore"}
+                                  </button>
+                                </form>
+                              ))}
+                            <details className="decision__corriger" style={{ marginTop: 0 }}>
+                              <summary className="bouton-mini">Modifier</summary>
+                              {formulaireRisque(r)}
+                              {peutModifierDecision(u.id, peutModifier, r.auteurId) ? (
+                                <form action={retirerUnRisque.bind(null, p.id, r.id)} style={{ marginTop: 8 }}>
+                                  <button type="submit" className="bouton-mini" style={{ color: "var(--retard)", borderColor: "var(--retard-point)" }}>
+                                    Retirer du registre
+                                  </button>
+                                </form>
+                              ) : null}
+                            </details>
+                          </div>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+              {noteDecisions ? (
+                <details className="decision__nouvelle" open={risques.length === 0 ? true : undefined}>
+                  <summary className="bouton-mini">
+                    <Icone nom="ajouter" taille={14} /> Ajouter un risque
+                  </summary>
+                  {formulaireRisque(null)}
+                </details>
+              ) : null}
+            </section>
+
             {pointsAv.some((x) => !x.avant) ? (
               <section className="carte" aria-labelledby="p-avancement" id="avancement" style={{ scrollMarginTop: 80 }}>
                 <h2 id="p-avancement" className="carte__titre" style={{ marginBottom: 4 }}>
@@ -686,6 +886,12 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 <span>{f.compte.a_faire} à faire</span>
                 <span className="ton-veille">{f.compte.bloquee} bloquée{f.compte.bloquee > 1 ? "s" : ""}</span>
               </div>
+              {temps.minutes ? (
+                <p className="note" style={{ margin: "-4px 0 12px" }}>
+                  Temps passé noté : <strong>{dureeTexte(temps.minutes)}</strong>
+                  {temps.heuresEstimees ? ` pour ${temps.heuresEstimees} h estimées sur l'ensemble des tâches` : ""} ({temps.tachesAvecTemps} tâche{temps.tachesAvecTemps > 1 ? "s" : ""} avec du temps noté).
+                </p>
+              ) : null}
               <ul className="liste">
                 {f.urgentes.map((t) => {
                   const e = echeanceRelative(t.echeance, jour);

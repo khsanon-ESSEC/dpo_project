@@ -11,6 +11,7 @@
  *  - des tâches ouvertes d'un livrable sont prévues après la date de ce livrable ;
  *  - une tâche a plus de JOURS_TACHE_EN_RETARD jours de retard, ou une tâche est bloquée depuis plus de JOURS_BLOCAGE jours ;
  *  - au rythme des SEMAINES_RYTHME dernières semaines, les tâches ouvertes ne seront pas finies avant la fin prévue ;
+ *  - un risque critique est ouvert au registre des risques, ou une phase a dépassé sa fin prévue sans être terminée ;
  *  - le chef de projet a signalé un risque (il ne peut qu'aggraver : jamais rendre un projet meilleur que le calcul),
  *    valable JOURS_SIGNAL jours.
  * Dans les temps, sinon. Le motif dit pourquoi, en clair. Règles pures, testées dans tests/sante.test.ts.
@@ -41,6 +42,10 @@ export type DonneesSante = {
   reports: { le: string; avant: string | null; apres: string | null }[];
   /** Risque signalé par le chef de projet. */
   risque: { motif: string; le: string; par: string | null } | null;
+  /** Risques critiques (probabilité × impact ≥ 6) encore ouverts au registre. */
+  risquesCritiques?: number;
+  /** Phases dont la fin prévue est passée sans qu'elles soient terminées. */
+  phasesDepassees?: { nom: string; fin: string }[];
 };
 
 const pluriel = (n: number, mot: string, motPluriel = `${mot}s`) => `${n} ${n > 1 ? motPluriel : mot}`;
@@ -103,6 +108,10 @@ export function calculerSante(d: DonneesSante, jour: string): { sante: Sante; ra
       if (besoin > restantes) surveiller.push(`Au rythme actuel : ${besoin} semaines de travail pour ${pluriel(restantes, "semaine")} restante${restantes > 1 ? "s" : ""}`);
     }
   }
+
+  // Registre des risques : un risque critique ouvert. Phases : une phase qui n'en finit pas.
+  if (d.risquesCritiques) surveiller.push(`${pluriel(d.risquesCritiques, "risque critique ouvert", "risques critiques ouverts")} au registre`);
+  for (const ph of d.phasesDepassees ?? []) surveiller.push(`Phase « ${ph.nom} » pas terminée (fin prévue le ${dateCourte(ph.fin)})`);
 
   // Risque signalé par le chef de projet : il aggrave, il n'améliore jamais.
   if (signalActif(d.risque, jour)) surveiller.push(`Risque signalé${d.risque!.par ? ` par ${d.risque!.par}` : ""} : ${d.risque!.motif}`);

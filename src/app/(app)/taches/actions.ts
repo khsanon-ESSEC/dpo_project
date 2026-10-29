@@ -7,6 +7,8 @@ import { db, schema } from "@/db";
 import { acces, exigerTacheVisible, idsProjetsVisibles, peutModifierTache } from "@/lib/acces";
 import { annulerTache, creerTacheGeree, modifierDefinitionTache, retablirTache, supprimerTache } from "@/lib/donnees/gestion";
 import { ajouterDependance, prevenirSuivantes, retirerDependance } from "@/lib/donnees/dependances";
+import { noterTemps, retirerTemps } from "@/lib/donnees/temps";
+import { lireDuree } from "@/lib/risques";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
 import { enregistrerAnnulation } from "@/lib/donnees/annulations";
@@ -324,4 +326,25 @@ export async function retirerPrecedente(tacheId: string, precedenteId: string) {
   await retirerDependance(a, t, precedenteId);
   revalidatePath("/", "layout");
   redirect(`/taches/${t.id}#enchainement`);
+}
+
+/** Temps passé sur la tâche (décision du 28 octobre 2026) : une durée et un jour, une note facultative. */
+export async function noterTempsPasse(tacheId: string, form: FormData) {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const t = await exigerTacheVisible(a, tacheId);
+  const r = await noterTemps(a, t, { jour: lireDate(form.get("jour")), minutes: lireDuree(String(form.get("duree") ?? "")), note: String(form.get("note") ?? "") });
+  revalidatePath("/", "layout");
+  if ("erreur" in r) redirect(`/taches/${t.id}?erreur=${encodeURIComponent(r.erreur)}#temps`);
+  redirect(`/taches/${t.id}?temps=note#temps`);
+}
+
+export async function retirerTempsPasse(tacheId: string, entreeId: string) {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const t = await exigerTacheVisible(a, tacheId);
+  const r = await retirerTemps(a, t, entreeId);
+  revalidatePath("/", "layout");
+  if ("erreur" in r) redirect(`/taches/${t.id}?erreur=${encodeURIComponent(r.erreur)}#temps`);
+  redirect(`/taches/${t.id}?temps=retire#temps`);
 }

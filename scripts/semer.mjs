@@ -338,6 +338,56 @@ await sql.begin(async (tx) => {
   await decision("PR", "dj", -6, "La plateforme sera une solution existante adaptée, pas un développement sur mesure", "Comité de pilotage", "Coût et délai");
   await decision("UC", "ml", -10, "Le module de paie passe avant les virements de masse", "Chef de projet", "Demande des clients entreprises");
 
+  // ---------- Phases (décision du 28 octobre 2026) ----------
+  // UR, CR et UC suivent les phases types ; Uninet a ses propres phases, dont une qui dépasse sa fin prévue.
+  const phases = async (pj, liste) => {
+    let ordre = 0;
+    for (const [nom, debut, fin, terminee] of liste) {
+      await tx`insert into phases_projet (projet_id, ordre, nom, debut, fin, terminee_le) values (${PJ[pj]}, ${ordre++}, ${nom}, ${debut === null ? null : jour(debut)}, ${fin === null ? null : jour(fin)}, ${terminee === undefined || terminee === null ? null : jour(terminee)})`;
+    }
+  };
+  await phases("UR", [["Cadrage", -850, -760, -760], ["Conception", -759, -600, -600], ["Réalisation", -599, -60, -55], ["Validation métier", -54, 14], ["Déploiement", 15, 31], ["Clôture", 32, 45]]);
+  await phases("CR", [["Cadrage", -500, -440, -440], ["Conception", -439, -300, -300], ["Réalisation", -299, -30, -28], ["Validation métier", -27, 25], ["Déploiement", 26, 35], ["Clôture", 36, 39]]);
+  await phases("UC", [["Cadrage", -680, -600, -600], ["Conception", -599, -9, -9], ["Réalisation", -8, 38], ["Validation métier", 39, 53], ["Déploiement", 54, 124], ["Clôture", 125, 132]]);
+  await phases("UN", [["Refonte graphique et base de données", -600, -120, -118], ["Intégration avec TMS", -117, -5], ["Migration des données", 10, 50], ["Statistiques et mise en service", 51, 80]]);
+  // Les livrables rattachés à leur phase (ceux dont le nom l'évoque).
+  const livrablePhase = async (pj, libelle, phase) =>
+    tx`update indicateurs set phase_id = (select id from phases_projet where projet_id = ${PJ[pj]} and nom = ${phase}) where projet_id = ${PJ[pj]} and libelle = ${libelle}`;
+  await livrablePhase("UR", "Audit de sécurité effectué et passé", "Validation métier");
+  await livrablePhase("UR", "Application développée", "Réalisation");
+  await livrablePhase("UR", "Application mise en ligne", "Déploiement");
+  await livrablePhase("CR", "Validation métier réalisée", "Validation métier");
+  await livrablePhase("CR", "Mise en production", "Déploiement");
+  await livrablePhase("UC", "Maquettes graphiques validées", "Conception");
+  await livrablePhase("UC", "Développement terminé", "Réalisation");
+  await livrablePhase("UN", "Intégration avec TMS", "Intégration avec TMS");
+
+  // ---------- Registre des risques ----------
+  const risque = async (pj, qui, suivi, j, titre, probabilite, impact, reponse, statut = "ouvert", revue = null) =>
+    tx`insert into risques_projet (projet_id, titre, probabilite, impact, responsable_id, reponse, statut, revue_le, auteur_id, cree_le, maj_le)
+      values (${PJ[pj]}, ${titre}, ${probabilite}, ${impact}, ${suivi ? P[suivi] : null}, ${reponse}, ${statut}, ${revue === null ? null : jour(revue)}, ${P[qui]}, ${moment(j, 11)}, ${moment(j, 11)})`;
+  await risque("UR", "mv", "dj", -12, "Les correctifs de l'audit ne sont pas prêts pour la deuxième vague", 3, 3, "Contre-audit par un cabinet externe ; mise en ligne en deux vagues", "ouvert", 7);
+  await risque("UR", "mv", "re", -9, "Le serveur ne tient pas la charge quand tous les clients passent à la nouvelle version", 1, 3, "Tests de charge sur 5 000 comptes avant la deuxième vague", "ouvert", 14);
+  await risque("UR", "mv", "mv", -30, "Le prestataire n'est pas disponible pendant les fêtes", 2, 2, "Astreinte prévue au contrat jusqu'au 15 janvier", "maitrise");
+  await risque("CE", "wb", "sc", -6, "Le Réseau n'a pas le temps de former tous les agents avant le lancement", 3, 2, "Sessions courtes en agence, un référent par succursale", "ouvert", 4);
+  await risque("CR", "wb", "wb", -10, "Les agences pilotes ne libèrent pas leurs agents pour la validation métier", 2, 2, "Calendrier convenu avec les directeurs d'agence", "ouvert", 9);
+  await risque("UC", "ml", "jn", -7, "Retard du prestataire sur les virements de masse", 2, 2, "Point hebdomadaire ; le module de paie passe en premier", "ouvert", 8);
+  await risque("UC", "ml", "ml", -20, "Départ d'un développeur clé du prestataire", 1, 2, "Documentation exigée à chaque livraison");
+  await risque("UN", "lp", "lp", -15, "La DTI tarde à ouvrir l'accès de test au TMS", 2, 3, "Relance chaque semaine ; escalade à la direction de la DTI");
+
+  // ---------- Temps passé noté sur quelques tâches ----------
+  const temps = async (pj, titre, entrees) => {
+    const [t] = await tx`select id, assigne_id from taches where projet_id = ${PJ[pj]} and titre = ${titre}`;
+    if (!t) throw new Error(`Tâche introuvable pour le temps : ${pj} · ${titre}`);
+    for (const [j, minutes, note = ""] of entrees)
+      await tx`insert into temps_passe (tache_id, personne_id, jour, minutes, note, note_par_id, cree_le) values (${t.id}, ${t.assigne_id}, ${jour(j)}, ${minutes}, ${note}, ${t.assigne_id}, ${moment(j, 17)})`;
+  };
+  await temps("UR", "Préparation de l'audit de sécurité", [[-14, 180, "Liste des contrôles"], [-12, 240], [-10, 300, "Réunion avec la DTI"], [-8, 360, "Dossier remis à l'auditeur"]]);
+  await temps("UR", "Module de virements", [[-25, 420], [-22, 480], [-19, 480], [-15, 450, "Virements programmés"], [-12, 480], [-8, 420], [-6, 360, "Corrections après revue"]]);
+  await temps("UR", "Tests du module de virements", [[-4, 240, "Scénarios de test"], [-3, 300]]);
+  await temps("UC", "Maquettes graphiques des écrans de paie", [[-21, 360], [-17, 480, "Écrans de paie"], [-14, 420], [-11, 300, "Retouches après revue"]]);
+  await temps("CR", "Jeux de données de test", [[-3, 210, "Dossiers de crédit anonymisés"], [-2, 120]]);
+
   // ---------- Tâches terminées des semaines passées (pour le bilan semaine sur semaine) ----------
   // Tirage déterministe : mêmes données à chaque semis.
   let graine = 7;

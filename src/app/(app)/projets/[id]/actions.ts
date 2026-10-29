@@ -9,6 +9,7 @@ import { acces, exigerProjetVisible } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { agirSurLivrable, livrableEtProjet, type ActionLivrable } from "@/lib/donnees/livrables";
 import { modifierDecision, noterDecision, retirerDecision } from "@/lib/donnees/decisions";
+import { ajouterPhase, changerStatutRisque, deplacerPhase, enregistrerRisque, modifierPhase, retirerPhase, retirerRisque, terminerPhase, utiliserPhasesTypes } from "@/lib/donnees/risques";
 import { noterReportFin } from "@/lib/donnees/reports-fin";
 import { recalculerSante, signalerRisque } from "@/lib/donnees/sante";
 import { noter } from "@/lib/journal";
@@ -141,4 +142,73 @@ export async function corrigerDecision(projetId: string, decisionId: string, for
 export async function retirerUneDecision(projetId: string, decisionId: string) {
   const a = await exigerVisible(projetId);
   apresDecision(projetId, await retirerDecision(a, projetId, decisionId), "retiree");
+}
+
+// ---------- Registre des risques ----------
+
+const donneesRisque = (form: FormData) => ({
+  titre: String(form.get("titre") ?? ""),
+  description: String(form.get("description") ?? ""),
+  probabilite: String(form.get("probabilite") ?? "2"),
+  impact: String(form.get("impact") ?? "2"),
+  responsableId: /^[0-9a-f-]{36}$/.test(String(form.get("responsableId") ?? "")) ? String(form.get("responsableId")) : null,
+  reponse: String(form.get("reponse") ?? ""),
+  revueLe: String(form.get("revueLe") ?? "") || null,
+});
+
+const apresRisque = (projetId: string, r: { erreur: string } | { ok: true }, fait: string, ancre = "risques"): never => {
+  revalidatePath(`/projets/${projetId}`, "layout");
+  if ("erreur" in r) redirect(`/projets/${projetId}?erreur=${encodeURIComponent(r.erreur)}#${ancre}`);
+  redirect(`/projets/${projetId}?risque=${fait}#${ancre}`);
+};
+
+export async function enregistrerUnRisque(projetId: string, risqueId: string | null, form: FormData) {
+  const a = await exigerVisible(projetId);
+  const r = await enregistrerRisque(a, projetId, risqueId, donneesRisque(form));
+  apresRisque(projetId, r, risqueId ? "modifie" : "note", "id" in r ? `risque-${r.id}` : "risques");
+}
+
+export async function statutDuRisque(projetId: string, risqueId: string, statut: string) {
+  const a = await exigerVisible(projetId);
+  apresRisque(projetId, await changerStatutRisque(a, projetId, risqueId, statut), statut, `risque-${risqueId}`);
+}
+
+export async function retirerUnRisque(projetId: string, risqueId: string) {
+  const a = await exigerVisible(projetId);
+  apresRisque(projetId, await retirerRisque(a, projetId, risqueId), "retire");
+}
+
+// ---------- Phases ----------
+
+const apresPhase = (projetId: string, r: { erreur: string } | { ok: true }, depuis: "fiche" | "modifier"): never => {
+  revalidatePath(`/projets/${projetId}`, "layout");
+  const base = depuis === "fiche" ? `/projets/${projetId}` : `/projets/${projetId}/modifier`;
+  if ("erreur" in r) redirect(`${base}?erreur=${encodeURIComponent(r.erreur)}#phases`);
+  redirect(`${base}#phases`);
+};
+const donneesPhase = (form: FormData) => ({ nom: String(form.get("nom") ?? ""), debut: String(form.get("debut") ?? "") || null, fin: String(form.get("fin") ?? "") || null });
+
+export async function ajouterUnePhase(projetId: string, form: FormData) {
+  const a = await exigerVisible(projetId);
+  apresPhase(projetId, await ajouterPhase(a, projetId, donneesPhase(form)), "modifier");
+}
+export async function phasesTypes(projetId: string) {
+  const a = await exigerVisible(projetId);
+  apresPhase(projetId, await utiliserPhasesTypes(a, projetId), "modifier");
+}
+export async function modifierUnePhase(projetId: string, phaseId: string, form: FormData) {
+  const a = await exigerVisible(projetId);
+  apresPhase(projetId, await modifierPhase(a, projetId, phaseId, donneesPhase(form)), "modifier");
+}
+export async function terminerUnePhase(projetId: string, phaseId: string, terminee: boolean, depuis: "fiche" | "modifier") {
+  const a = await exigerVisible(projetId);
+  apresPhase(projetId, await terminerPhase(a, projetId, phaseId, terminee), depuis);
+}
+export async function retirerUnePhase(projetId: string, phaseId: string) {
+  const a = await exigerVisible(projetId);
+  apresPhase(projetId, await retirerPhase(a, projetId, phaseId), "modifier");
+}
+export async function deplacerUnePhase(projetId: string, phaseId: string, sens: -1 | 1) {
+  const a = await exigerVisible(projetId);
+  apresPhase(projetId, await deplacerPhase(a, projetId, phaseId, sens), "modifier");
 }

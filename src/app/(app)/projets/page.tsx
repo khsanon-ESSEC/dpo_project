@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { phasesDe } from "@/lib/donnees/risques";
+import { phaseDepassee, phaseEnCours } from "@/lib/risques";
 import { recalculerSante } from "@/lib/donnees/sante";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
@@ -29,6 +31,13 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
   await recalculerSante();
   const [tous, nArchives, demandes] = await Promise.all([portefeuille(a, { archives }), archives ? Promise.resolve(null) : portefeuille(a, { archives: true }).then((l) => l.length), demandesDeProjet(a, await idsProjetsVisibles(a))]);
   const projets = tous.filter((p) => filtre === "tous" || archives || (filtre === "strat" && p.strategique) || (filtre === "glisse" && p.glissementSemaines > 0) || (filtre === "retard" && p.sante === "en_retard") || (filtre === "surveiller" && p.sante === "a_surveiller"));
+  // Phase en cours de chaque projet (quand il est découpé en phases).
+  const phasesParProjet = await phasesDe(projets.map((p) => p.id));
+  const jourPhase = aujourdhui();
+  const phaseDe = (id: string) => {
+    const l = phasesParProjet.get(id);
+    return l?.length ? phaseEnCours(l, jourPhase) : null;
+  };
   const decideur = peutDecider(a);
   const enAttente = demandes.filter((d) => d.statut === "requete");
   const miennes = demandes.filter((d) => d.demandeurId === u.id);
@@ -180,8 +189,9 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
                   {/* Le titre garde toute la largeur ; les étiquettes passent dessous (un titre long ne passe plus sous elles). */}
                   <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
                     <span style={{ fontSize: 16, lineHeight: "22px", fontWeight: 500, overflowWrap: "anywhere" }}>{p.titre}</span>
-                    {p.strategique || p.division ? (
+                    {p.strategique || p.division || phaseDe(p.id) ? (
                       <span style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                        {phaseDe(p.id) ? <span className={`etiquette-phase${phaseDepassee(phaseDe(p.id)!, jourPhase) ? " etiquette-phase--depassee" : ""}`} title={phaseDepassee(phaseDe(p.id)!, jourPhase) ? "Phase en cours, fin prévue dépassée" : "Phase en cours"}>{phaseDe(p.id)!.nom}</span> : null}
                         {p.strategique ? <span className="etiquette-strategique">Stratégique</span> : null}
                         {p.division ? (
                           <span className="etiquette-hors" title={`Projet de la ${p.division}`}>

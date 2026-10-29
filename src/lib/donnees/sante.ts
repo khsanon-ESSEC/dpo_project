@@ -11,6 +11,7 @@ import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet } from "@/lib/regles";
 import { calculerSante, type DonneesSante } from "@/lib/sante";
 import { apresLeLivrable } from "@/lib/projets";
+import { criticite, phaseDepassee } from "@/lib/risques";
 
 export async function recalculerSante(projetIds?: string[]): Promise<number> {
   if (projetIds && !projetIds.length) return 0;
@@ -21,7 +22,7 @@ export async function recalculerSante(projetIds?: string[]): Promise<number> {
     .where(and(projetIds ? inArray(schema.projets.id, projetIds) : undefined, notInArray(schema.projets.statut, ["requete", "refuse"]), isNull(schema.projets.archiveLe)));
   if (!projets.length) return 0;
   const ids = projets.map((p) => p.id);
-  const [jalons, taches, reports, org] = await Promise.all([
+  const [jalons, taches, reports, org, risques, phases] = await Promise.all([
     db.select({ id: schema.indicateurs.id, projetId: schema.indicateurs.projetId, prevuLe: schema.indicateurs.prevuLe, etat: schema.indicateurs.etat }).from(schema.indicateurs).where(inArray(schema.indicateurs.projetId, ids)),
     db
       .select({ id: schema.taches.id, projetId: schema.taches.projetId, statut: schema.taches.statut, echeance: schema.taches.echeance, creeLe: schema.taches.creeLe, termineeLe: schema.taches.termineeLe, majLe: schema.taches.majLe, livrableId: schema.taches.livrableId })
@@ -29,6 +30,11 @@ export async function recalculerSante(projetIds?: string[]): Promise<number> {
       .where(and(inArray(schema.taches.projetId, ids), isNull(schema.taches.annuleeLe))),
     db.select({ projetId: schema.reportsFinProjet.projetId, avant: schema.reportsFinProjet.avant, apres: schema.reportsFinProjet.apres, creeLe: schema.reportsFinProjet.creeLe }).from(schema.reportsFinProjet).where(inArray(schema.reportsFinProjet.projetId, ids)),
     chargerOrganisation(),
+    db
+      .select({ projetId: schema.risquesProjet.projetId, probabilite: schema.risquesProjet.probabilite, impact: schema.risquesProjet.impact })
+      .from(schema.risquesProjet)
+      .where(and(inArray(schema.risquesProjet.projetId, ids), eq(schema.risquesProjet.statut, "ouvert"))),
+    db.select().from(schema.phasesProjet).where(inArray(schema.phasesProjet.projetId, ids)),
   ]);
   // Depuis quand une tâche est bloquée : le dernier passage à « bloquée » (à défaut, sa dernière mise à jour).
   const bloquees = taches.filter((t) => t.statut === "bloquee");
@@ -69,6 +75,11 @@ export async function recalculerSante(projetIds?: string[]): Promise<number> {
         })),
       reports: reports.filter((r) => r.projetId === p.id).map((r) => ({ le: dateLocale(r.creeLe), avant: r.avant, apres: r.apres })),
       risque: p.risqueMotif && p.risqueLe ? { motif: p.risqueMotif, le: dateLocale(p.risqueLe), par: par ? nomComplet(par) : null } : null,
+      risquesCritiques: risques.filter((r) => r.projetId === p.id && criticite(r.probabilite, r.impact) >= 6).length,
+      phasesDepassees: phases
+        .filter((ph) => ph.projetId === p.id && phaseDepassee(ph, jour))
+        .sort((x, y) => x.ordre - y.ordre)
+        .map((ph) => ({ nom: ph.nom, fin: ph.fin! })),
     };
     const { sante, raisons } = calculerSante(d, jour);
     const motif = raisons.join(" · ").slice(0, 500);

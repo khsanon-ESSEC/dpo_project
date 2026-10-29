@@ -5,6 +5,8 @@ import { Gantt, LIBELLE_ZOOM, type BarreGantt, type LigneGantt, type Zoom } from
 import { chargerVueProjet, cheminVue, EnTeteVue, LIBELLE_STATUT } from "../commun";
 import { livrablesDuProjet } from "@/lib/donnees/livrables";
 import { attentesDuProjet } from "@/lib/donnees/dependances";
+import { phasesDuProjet } from "@/lib/donnees/risques";
+import { phaseDepassee, phaseEnCours } from "@/lib/risques";
 
 export const metadata: Metadata = { title: "Gantt du projet" };
 
@@ -15,7 +17,17 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
   const ctx = await chargerVueProjet(id);
   const { projet, taches } = ctx;
   const jour = aujourdhui();
-  const [{ livrables }, attentes] = await Promise.all([livrablesDuProjet(id, jour), attentesDuProjet(id)]);
+  const [{ livrables }, attentes, phases] = await Promise.all([livrablesDuProjet(id, jour), attentesDuProjet(id), phasesDuProjet(id)]);
+  // Phases datées : du début saisi (ou du lendemain de la phase précédente) à la fin prévue (ou au jour où elle a été terminée).
+  const courante = phaseEnCours(phases, jour);
+  const phasesDatees: { id: string; nom: string; debut: string; fin: string; etat: "terminee" | "depassee" | "en-cours" | "a-venir" }[] = [];
+  for (const ph of phases) {
+    const precedente = phasesDatees[phasesDatees.length - 1];
+    const fin = ph.fin ?? ph.termineeLe ?? null;
+    const deb = ph.debut ?? (precedente ? ajouterJours(precedente.fin, 1) : null);
+    if (!deb || !fin || deb > fin) continue;
+    phasesDatees.push({ id: ph.id, nom: ph.nom, debut: deb, fin, etat: ph.termineeLe ? "terminee" : phaseDepassee(ph, jour) ? "depassee" : ph.id === courante?.id ? "en-cours" : "a-venir" });
+  }
   // Par livrable quand le projet en a (le plan du projet), sinon par personne.
   const parLivrable = livrables.length > 0 && par !== "personne";
   const lienVue = (zz: Zoom, pp: "livrable" | "personne") => {
@@ -36,7 +48,7 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
   const datees = periodes.filter((p) => p.debut && p.fin) as { t: (typeof taches)[number]; debut: string; fin: string }[];
 
   // Fenêtre affichée : les tâches et aujourd'hui ; en zoom « mois », toute la vie du projet (au plus deux ans).
-  const dates = [jour, ...datees.flatMap((p) => [p.debut, p.fin]), ...(parLivrable ? livrables.filter((l) => l.prevuLe).map((l) => l.prevuLe!) : [])];
+  const dates = [jour, ...datees.flatMap((p) => [p.debut, p.fin]), ...(parLivrable ? livrables.filter((l) => l.prevuLe).map((l) => l.prevuLe!) : []), ...(zoom === "mois" ? phasesDatees.flatMap((ph) => [ph.debut, ph.fin]) : phasesDatees.filter((ph) => ph.etat !== "terminee").map((ph) => ph.fin))];
   if (zoom === "mois") {
     if (projet.dateEntree && ecartJours(projet.dateEntree, jour) < 730) dates.push(projet.dateEntree);
     if (projet.dateFinPrevue) dates.push(projet.dateFinPrevue);
@@ -68,6 +80,24 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
       ],
     },
   ];
+
+  if (phasesDatees.length) {
+    const LIB = { terminee: "terminée", depassee: "fin dépassée", "en-cours": "en cours", "a-venir": "à venir" } as const;
+    lignes.push({
+      id: "phases",
+      libelle: "Phases",
+      sous: courante ? `${courante.nom} en cours` : "toutes terminées",
+      lien: `/projets/${id}#phases`,
+      // Plages ramenées à la fenêtre affichée, pour que le nom de la phase reste lisible.
+      barres: phasesDatees.filter((ph) => ph.fin >= debut && ph.debut <= fin).map((ph) => ({
+        debut: ph.debut < debut ? debut : ph.debut,
+        fin: ph.fin > fin ? fin : ph.fin,
+        classe: `gantt__barre--phase gantt__barre--phase-${ph.etat}`,
+        texte: ph.nom,
+        titre: `Phase « ${ph.nom} » : du ${dateCourte(ph.debut)} au ${dateCourte(ph.fin)} — ${LIB[ph.etat]}`,
+      })),
+    });
+  }
 
   const ligneTache = (p: (typeof datees)[number], avecPersonne: boolean, prevuLivrable: string | null = null): LigneGantt => {
     const t = p.t;

@@ -137,6 +137,7 @@ const donneesLivrable = (form: FormData) => ({
   prevuLe: String(form.get("prevuLe") ?? "") || null,
   responsableId: UUID.test(String(form.get("responsableId") ?? "")) ? String(form.get("responsableId")) : null,
   critere: String(form.get("critere") ?? ""),
+  phaseId: form.has("phaseId") ? (UUID.test(String(form.get("phaseId") ?? "")) ? String(form.get("phaseId")) : null) : undefined,
 });
 
 export async function nouveauLivrable(projetId: string, form: FormData) {

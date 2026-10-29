@@ -174,6 +174,8 @@ export const indicateurs = pgTable(
     valideParId: uuid("valide_par_id").references(() => personnes.id, { onDelete: "set null" }),
     /** Remarque de qui gère le projet quand il renvoie le livrable à reprendre. */
     remarque: text().notNull().default(""),
+    /** La phase du projet à laquelle appartient le livrable (facultatif). */
+    phaseId: uuid("phase_id").references((): AnyPgColumn => phasesProjet.id, { onDelete: "set null" }),
   },
   (t) => [index("indicateurs_projet_idx").on(t.projetId), index("indicateurs_responsable_idx").on(t.responsableId)],
 );
@@ -209,6 +211,71 @@ export const taches = pgTable(
     livrableId: uuid("livrable_id").references(() => indicateurs.id, { onDelete: "set null" }),
   },
   (t) => [index("taches_assigne_idx").on(t.assigneId), index("taches_projet_idx").on(t.projetId), index("taches_reunion_idx").on(t.reunionId), index("taches_livrable_idx").on(t.livrableId)],
+);
+
+/**
+ * Registre des risques d'un projet (décision du 28 octobre 2026) : probabilité et impact (1 faible, 2 moyen,
+ * 3 fort), un responsable, la réponse prévue, et un statut (ouvert, maîtrisé, clos). Règles : src/lib/risques.ts.
+ */
+export const risquesProjet = pgTable(
+  "risques_projet",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    projetId: uuid("projet_id").notNull().references(() => projets.id, { onDelete: "cascade" }),
+    titre: text().notNull(),
+    description: text().notNull().default(""),
+    probabilite: integer().notNull().default(2),
+    impact: integer().notNull().default(2),
+    responsableId: uuid("responsable_id").references(() => personnes.id, { onDelete: "set null" }),
+    /** Ce qui est prévu pour l'éviter ou en limiter l'effet. */
+    reponse: text().notNull().default(""),
+    /** « ouvert », « maitrise » (la réponse fonctionne, on surveille) ou « clos ». */
+    statut: text().notNull().default("ouvert"),
+    /** Prochaine revue prévue (facultatif). */
+    revueLe: date("revue_le"),
+    auteurId: uuid("auteur_id").references(() => personnes.id, { onDelete: "set null" }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+    majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("risques_projet_idx").on(t.projetId)],
+);
+
+/**
+ * Phases d'un projet (décision du 28 octobre 2026) : une suite ordonnée (cadrage, conception, réalisation,
+ * validation métier, déploiement, clôture… ou d'autres), avec des dates ; un livrable peut appartenir à une phase.
+ */
+export const phasesProjet = pgTable(
+  "phases_projet",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    projetId: uuid("projet_id").notNull().references(() => projets.id, { onDelete: "cascade" }),
+    ordre: integer().notNull(),
+    nom: text().notNull(),
+    debut: date(),
+    fin: date(),
+    /** Le jour où qui gère le projet l'a déclarée terminée. */
+    termineeLe: date("terminee_le"),
+  },
+  (t) => [index("phases_projet_idx").on(t.projetId, t.ordre)],
+);
+
+/**
+ * Temps réellement passé sur une tâche (décision du 28 octobre 2026), noté par jour : pour comparer à l'estimation.
+ * Compté pour la personne de la tâche ; noté par elle, ou par qui peut modifier la tâche (une tâche confiée hors division).
+ */
+export const tempsPasse = pgTable(
+  "temps_passe",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    tacheId: uuid("tache_id").notNull().references(() => taches.id, { onDelete: "cascade" }),
+    personneId: uuid("personne_id").notNull().references(() => personnes.id, { onDelete: "cascade" }),
+    jour: date().notNull(),
+    minutes: integer().notNull(),
+    note: text().notNull().default(""),
+    noteParId: uuid("note_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("temps_passe_tache_idx").on(t.tacheId), index("temps_passe_personne_idx").on(t.personneId, t.jour)],
 );
 
 /**

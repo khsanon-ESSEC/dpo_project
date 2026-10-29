@@ -252,7 +252,14 @@ export async function supprimerProjet(projetId: string, parId: string): Promise<
 // Livrables (table « indicateurs »)
 // ---------------------------------------------------------------------------
 
-export type DonneesLivrable = { libelle: string; prevuLe: string | null; responsableId: string | null; critere: string };
+export type DonneesLivrable = { libelle: string; prevuLe: string | null; responsableId: string | null; critere: string; phaseId?: string | null };
+
+/** La phase d'un livrable : une phase de ce projet, ou aucune. */
+async function phaseDuProjet(projetId: string, phaseId: string | null | undefined): Promise<string | null> {
+  if (!phaseId) return null;
+  const [ph] = await db.select({ id: schema.phasesProjet.id }).from(schema.phasesProjet).where(and(eq(schema.phasesProjet.id, phaseId), eq(schema.phasesProjet.projetId, projetId)));
+  return ph?.id ?? null;
+}
 
 /** Le responsable d'un livrable : une personne active ; il entre dans l'équipe du projet et il est prévenu. */
 async function responsableValide(responsableId: string | null) {
@@ -278,7 +285,7 @@ export async function ajouterLivrable(projetId: string, d: DonneesLivrable, parI
   const [{ m }] = await db.select({ m: max(schema.indicateurs.ordre) }).from(schema.indicateurs).where(eq(schema.indicateurs.projetId, projetId));
   const [n] = await db
     .insert(schema.indicateurs)
-    .values({ projetId, libelle: l, ordre: (m ?? 0) + 1, prevuLe: date(d.prevuLe), responsableId: r.id, critere: texte(d.critere, 500) })
+    .values({ projetId, libelle: l, ordre: (m ?? 0) + 1, prevuLe: date(d.prevuLe), responsableId: r.id, critere: texte(d.critere, 500), phaseId: await phaseDuProjet(projetId, d.phaseId) })
     .returning({ id: schema.indicateurs.id });
   if (r.id) await prevenirResponsable(projetId, l, r.id, parId);
   await noter(parId, "livrable_ajoute", projetId, { libelle: l, responsable: r.id, prevuLe: date(d.prevuLe) });
@@ -299,7 +306,10 @@ export async function modifierLivrable(projetId: string, livrableId: string, d: 
   const r = await responsableValide(d.responsableId);
   if ("erreur" in r) return { erreur: r.erreur! };
   const prevuLe = date(d.prevuLe);
-  await db.update(schema.indicateurs).set({ libelle: l, prevuLe, responsableId: r.id, critere: texte(d.critere, 500) }).where(eq(schema.indicateurs.id, livrableId));
+  await db
+    .update(schema.indicateurs)
+    .set({ libelle: l, prevuLe, responsableId: r.id, critere: texte(d.critere, 500), ...(d.phaseId !== undefined ? { phaseId: await phaseDuProjet(projetId, d.phaseId) } : {}) })
+    .where(eq(schema.indicateurs.id, livrableId));
   if (r.id && r.id !== avant.responsableId) await prevenirResponsable(projetId, l, r.id, parId);
   await noter(parId, "livrable_modifie", livrableId, { libelle: l !== avant.libelle ? l : undefined, prevuLe: prevuLe !== avant.prevuLe ? prevuLe : undefined, responsable: r.id !== avant.responsableId ? r.id : undefined });
   await recalculerSante([projetId]);

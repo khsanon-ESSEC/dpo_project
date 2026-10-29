@@ -254,6 +254,12 @@ Nouvelles lectures de données, vérifiées à la lecture du code et par des tes
 - **Dépendances** : ajoutées ou retirées seulement par qui peut modifier la tâche (mêmes règles que la tâche), entre deux tâches du même projet que la personne voit ; boucles refusées ; dix précédentes au plus. Les titres proposés sont ceux des tâches du projet, déjà visibles dans sa liste. **[vérifié par tests]**
 - **Alerte « vous pouvez commencer »** : envoyée seulement à la personne de la tâche suivante, quand plus aucune précédente n'est ouverte. **[vérifié par tests]**
 
+## Phases, risques, temps passé (28 octobre 2026, nuit)
+
+- **Registre des risques** : noter, modifier et changer le statut sont réservés à l'équipe du projet et à ceux qui le gèrent, sur un projet en cours que la personne voit ; retirer, à l'auteur et à ceux qui gèrent ; le risque est vérifié comme appartenant au projet de l'adresse. Probabilité, impact et statut inconnus sont ramenés à des valeurs connues ; textes raccourcis (200 et 1 000 caractères), affichés comme texte. **[vérifié par tests]**
+- **Phases** : ajoutées, modifiées, déplacées, terminées ou retirées seulement par ceux qui gèrent le projet ; dates cohérentes exigées (la fin suit le début). **[vérifié par tests]**
+- **Temps passé** : noté seulement par qui peut modifier la tâche (mêmes règles que la tâche), compté pour la personne de la tâche ; pas de date future ni de plus de 60 jours ; durée de 5 minutes à 24 heures ; retiré par son auteur ou qui peut modifier la tâche. **[vérifié par tests]**
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.

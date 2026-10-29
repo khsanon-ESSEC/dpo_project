@@ -45,6 +45,7 @@ export type Livrable = {
   pretLe: string | null;
   responsableId: string | null;
   responsable: string | null;
+  phaseId: string | null;
   validePar: string | null;
   remarque: string;
   taches: TacheDeLivrable[];
@@ -115,6 +116,7 @@ export async function livrablesDe(projetIds: string[], jour = aujourdhui()) {
       pretLe: l.pretLe ? dateLocale(l.pretLe) : null,
       responsableId: l.responsableId,
       responsable: nom(l.responsableId),
+      phaseId: l.phaseId,
       validePar: nom(l.valideParId),
       remarque: l.remarque,
       taches: siennes,

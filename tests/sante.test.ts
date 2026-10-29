@@ -55,4 +55,8 @@ describe("santé calculée d'un projet", () => {
     expect(signalActif({ ...risque, le: "2026-09-20" }, AUJ)).toBe(false);
     expect(calculerSante({ ...base, risque: { ...risque, le: "2026-09-20" } }, AUJ).sante).toBe("dans_les_temps");
   });
+  it("registre des risques et phases : un risque critique ouvert, une phase dépassée", () => {
+    expect(calculerSante({ ...base, risquesCritiques: 1 }, AUJ)).toEqual({ sante: "a_surveiller", raisons: ["1 risque critique ouvert au registre"] });
+    expect(calculerSante({ ...base, phasesDepassees: [{ nom: "Conception", fin: "2026-10-15" }] }, AUJ).raisons).toEqual(["Phase « Conception » pas terminée (fin prévue le 15 oct.)"]);
+  });
 });

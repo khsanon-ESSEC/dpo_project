@@ -21,15 +21,18 @@ import { enchainementDe, precedentesPossibles } from "@/lib/donnees/dependances"
 import { ListeFiltrable } from "@/components/ListeFiltrable";
 import { tousLesProjetsActifs } from "@/lib/donnees/projets";
 import { tacheSupprimable, apresLeLivrable } from "@/lib/projets";
-import { ajouterPrecedente, annuler, retablir, retirerPrecedente, supprimer } from "../actions";
+import { ajouterPrecedente, annuler, noterTempsPasse, retablir, retirerPrecedente, retirerTempsPasse, supprimer } from "../actions";
+import { JOURS_RETRO, tempsDeLaTache } from "@/lib/donnees/temps";
+import { dureeTexte } from "@/lib/projets";
+import { ajouterJours } from "@/lib/dates";
 
 export const metadata: Metadata = { title: "Tâche" };
 
 const LIBELLE: Record<string, string> = { a_faire: "À faire", en_cours: "En cours", bloquee: "Bloquée", faite: "Faite" };
 
-export default async function PageTache({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ statut?: string; retour?: string; erreur?: string }> }) {
+export default async function PageTache({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ statut?: string; retour?: string; erreur?: string; temps?: string }> }) {
   const { id } = await params;
-  const { statut: statutDemande, retour: retourDemande, erreur } = await searchParams;
+  const { statut: statutDemande, retour: retourDemande, erreur, temps: tempsFait } = await searchParams;
   const retour = retourValide(retourDemande);
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
@@ -51,6 +54,8 @@ export default async function PageTache({ params, searchParams }: { params: Prom
   // Enchaînement : les tâches que celle-ci attend, et celles qui l'attendent (même projet).
   const ench = await enchainementDe(t);
   const possibles = !t.annuleeLe && t.projetId && peutModifierTache(a, t) ? await precedentesPossibles(t) : [];
+  // Temps passé : ce qui a été noté, comparé à l'estimation.
+  const temps = await tempsDeLaTache(t.id);
   const actuel = org.personnes.get(t.assigneId)!;
   if (!personnes.some((x) => x.id === t.assigneId)) personnes.push({ id: t.assigneId, nom: nomComplet(actuel), externe: actuel.externe, organisation: actuel.organisation });
   // « @ » ou « pour … » dans la ligne de mise à jour : les personnes à qui l'on peut confier cette tâche
@@ -315,6 +320,79 @@ export default async function PageTache({ params, searchParams }: { params: Prom
                   ))}
                 </ul>
               </>
+            ) : null}
+          </section>
+        ) : null}
+        {!t.annuleeLe && (temps.entrees.length || modifiable) ? (
+          <section className="carte carte--liste" id="temps" aria-labelledby="t-temps" style={{ scrollMarginTop: 80 }}>
+            <h2 id="t-temps" className="carte__titre">
+              Temps passé{temps.minutes ? ` · ${dureeTexte(temps.minutes)}` : ""}
+              {t.estimationHeures ? <span className="carte__titre-sous"> sur {t.estimationHeures} h estimées</span> : null}
+            </h2>
+            {tempsFait === "note" || tempsFait === "retire" ? (
+              <p className="succes" role="status" style={{ margin: "4px 0 8px" }}>
+                {tempsFait === "note" ? "Temps noté." : "Temps retiré."}
+              </p>
+            ) : null}
+            {t.estimationHeures && temps.minutes ? (
+              <div className="temps-jauge" aria-hidden="true">
+                <span className={`temps-jauge__plein${temps.minutes > t.estimationHeures * 60 ? " temps-jauge__plein--depasse" : ""}`} style={{ width: `${Math.min(100, Math.round((temps.minutes / (t.estimationHeures * 60)) * 100))}%` }} />
+              </div>
+            ) : null}
+            {t.estimationHeures && temps.minutes > t.estimationHeures * 60 ? (
+              <p className="livrable__alerte" style={{ marginLeft: 0 }}>
+                Plus que l&apos;estimation : {dureeTexte(temps.minutes - t.estimationHeures * 60)} de plus. Revoir l&apos;estimation aide à mieux prévoir la charge.
+              </p>
+            ) : null}
+            {temps.entrees.length ? (
+              <ul className="liste">
+                {temps.entrees.slice(0, 12).map((x) => (
+                  <li key={x.id} className="rangee rangee--etiree">
+                    <span className="rangee__texte">
+                      <span className="rangee__titre">
+                        {dureeTexte(x.minutes)} · {dateCourte(x.jour)}
+                      </span>
+                      <span className="rangee__sous">
+                        {x.note ? `${x.note} · ` : ""}
+                        {x.notePar && x.notePar !== x.personne ? `noté par ${x.notePar} pour ${x.personne}` : `noté par ${x.notePar ?? "?"}`}
+                      </span>
+                    </span>
+                    {x.noteParId === u.id || modifiable ? (
+                      <form action={retirerTempsPasse.bind(null, t.id, x.id)}>
+                        <button type="submit" className="bouton-icone" style={{ width: 32, height: 32 }} aria-label={`Retirer ${dureeTexte(x.minutes)} du ${dateCourte(x.jour)}`} title="Retirer">
+                          <Icone nom="fermer" taille={16} />
+                        </button>
+                      </form>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="note" style={{ margin: "0 0 4px" }}>
+                Pas encore de temps noté. Noter le temps passé, même approximatif, aide à mieux estimer les prochaines tâches.
+              </p>
+            )}
+            {modifiable ? (
+              <form action={noterTempsPasse.bind(null, t.id)} className="temps-form">
+                <div className="champ">
+                  <label htmlFor="temps-duree">Durée</label>
+                  <input id="temps-duree" name="duree" required inputMode="text" maxLength={12} placeholder="1h30" aria-describedby="temps-aide" style={{ width: 110 }} />
+                </div>
+                <div className="champ">
+                  <label htmlFor="temps-jour">Jour</label>
+                  <input id="temps-jour" name="jour" type="date" defaultValue={aujourdhui()} max={aujourdhui()} min={ajouterJours(aujourdhui(), -JOURS_RETRO)} />
+                </div>
+                <div className="champ" style={{ flex: "1 1 200px", minWidth: 0 }}>
+                  <label htmlFor="temps-note">Note (facultatif)</label>
+                  <input id="temps-note" name="note" maxLength={300} placeholder="Ex. : relecture du cahier des charges" />
+                </div>
+                <button type="submit" className="bouton-contour">
+                  <Icone nom="ajouter" taille={16} /> Noter
+                </button>
+                <span className="aide" id="temps-aide" style={{ flexBasis: "100%" }}>
+                  « 1h30 », « 45 min », « 2 » (heures). Jusqu&apos;à {JOURS_RETRO} jours en arrière.
+                </span>
+              </form>
             ) : null}
           </section>
         ) : null}

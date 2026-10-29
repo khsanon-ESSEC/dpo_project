@@ -7,7 +7,10 @@ import { exigerUtilisateur } from "@/lib/auth/session";
 import { activiteDuProjet, membresDuProjet } from "@/lib/donnees/gestion";
 import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet } from "@/lib/regles";
-import { dateCourte } from "@/lib/dates";
+import { aujourdhui, dateCourte } from "@/lib/dates";
+import { phasesDuProjet } from "@/lib/donnees/risques";
+import { PHASES_TYPES, phaseDepassee, phaseEnCours } from "@/lib/risques";
+import { ajouterUnePhase, deplacerUnePhase, modifierUnePhase, phasesTypes, retirerUnePhase, terminerUnePhase } from "../actions";
 import { LIBELLE_ETAT_LIVRABLE, LIBELLE_STATUT_PROJET, peutGererProjet, projetSupprimable, STATUTS_ACCEPTES } from "@/lib/projets";
 import { ListeFiltrable } from "@/components/ListeFiltrable";
 import { Bandeau } from "@/components/Bandeau";
@@ -27,13 +30,16 @@ export default async function PageModifierProjet({ params, searchParams }: { par
   const a = await acces(u);
   const p = await exigerProjetVisible(a, id);
   if (!peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir, suivis: a.suivis }, p)) notFound();
-  const [indicateurs, activite, org, membres, tachesLiees] = await Promise.all([
+  const [indicateurs, activite, org, membres, tachesLiees, phases] = await Promise.all([
     db.select().from(schema.indicateurs).where(eq(schema.indicateurs.projetId, id)).orderBy(asc(schema.indicateurs.ordre)),
     activiteDuProjet(id),
     chargerOrganisation(),
     membresDuProjet(id),
     db.select({ livrableId: schema.taches.livrableId }).from(schema.taches).where(and(eq(schema.taches.projetId, id), isNull(schema.taches.annuleeLe))),
+    phasesDuProjet(id),
   ]);
+  const jourJ = aujourdhui();
+  const enCours = phaseEnCours(phases, jourJ);
   const nTaches = new Map<string, number>();
   for (const t of tachesLiees) if (t.livrableId) nTaches.set(t.livrableId, (nTaches.get(t.livrableId) ?? 0) + 1);
   const personnes = [...org.personnes.values()]
@@ -172,6 +178,113 @@ export default async function PageModifierProjet({ params, searchParams }: { par
           </div>
         </form>
 
+        <section className="carte carte--liste" id="phases" aria-labelledby="mp-phases" style={{ scrollMarginTop: 80 }}>
+          <h2 id="mp-phases" className="carte__titre">
+            Phases · {phases.length}
+          </h2>
+          <p className="note" style={{ margin: "4px 0 12px" }}>
+            Les grandes étapes du projet, dans l&apos;ordre. La phase en cours paraît sur la fiche et dans le Gantt ; une phase dont la fin prévue est passée sans qu&apos;elle soit terminée met le projet à surveiller.
+          </p>
+          {phases.length === 0 ? (
+            <form action={phasesTypes.bind(null, p.id)} style={{ marginBottom: 12, display: "flex", flexWrap: "wrap", gap: "6px 12px", alignItems: "center" }}>
+              <button type="submit" className="bouton-contour">
+                Utiliser les phases types
+              </button>
+              <span className="aide" style={{ flex: "1 1 220px" }}>
+                {PHASES_TYPES.join(", ")} ; réparties de l&apos;entrée à la fin prévue du projet, à ajuster ensuite.
+              </span>
+            </form>
+          ) : null}
+          <ol className="livrables-gestion">
+            {phases.map((ph, n) => (
+              <li key={ph.id} className="livrables-gestion__ligne">
+                <details className="livrables-gestion__details">
+                  <summary className="livrables-gestion__resume">
+                    <span className="livrables-gestion__ordre" aria-hidden="true">
+                      {ph.ordre}
+                    </span>
+                    <span className="livrables-gestion__texte">
+                      <span className="livrables-gestion__libelle">
+                        {ph.nom}
+                        {ph.id === enCours?.id ? <span className="etiquette-phase">en cours</span> : null}
+                      </span>
+                      <span className="rangee__sous">
+                        {[ph.debut ? `du ${dateCourte(ph.debut)}` : null, ph.fin ? `au ${dateCourte(ph.fin)}` : null, ph.termineeLe ? `terminée le ${dateCourte(ph.termineeLe)}` : phaseDepassee(ph, jourJ) ? "fin dépassée" : null].filter(Boolean).join(" ") || "sans dates"}
+                      </span>
+                    </span>
+                    <span className="livrables-gestion__modifier" aria-hidden="true">
+                      <Icone nom="modifier" taille={14} /> Modifier
+                    </span>
+                  </summary>
+                  <form action={modifierUnePhase.bind(null, p.id, ph.id)} className="livrables-gestion__form">
+                    <div className="champ livrables-gestion__nom">
+                      <label htmlFor={`ph-n-${ph.id}`}>Phase</label>
+                      <input id={`ph-n-${ph.id}`} name="nom" defaultValue={ph.nom} required maxLength={80} />
+                    </div>
+                    <div className="champ">
+                      <label htmlFor={`ph-d-${ph.id}`}>Début</label>
+                      <input id={`ph-d-${ph.id}`} name="debut" type="date" defaultValue={ph.debut ?? ""} />
+                    </div>
+                    <div className="champ">
+                      <label htmlFor={`ph-f-${ph.id}`}>Fin prévue</label>
+                      <input id={`ph-f-${ph.id}`} name="fin" type="date" defaultValue={ph.fin ?? ""} />
+                    </div>
+                    <div className="livrables-gestion__pied" style={{ gap: 8 }}>
+                      <button type="submit" formAction={terminerUnePhase.bind(null, p.id, ph.id, !ph.termineeLe, "modifier")} formNoValidate className="bouton-mini">
+                        {ph.termineeLe ? "Rouvrir la phase" : "Terminer la phase"}
+                      </button>
+                      <button type="submit" className="bouton-contour">
+                        <Icone nom="coche" taille={16} /> Enregistrer
+                      </button>
+                    </div>
+                  </form>
+                </details>
+                <span className="livrables-gestion__outils">
+                  <form action={deplacerUnePhase.bind(null, p.id, ph.id, -1)}>
+                    <button type="submit" className="bouton-icone" style={{ width: 32, height: 32 }} disabled={n === 0} aria-label={`Monter « ${ph.nom} »`} title="Monter">
+                      <Icone nom="chevron-haut" taille={16} />
+                    </button>
+                  </form>
+                  <form action={deplacerUnePhase.bind(null, p.id, ph.id, 1)}>
+                    <button type="submit" className="bouton-icone" style={{ width: 32, height: 32 }} disabled={n === phases.length - 1} aria-label={`Descendre « ${ph.nom} »`} title="Descendre">
+                      <Icone nom="chevron-bas" taille={16} />
+                    </button>
+                  </form>
+                  <form action={retirerUnePhase.bind(null, p.id, ph.id)}>
+                    <button type="submit" className="bouton-icone" style={{ width: 32, height: 32 }} aria-label={`Retirer la phase « ${ph.nom} »`} title="Retirer">
+                      <Icone nom="fermer" taille={16} />
+                    </button>
+                  </form>
+                </span>
+              </li>
+            ))}
+          </ol>
+          <form action={ajouterUnePhase.bind(null, p.id)} className="livrables-gestion__nouveau">
+            <h3 className="sante-barre__titre" style={{ margin: 0 }}>
+              Nouvelle phase
+            </h3>
+            <div className="livrables-gestion__form">
+              <div className="champ livrables-gestion__nom">
+                <label htmlFor="ph-nouvelle">Phase</label>
+                <input id="ph-nouvelle" name="nom" required maxLength={80} placeholder="Ex. : Tests du prestataire, Pilote en agence" />
+              </div>
+              <div className="champ">
+                <label htmlFor="ph-nouvelle-debut">Début</label>
+                <input id="ph-nouvelle-debut" name="debut" type="date" />
+              </div>
+              <div className="champ">
+                <label htmlFor="ph-nouvelle-fin">Fin prévue</label>
+                <input id="ph-nouvelle-fin" name="fin" type="date" />
+              </div>
+              <div className="livrables-gestion__pied">
+                <button type="submit" className="bouton-contour">
+                  <Icone nom="ajouter" taille={16} /> Ajouter la phase
+                </button>
+              </div>
+            </div>
+          </form>
+        </section>
+
         <section className="carte carte--liste" id="livrables" aria-labelledby="mp-livrables" style={{ scrollMarginTop: 80 }}>
           <h2 id="mp-livrables" className="carte__titre">
             Livrables · {indicateurs.length}
@@ -196,11 +309,14 @@ export default async function PageModifierProjet({ params, searchParams }: { par
                       <span className="livrables-gestion__libelle">{i.libelle}</span>
                       <span className="rangee__sous">
                         {[
+                          i.phaseId ? (phases.find((ph) => ph.id === i.phaseId)?.nom ?? null) : null,
                           i.prevuLe ? `prévu le ${dateCourte(i.prevuLe)}` : "sans date",
                           i.responsableId ? (personnes.find((x) => x.id === i.responsableId)?.nom ?? "—") : "sans responsable",
                           LIBELLE_ETAT_LIVRABLE[i.etat].toLowerCase(),
                           nTaches.get(i.id) ? `${nTaches.get(i.id)} tâche${nTaches.get(i.id)! > 1 ? "s" : ""}` : "aucune tâche",
-                        ].join(" · ")}
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </span>
                     </span>
                     <span className="livrables-gestion__modifier" aria-hidden="true">
@@ -220,6 +336,19 @@ export default async function PageModifierProjet({ params, searchParams }: { par
                       <label htmlFor={`lv-r-${i.id}`}>Responsable</label>
                       <ListeFiltrable id={`lv-r-${i.id}`} name="responsableId" defaultValue={i.responsableId ?? ""} vide="Aucun" placeholder="Tapez un nom" options={optionsResponsable} aucun="Personne ne correspond à" />
                     </div>
+                    {phases.length ? (
+                      <div className="champ">
+                        <label htmlFor={`lv-p-${i.id}`}>Phase</label>
+                        <select id={`lv-p-${i.id}`} name="phaseId" defaultValue={i.phaseId ?? ""}>
+                          <option value="">Aucune</option>
+                          {phases.map((ph) => (
+                            <option key={ph.id} value={ph.id}>
+                              {ph.nom}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : null}
                     <div className="champ livrables-gestion__critere">
                       <label htmlFor={`lv-c-${i.id}`}>Validé quand (facultatif)</label>
                       <input id={`lv-c-${i.id}`} name="critere" defaultValue={i.critere} maxLength={500} placeholder="Ex. : rapport d'audit sans point critique" />
@@ -275,6 +404,19 @@ export default async function PageModifierProjet({ params, searchParams }: { par
                 <label htmlFor="mp-nouvel-resp">Responsable</label>
                 <ListeFiltrable id="mp-nouvel-resp" name="responsableId" vide="Aucun" placeholder="Tapez un nom" options={optionsResponsable} aucun="Personne ne correspond à" />
               </div>
+              {phases.length ? (
+                <div className="champ">
+                  <label htmlFor="mp-nouvel-phase">Phase</label>
+                  <select id="mp-nouvel-phase" name="phaseId" defaultValue={enCours?.id ?? ""}>
+                    <option value="">Aucune</option>
+                    {phases.map((ph) => (
+                      <option key={ph.id} value={ph.id}>
+                        {ph.nom}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div className="champ livrables-gestion__critere">
                 <label htmlFor="mp-nouvel-critere">Validé quand (facultatif)</label>
                 <input id="mp-nouvel-critere" name="critere" maxLength={500} placeholder="Ex. : maquettes signées par le métier" />
