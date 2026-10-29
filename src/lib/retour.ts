@@ -10,5 +10,5 @@ export function suiteValide(v: unknown): string | null {
  */
 export function retourValide(v: unknown): string | null {
   const s = String(v ?? "");
-  return /^\/(semaine|a-faire|charge|projets\/[0-9a-f-]{36}(\/(liste|tableau|gantt|calendrier|charge))?|equipe(\/[0-9a-f-]{36})?)(#[a-z0-9-]{1,80})?$/.test(s) ? s : null;
+  return /^\/(semaine|a-faire|charge|projets\/[0-9a-f-]{36}(\/(liste|tableau|gantt|calendrier|charge|livrables\/[0-9a-f-]{36}))?|equipe(\/[0-9a-f-]{36})?)(#[a-z0-9-]{1,80})?$/.test(s) ? s : null;
 }

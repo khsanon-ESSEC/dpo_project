@@ -1,3 +1,4 @@
+import { PastilleStatut } from "@/components/PastilleStatut";
 import type { Metadata } from "next";
 import { aujourdhui, dateCourte, echeanceRelative } from "@/lib/dates";
 import { heuresDe, heuresTexte } from "@/lib/charge";
@@ -152,7 +153,14 @@ export default async function PageListe({ params, searchParams }: { params: Prom
                     return (
                       <tr key={t.id} style={t.statut === "faite" ? { color: "var(--discret)" } : undefined}>
                         <td>
-                          {t.ouvrable ? <a href={`/taches/${t.id}?retour=${retour}`}>{t.titre}</a> : t.titre}
+                          <PastilleStatut statut={t.statut} retard={t.retard} />
+                          {t.ouvrable ? (
+                            <a href={`/taches/${t.id}?retour=${retour}`} className={t.statut === "faite" ? "titre-faite" : undefined}>
+                              {t.titre}
+                            </a>
+                          ) : (
+                            <span className={t.statut === "faite" ? "titre-faite" : undefined}>{t.titre}</span>
+                          )}
                           <EtiquettePriorite priorite={t.priorite} faite={t.statut === "faite"} recurrente={!!t.recurrenceId} />
                         </td>
                         <td style={{ whiteSpace: "nowrap" }}>

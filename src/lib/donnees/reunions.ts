@@ -6,7 +6,7 @@
 import "server-only";
 import { disponibilites } from "@/lib/donnees/disponibilites";
 import type { Disponibilite } from "@/lib/creneaux";
-import { and, asc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, lte } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Acces } from "@/lib/acces";
 import { ajouterJours, dateCourte } from "@/lib/dates";
@@ -15,8 +15,22 @@ import { chargerOrganisation } from "@/lib/organisation";
 import { dureeTexte, dureeValide } from "@/lib/projets";
 import { nomComplet } from "@/lib/regles";
 import type { ReunionsFigees } from "@/lib/modeles";
+import { controlerSerie, joursDeLaSerie, serieTexte } from "@/lib/recurrence-reunion";
 
-export type SaisieReunion = { titre: string; jour: string; heure: string; dureeMinutes: unknown; projetId: string; notes: string; participants: string[] };
+export type SaisieReunion = {
+  titre: string;
+  jour: string;
+  heure: string;
+  dureeMinutes: unknown;
+  projetId: string;
+  notes: string;
+  participants: string[];
+  /** Réunion récurrente (création) : le rythme et la date de la dernière réunion. Vide : une seule fois. */
+  rythme?: string;
+  jusquau?: string;
+  /** Modifier une réunion d'une série : celle-ci seulement (« une ») ou celle-ci et les suivantes. */
+  portee?: string;
+};
 
 const JOUR = /^\d{4}-\d{2}-\d{2}$/;
 const HEURE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -36,9 +50,10 @@ async function detailler(ids: string[]) {
   const org = await chargerOrganisation();
   const [lignes, participants, actions] = await Promise.all([
     db
-      .select({ r: schema.reunions, code: schema.projets.code, projetTitre: schema.projets.titre })
+      .select({ r: schema.reunions, code: schema.projets.code, projetTitre: schema.projets.titre, serieRythme: schema.seriesReunion.rythme, serieJusquau: schema.seriesReunion.jusquau })
       .from(schema.reunions)
       .leftJoin(schema.projets, eq(schema.projets.id, schema.reunions.projetId))
+      .leftJoin(schema.seriesReunion, eq(schema.seriesReunion.id, schema.reunions.serieId))
       .where(inArray(schema.reunions.id, ids))
       .orderBy(asc(schema.reunions.jour), asc(schema.reunions.heure)),
     db.select().from(schema.participantsReunion).where(inArray(schema.participantsReunion.reunionId, ids)),
@@ -49,13 +64,14 @@ async function detailler(ids: string[]) {
       .where(and(inArray(schema.taches.reunionId, ids), isNull(schema.taches.annuleeLe)))
       .orderBy(asc(schema.taches.creeLe)),
   ]);
-  return lignes.map(({ r, code, projetTitre }) => {
+  return lignes.map(({ r, code, projetTitre, serieRythme, serieJusquau }) => {
     const avec = participants.filter((p) => p.reunionId === r.id).map((p) => p.personneId);
     const notee = r.noteeParId ? org.personnes.get(r.noteeParId) : undefined;
     return {
       ...r,
       projetCode: code,
       projetTitre,
+      serie: r.serieId && serieRythme && serieJusquau ? { rythme: serieRythme, jusquau: serieJusquau, texte: serieTexte(serieRythme, dateCourte(serieJusquau)) } : null,
       participants: avec
         .map((id) => org.personnes.get(id))
         .filter((p) => !!p)
@@ -128,15 +144,28 @@ async function verifier(d: SaisieReunion, moiId: string) {
 }
 
 /** Noter une réunion : la personne qui la note y participe ; les autres participants sont prévenus. */
-export async function noterReunion(a: Acces, d: SaisieReunion, projetsPermis: Set<string> | "tous"): Promise<{ id: string; occupes: Disponibilite[] } | { erreur: string }> {
+export async function noterReunion(a: Acces, d: SaisieReunion, projetsPermis: Set<string> | "tous"): Promise<{ id: string; occupes: Disponibilite[]; occurrences: number } | { erreur: string }> {
   const v = await verifier(d, a.moi.id);
   if ("erreur" in v) return { erreur: v.erreur! };
   if (v.projetId && projetsPermis !== "tous" && !projetsPermis.has(v.projetId)) return { erreur: "Projet introuvable." };
-  const [r] = await db
+  // Récurrente : toutes les réunions de la série sont créées d'un coup (un an au plus), chacune avec ses participants.
+  let serie: { id: string; jours: string[]; texte: string } | null = null;
+  if (d.rythme) {
+    const s = controlerSerie(v.jour, d.rythme, d.jusquau);
+    if ("erreur" in s) return { erreur: s.erreur };
+    const jours = joursDeLaSerie(v.jour, s.rythme, s.jusquau);
+    if (jours.length > 1) {
+      const [n] = await db.insert(schema.seriesReunion).values({ rythme: s.rythme, jusquau: s.jusquau, creeParId: a.moi.id }).returning({ id: schema.seriesReunion.id });
+      serie = { id: n.id, jours, texte: serieTexte(s.rythme, dateCourte(s.jusquau)) };
+    }
+  }
+  const jours = serie ? serie.jours : [v.jour];
+  const creees = await db
     .insert(schema.reunions)
-    .values({ titre: v.titre, jour: v.jour, heure: v.heure, dureeMinutes: v.dureeMinutes, projetId: v.projetId, notes: v.notes, noteeParId: a.moi.id })
-    .returning({ id: schema.reunions.id });
-  await db.insert(schema.participantsReunion).values(v.participants.map((personneId) => ({ reunionId: r.id, personneId })));
+    .values(jours.map((jour) => ({ titre: v.titre, jour, heure: v.heure, dureeMinutes: v.dureeMinutes, projetId: v.projetId, notes: v.notes, noteeParId: a.moi.id, serieId: serie?.id ?? null })))
+    .returning({ id: schema.reunions.id, jour: schema.reunions.jour });
+  const r = creees.find((x) => x.jour === v.jour) ?? creees[0];
+  await db.insert(schema.participantsReunion).values(creees.flatMap((c) => v.participants.map((personneId) => ({ reunionId: c.id, personneId }))));
   // Qui était déjà pris à cette heure (autres réunions notées) : la personne qui note est avertie, la personne prise aussi.
   const occupes = v.heure ? await disponibilites({ moiId: a.moi.id, personneIds: v.participants, jour: v.jour, heure: v.heure, duree: v.dureeMinutes, sauf: r.id }) : [];
   const prise = new Set(occupes.map((o) => o.id));
@@ -146,12 +175,12 @@ export async function noterReunion(a: Acces, d: SaisieReunion, projetsPermis: Se
       autres.map((personneId) => ({
         personneId,
         type: "reunion",
-        texte: `${a.moi.prenom} ${a.moi.nom} a noté « ${v.titre} » (${dateCourte(v.jour)}${v.heure ? ` à ${v.heure.replace(":", " h ").replace(" h 00", " h")}` : ""}, ${dureeTexte(v.dureeMinutes)}) avec vous${prise.has(personneId) ? " ; attention, vous êtes déjà pris(e) à cette heure" : " : inutile de la noter à nouveau"}`,
+        texte: `${a.moi.prenom} ${a.moi.nom} a noté « ${v.titre} » (${dateCourte(v.jour)}${v.heure ? ` à ${v.heure.replace(":", " h ").replace(" h 00", " h")}` : ""}, ${dureeTexte(v.dureeMinutes)}${serie ? `, ${serie.texte}, ${serie.jours.length} réunions` : ""}) avec vous${prise.has(personneId) ? " ; attention, vous êtes déjà pris(e) à cette heure" : " : inutile de la noter à nouveau"}`,
         lien: `/reunions?semaine=${v.jour}`,
       })),
     );
-  await noter(a.moi.id, "reunion_notee", r.id, { titre: v.titre, jour: v.jour, minutes: v.dureeMinutes, participants: v.participants.length });
-  return { id: r.id, occupes };
+  await noter(a.moi.id, "reunion_notee", r.id, { titre: v.titre, jour: v.jour, minutes: v.dureeMinutes, participants: v.participants.length, serie: serie ? { id: serie.id, reunions: serie.jours.length } : undefined });
+  return { id: r.id, occupes, occurrences: creees.length };
 }
 
 async function reunionNoteePar(id: string, moiId: string) {
@@ -167,8 +196,16 @@ export async function modifierReunion(a: Acces, id: string, d: SaisieReunion, pr
   if (v.projetId && v.projetId !== r.projetId && projetsPermis !== "tous" && !projetsPermis.has(v.projetId)) return { erreur: "Projet introuvable." };
   await db.update(schema.reunions).set({ titre: v.titre, jour: v.jour, heure: v.heure, dureeMinutes: v.dureeMinutes, projetId: v.projetId, notes: v.notes }).where(eq(schema.reunions.id, id));
   const avant = new Set((await db.select().from(schema.participantsReunion).where(eq(schema.participantsReunion.reunionId, id))).map((p) => p.personneId));
-  await db.delete(schema.participantsReunion).where(eq(schema.participantsReunion.reunionId, id));
-  await db.insert(schema.participantsReunion).values(v.participants.map((personneId) => ({ reunionId: id, personneId })));
+  // Celle-ci et les suivantes de la série (notées par la même personne) : même sujet, heure, durée, projet, notes et
+  // participants ; le jour ne change que pour celle-ci.
+  const suivantes =
+    r.serieId && d.portee === "suivantes"
+      ? (await db.select({ id: schema.reunions.id }).from(schema.reunions).where(and(eq(schema.reunions.serieId, r.serieId), gt(schema.reunions.jour, r.jour), eq(schema.reunions.noteeParId, a.moi.id)))).map((x) => x.id)
+      : [];
+  if (suivantes.length) await db.update(schema.reunions).set({ titre: v.titre, heure: v.heure, dureeMinutes: v.dureeMinutes, projetId: v.projetId, notes: v.notes }).where(inArray(schema.reunions.id, suivantes));
+  const touchees = [id, ...suivantes];
+  await db.delete(schema.participantsReunion).where(inArray(schema.participantsReunion.reunionId, touchees));
+  await db.insert(schema.participantsReunion).values(touchees.flatMap((rid) => v.participants.map((personneId) => ({ reunionId: rid, personneId }))));
   const occupes = v.heure ? await disponibilites({ moiId: a.moi.id, personneIds: v.participants, jour: v.jour, heure: v.heure, duree: v.dureeMinutes, sauf: id }) : [];
   const prise = new Set(occupes.map((o) => o.id));
   const nouveaux = await prevenables(v.participants.filter((p) => !avant.has(p) && p !== a.moi.id));
@@ -177,20 +214,25 @@ export async function modifierReunion(a: Acces, id: string, d: SaisieReunion, pr
       nouveaux.map((personneId) => ({
         personneId,
         type: "reunion",
-        texte: `${a.moi.prenom} ${a.moi.nom} a noté « ${v.titre} » (${dateCourte(v.jour)}, ${dureeTexte(v.dureeMinutes)}) avec vous${prise.has(personneId) ? " ; attention, vous êtes déjà pris(e) à cette heure" : ""}`,
+        texte: `${a.moi.prenom} ${a.moi.nom} a noté « ${v.titre} » (${dateCourte(v.jour)}, ${dureeTexte(v.dureeMinutes)}${suivantes.length ? `, et les ${suivantes.length} suivantes` : ""}) avec vous${prise.has(personneId) ? " ; attention, vous êtes déjà pris(e) à cette heure" : ""}`,
         lien: `/reunions?semaine=${v.jour}`,
       })),
     );
-  await noter(a.moi.id, "reunion_modifiee", id, { titre: v.titre, jour: v.jour, minutes: v.dureeMinutes });
+  await noter(a.moi.id, "reunion_modifiee", id, { titre: v.titre, jour: v.jour, minutes: v.dureeMinutes, suivantes: suivantes.length || undefined });
   return { ok: true, occupes };
 }
 
-export async function supprimerReunion(a: Acces, id: string): Promise<{ ok: true } | { erreur: string }> {
+export async function supprimerReunion(a: Acces, id: string, portee: "une" | "suivantes" = "une"): Promise<{ ok: true; n: number } | { erreur: string }> {
   const r = await reunionNoteePar(id, a.moi.id);
   if (!r) return { erreur: "Seule la personne qui a noté la réunion la supprime." };
-  await db.delete(schema.reunions).where(eq(schema.reunions.id, id));
-  await noter(a.moi.id, "reunion_supprimee", id, { titre: r.titre, jour: r.jour });
-  return { ok: true };
+  // Celle-ci et les suivantes de la série (notées par la même personne).
+  const ids =
+    r.serieId && portee === "suivantes"
+      ? (await db.select({ id: schema.reunions.id }).from(schema.reunions).where(and(eq(schema.reunions.serieId, r.serieId), gte(schema.reunions.jour, r.jour), eq(schema.reunions.noteeParId, a.moi.id)))).map((x) => x.id)
+      : [id];
+  await db.delete(schema.reunions).where(inArray(schema.reunions.id, ids.length ? ids : [id]));
+  await noter(a.moi.id, "reunion_supprimee", id, { titre: r.titre, jour: r.jour, reunions: ids.length });
+  return { ok: true, n: ids.length };
 }
 
 /** Un participant ajouté par erreur se retire (la personne qui l'a notée, elle, la supprime). */

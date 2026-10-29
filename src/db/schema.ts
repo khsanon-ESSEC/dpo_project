@@ -381,10 +381,24 @@ export const reunions = pgTable(
     notes: text().notNull().default(""),
     /** Qui l'a notée (et peut la modifier). */
     noteeParId: uuid("notee_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    /** Réunion récurrente : la série dont elle fait partie (chaque occurrence est une réunion à part entière). */
+    serieId: uuid("serie_id").references((): AnyPgColumn => seriesReunion.id, { onDelete: "set null" }),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("reunions_jour_idx").on(t.jour)],
+  (t) => [index("reunions_jour_idx").on(t.jour), index("reunions_serie_idx").on(t.serieId)],
 );
+
+/**
+ * Réunions récurrentes (demandé le 29 octobre 2026) : le rythme (chaque jour ouvré, chaque semaine, toutes les deux
+ * semaines, chaque mois) et la date de fin. Les occurrences sont créées d'un coup, jusqu'à cette date (un an au plus).
+ */
+export const seriesReunion = pgTable("series_reunion", {
+  id: uuid().primaryKey().defaultRandom(),
+  rythme: text().notNull(),
+  jusquau: date().notNull(),
+  creeParId: uuid("cree_par_id").references(() => personnes.id, { onDelete: "set null" }),
+  creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const participantsReunion = pgTable(
   "participants_reunion",

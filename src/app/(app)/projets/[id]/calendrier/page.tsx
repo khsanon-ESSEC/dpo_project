@@ -43,7 +43,7 @@ export default async function PageCalendrier({ params, searchParams }: { params:
       texte: `Livrable · ${l.libelle}`,
       titre: `Livrable « ${l.libelle} »${l.responsable ? ` — ${l.responsable}` : ""} — ${l.affiche === "atteint" ? "validé" : l.affiche === "pret" ? "prêt à valider" : l.enRetard ? "en retard" : `${l.compte.faites}/${l.compte.total} tâches faites`}`,
       classe: `puce--jalon${l.enRetard ? " puce--retard" : ""}`,
-      lien: `/projets/${id}#livrable-${l.id}`,
+      lien: `/projets/${id}/livrables/${l.id}`,
     });
   }
   ajouter(projet.dateFinPrevue, { id: "fin", texte: "Fin prévue du projet", titre: "Fin prévue du projet", classe: "puce--jalon", lien: null });

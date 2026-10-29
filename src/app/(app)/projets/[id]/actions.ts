@@ -53,6 +53,11 @@ export async function agirLivrable(projetId: string, livrableId: string, action:
   if (l.projet.archiveLe || l.projet.statut === "refuse") redirect(`/projets/${projetId}?erreur=${encodeURIComponent("Ce projet est archivé : ses livrables sont figés.")}#livrables`);
   const r = await agirSurLivrable(a, livrableId, action, String(form.get("remarque") ?? ""));
   revalidatePath(`/projets/${projetId}`, "layout");
+  // Depuis la page du livrable, on y revient (adresse fixe, rien de fourni par la page).
+  if (form.get("depuis") === "livrable") {
+    const page = `/projets/${projetId}/livrables/${livrableId}`;
+    redirect("erreur" in r ? `${page}?erreur=${encodeURIComponent(r.erreur)}` : `${page}?fait=${action}`);
+  }
   if ("erreur" in r) redirect(`/projets/${projetId}?erreur=${encodeURIComponent(r.erreur)}#livrable-${livrableId}`);
   redirect(`/projets/${projetId}?livrable=${action}#livrable-${livrableId}`);
 }

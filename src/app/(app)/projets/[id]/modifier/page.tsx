@@ -417,7 +417,7 @@ export default async function PageModifierProjet({ params, searchParams }: { par
             ))}
             {indicateurs.length === 0 ? <li className="vide">Aucun livrable.</li> : null}
           </ol>
-          <form action={nouveauLivrable.bind(null, p.id)} className="livrables-gestion__nouveau">
+          <form action={nouveauLivrable.bind(null, p.id)} className="livrables-gestion__nouveau" id="nouveau-livrable" style={{ scrollMarginTop: 80 }}>
             <h3 className="sante-barre__titre" style={{ margin: 0 }}>
               Nouveau livrable
             </h3>

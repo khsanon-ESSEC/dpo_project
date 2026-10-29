@@ -20,6 +20,8 @@ import { Jauge, Niveau } from "@/components/Charge";
 import { EvolutionPersonne } from "@/components/EvolutionPersonne";
 import { Icone } from "@/components/Icone";
 import { CodeProjet, LienPersonne, LienProjet } from "@/components/Liens";
+import { PastilleStatut } from "@/components/PastilleStatut";
+import { JOURS_PAR_PROJET, travailParProjet } from "@/lib/donnees/par-projet";
 
 export const metadata: Metadata = { title: "Fiche personne" };
 
@@ -30,9 +32,10 @@ const JOUR = /^\d{4}-\d{2}-\d{2}$/;
  * Ouverte à tous. Pour qui la suit (et pour soi-même), la même page montre aussi sa charge des semaines à
  * venir, ses tâches ouvertes, ses réunions de la semaine et son évolution, période contre période.
  */
-export default async function PageFichePersonne({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ semaine?: string; vue?: string; p?: string }> }) {
+export default async function PageFichePersonne({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ semaine?: string; vue?: string; p?: string; taches?: string }> }) {
   const { id } = await params;
-  const { semaine: s0, vue, p: periode } = await searchParams;
+  const { semaine: s0, vue, p: periode, taches: vueTaches } = await searchParams;
+  const tachesParProjet = vueTaches === "projet";
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
   const a = await acces(u);
@@ -98,6 +101,24 @@ export default async function PageFichePersonne({ params, searchParams }: { para
   const minutesSuivantes = reunionsSuivantes.reduce((t, r) => t + r.dureeMinutes, 0);
   const triees = trier(taches, jour);
   const c = compter(triees, jour);
+  // Par projet (quatre dernières semaines) : seulement quand on voit le travail de la personne.
+  const parProjet = travail ? await travailParProjet(id, jour, visibles) : null;
+  const maxTemps = Math.max(1, ...(parProjet?.lignes ?? []).map((l) => l.heuresRestantes * 60 + l.minutesNotees + l.minutesReunions));
+  // La liste des tâches, regroupée par projet si on l'a demandé.
+  const groupesTaches = tachesParProjet
+    ? [...new Map(triees.map((t) => [t.projetId ?? "", { cle: t.projetId ?? "", code: t.projetCode, titre: t.projetTitre ?? "Hors projet", projetId: t.projetId }])).values()]
+        .sort((x, y) => Number(!x.cle) - Number(!y.cle) || (x.titre ?? "").localeCompare(y.titre ?? "", "fr"))
+        .map((g) => ({ ...g, taches: triees.filter((t) => (t.projetId ?? "") === g.cle) }))
+    : [{ cle: "toutes", code: null, titre: null, projetId: null, taches: triees }];
+  const lienTaches = (parProj: boolean) => {
+    const q = new URLSearchParams();
+    if (s0 && JOUR.test(s0)) q.set("semaine", s0);
+    if (vue) q.set("vue", vue);
+    if (periode) q.set("p", periode);
+    if (parProj) q.set("taches", "projet");
+    const t = q.toString();
+    return `/personnes/${id}${t ? `?${t}` : ""}#pf-taches`;
+  };
   const ligne = lignes[0];
   const charge = ligne?.charge;
   const choisie = s0 && semaines.includes(s0) ? s0 : semaines[0];
@@ -344,29 +365,136 @@ export default async function PageFichePersonne({ params, searchParams }: { para
                   </section>
                 ) : null}
 
+                {parProjet && parProjet.lignes.length ? (
+                  <section className="carte" aria-labelledby="pf-projets-titre" id="pf-projets" style={{ scrollMarginTop: 80 }}>
+                    <div className="carte__entete">
+                      <h2 id="pf-projets-titre" className="carte__titre">
+                        Par projet · {JOURS_PAR_PROJET / 7} dernières semaines
+                      </h2>
+                      <span className="note">Le temps : heures estimées qui restent, temps passé noté et réunions</span>
+                    </div>
+                    <div className="defile-x">
+                      <table className="par-projet">
+                        <thead>
+                          <tr>
+                            <th scope="col">Projet</th>
+                            <th scope="col" className="nombre">
+                              Ouvertes
+                            </th>
+                            <th scope="col" className="nombre">
+                              Faites
+                            </th>
+                            <th scope="col" className="nombre">
+                              Restant
+                            </th>
+                            <th scope="col" className="nombre">
+                              Noté
+                            </th>
+                            <th scope="col" className="nombre">
+                              Réunions
+                            </th>
+                            <th scope="col" className="par-projet__barre-col">
+                              Part du temps
+                            </th>
+                            <th scope="col">Dernière activité</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {parProjet.lignes.map((l) => {
+                            const minutes = l.heuresRestantes * 60 + l.minutesNotees + l.minutesReunions;
+                            const lien = l.projetId && l.projetId !== "autres" && voit(l.projetId) ? `/projets/${l.projetId}/liste?pour=${id}` : null;
+                            return (
+                              <tr key={l.cle} className={l.delaisse ? "par-projet__delaisse" : undefined}>
+                                <th scope="row">
+                                  {l.code ? <span className="etiquette-projet">{l.code}</span> : null}{" "}
+                                  {lien ? (
+                                    <a href={lien} className="lien-discret" title={`Les tâches de ${p.prenom} sur ce projet`}>
+                                      {l.titre}
+                                    </a>
+                                  ) : (
+                                    <span className="ton-discret">{l.titre}</span>
+                                  )}
+                                  {l.delaisse ? <span className="marque-modele marque-modele--ambre" style={{ marginLeft: 8 }}>Rien depuis 14 j</span> : null}
+                                </th>
+                                <td className="nombre">
+                                  {l.ouvertes}
+                                  {l.enRetard ? <span className="ton-retard"> · {l.enRetard} en retard</span> : null}
+                                  {l.bloquees ? <span className="ton-veille"> · {l.bloquees} bloquée{l.bloquees > 1 ? "s" : ""}</span> : null}
+                                </td>
+                                <td className="nombre">{l.faites}</td>
+                                <td className="nombre">{l.heuresRestantes ? heuresTexte(l.heuresRestantes) : "—"}</td>
+                                <td className="nombre">{l.minutesNotees ? dureeTexte(l.minutesNotees) : "—"}</td>
+                                <td className="nombre">{l.minutesReunions ? dureeTexte(l.minutesReunions) : "—"}</td>
+                                <td className="par-projet__barre-col">
+                                  <span className="par-projet__barre" role="img" aria-label={`${Math.round(minutes / 60)} h au total`}>
+                                    <span style={{ width: `${(minutes / maxTemps) * 100}%` }} />
+                                  </span>
+                                </td>
+                                <td>{l.derniereActivite ? dateCourte(l.derniereActivite) : "—"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="note" style={{ margin: "10px 0 0" }}>
+                      « Rien depuis 14 j » : des tâches ouvertes, mais aucune faite ni mise à jour depuis deux semaines. Le nom d&apos;un projet ouvre ses tâches pour {p.prenom}.
+                    </p>
+                  </section>
+                ) : null}
+
                 <section className="carte carte--liste" aria-labelledby="pf-taches-titre" id="pf-taches">
                   <div className="carte__entete">
                     <h2 id="pf-taches-titre" className="carte__titre">
                       Tâches ouvertes · {c.faites} faite{c.faites > 1 ? "s" : ""} cette semaine
                     </h2>
-                    {!moi ? (
-                      <a href={`/taches/nouvelle?pour=${id}&retour=${encodeURIComponent(`/personnes/${id}`)}`} className="lien-discret">
-                        Confier une tâche →
-                      </a>
-                    ) : null}
+                    <span style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+                      <nav className="zoom" aria-label="Classer les tâches">
+                        <a href={lienTaches(false)} aria-current={!tachesParProjet ? "true" : undefined}>
+                          Par échéance
+                        </a>
+                        <a href={lienTaches(true)} aria-current={tachesParProjet ? "true" : undefined}>
+                          Par projet
+                        </a>
+                      </nav>
+                      {!moi ? (
+                        <a href={`/taches/nouvelle?pour=${id}&retour=${encodeURIComponent(`/personnes/${id}`)}`} className="lien-discret">
+                          Confier une tâche →
+                        </a>
+                      ) : null}
+                    </span>
                   </div>
+                  {groupesTaches.map((g) => (
+                  <div key={g.cle}>
+                  {g.titre ? (
+                    <h3 className="liste-groupe">
+                      {g.code ? <span className="etiquette-projet">{g.code}</span> : null}{" "}
+                      {g.projetId ? (
+                        <LienProjet id={g.projetId} visible={voit(g.projetId)}>
+                          {g.titre}
+                        </LienProjet>
+                      ) : (
+                        g.titre
+                      )}{" "}
+                      · {g.taches.filter((t) => t.statut !== "faite").length} ouverte{g.taches.filter((t) => t.statut !== "faite").length > 1 ? "s" : ""}
+                      {g.taches.some((t) => t.statut === "faite") ? `, ${g.taches.filter((t) => t.statut === "faite").length} faite${g.taches.filter((t) => t.statut === "faite").length > 1 ? "s" : ""} cette semaine` : ""}
+                    </h3>
+                  ) : null}
                   <ul className="liste">
-                    {triees.map((t) => {
+                    {g.taches.map((t) => {
                       const e = echeanceRelative(t.echeance, jour);
                       return (
                         <li key={t.id}>
                           <div className={`rangee rangee--etiree${t.statut === "faite" ? " fait" : ""}`}>
                             {t.projetCode ? <CodeProjet id={t.projetId} code={t.projetCode} titre={t.projetTitre} visible={voit(t.projetId)} mono /> : null}
                             <span className="rangee__texte">
-                              <a href={`/taches/${t.id}`} className="rangee__titre rangee__lien">
-                                {t.titre}
-                              </a>
-                              <span className="rangee__sous">
+                              <span style={{ display: "flex", alignItems: "baseline" }}>
+                                <PastilleStatut statut={t.statut} retard={e.retard} />
+                                <a href={`/taches/${t.id}`} className="rangee__titre rangee__lien">
+                                  {t.titre}
+                                </a>
+                              </span>
+                              <span className="rangee__sous" style={{ paddingLeft: 24 }}>
                                 {t.projetId ? (
                                   <LienProjet id={t.projetId} visible={voit(t.projetId)}>
                                     {t.projetTitre}
@@ -383,8 +511,10 @@ export default async function PageFichePersonne({ params, searchParams }: { para
                         </li>
                       );
                     })}
-                    {triees.length === 0 ? <li className="vide">Aucune tâche ouverte.</li> : null}
                   </ul>
+                  </div>
+                  ))}
+                  {triees.length === 0 ? <p className="vide">Aucune tâche ouverte.</p> : null}
                 </section>
 
                 <section className="carte carte--liste" aria-labelledby="pf-reunions-titre" id="pf-reunions">

@@ -162,7 +162,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
             <Icone nom="drapeau" taille={16} />
             <span>
               Mène au livrable{" "}
-              <a href={`/projets/${t.projetId}#livrable-${leLivrable.id}`} className="lien-discret">
+              <a href={`/projets/${t.projetId}/livrables/${leLivrable.id}`} className="lien-discret">
                 « {leLivrable.libelle} »
               </a>
               {leLivrable.prevuLe ? `, prévu le ${dateCourte(leLivrable.prevuLe)}` : ""}

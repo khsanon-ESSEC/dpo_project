@@ -8175,3 +8175,128 @@ a.pastille-rapport:hover {
     grid-column: 1;
   }
 }
+
+/* Le titre d'un livrable mène à sa page (29 octobre 2026). */
+a.livrable__lien {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--filet-fort);
+}
+a.livrable__lien:hover,
+a.livrable__lien:focus-visible {
+  color: var(--actif);
+  border-bottom-color: currentColor;
+}
+.fiche-livrable {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+  gap: 14px 24px;
+  margin: 0;
+}
+.fiche-livrable dt {
+  font-size: 12px;
+  color: var(--discret);
+}
+.fiche-livrable dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 21px;
+}
+.fiche-livrable__large {
+  grid-column: 1 / -1;
+}
+
+/* État d'une tâche en un coup d'œil (29 octobre 2026) : vide, à moitié, barré ambre, coché. */
+.pastille-statut {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  vertical-align: -3px;
+  border-radius: 50%;
+  border: 2px solid var(--controle);
+  background: transparent;
+  box-sizing: border-box;
+}
+.pastille-statut--en_cours {
+  border-color: var(--actif);
+  background: linear-gradient(90deg, var(--actif) 50%, transparent 50%);
+}
+.pastille-statut--bloquee {
+  border-color: var(--veille-point);
+  background: linear-gradient(var(--veille-point), var(--veille-point)) center / 8px 2px no-repeat;
+}
+.pastille-statut--faite {
+  border-color: var(--ok-point);
+  background: var(--ok-point);
+  color: #ffffff;
+}
+.pastille-statut--retard {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--retard-point);
+}
+.liste-taches td:first-child {
+  /* La pastille et le titre restent ensemble. */
+  white-space: normal;
+}
+.titre-faite {
+  text-decoration: line-through;
+  text-decoration-color: var(--filet-fort);
+}
+
+/* Fiche d'une personne : son travail projet par projet (29 octobre 2026). */
+.par-projet {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.par-projet th,
+.par-projet td {
+  padding: 10px 12px;
+  border-top: 1px solid var(--filet);
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.par-projet thead th {
+  border-top: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--discret);
+}
+.par-projet tbody th {
+  font-weight: 400;
+  white-space: normal;
+  min-width: 220px;
+}
+.par-projet .nombre {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.par-projet__barre-col {
+  width: 28%;
+  min-width: 140px;
+}
+.par-projet__barre {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--piste);
+  overflow: hidden;
+}
+.par-projet__barre > span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--arc);
+}
+.par-projet__delaisse th {
+  box-shadow: inset 3px 0 0 var(--veille-point);
+}
+.liste-groupe {
+  margin: 16px 0 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--encre);
+}

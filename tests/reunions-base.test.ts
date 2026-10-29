@@ -73,7 +73,7 @@ describe.skipIf(!URL_TEST)("journal des réunions et bilan", () => {
     expect(await RE.quitterReunion(lp, id)).toHaveProperty("erreur");
     expect(await RE.quitterReunion(wb, id)).toEqual({ ok: true });
     expect((await RE.minutesDeReunion([qui("wesner.bazile").id], LUNDI, "2026-11-01")).get(qui("wesner.bazile").id)).toBe(avant);
-    expect(await RE.supprimerReunion(lp, id)).toEqual({ ok: true });
+    expect(await RE.supprimerReunion(lp, id)).toEqual({ ok: true, n: 1 });
   });
 
   it("un projet qu'on ne voit pas ne s'attache pas à une réunion", async () => {
@@ -148,5 +148,36 @@ describe.skipIf(!URL_TEST)("journal des réunions et bilan", () => {
     const DI = await import("@/lib/donnees/disponibilites");
     expect(await DI.disponibilites({ moiId: mv.moi.id, personneIds: [fm], jour: "2026-11-03", heure: "14:15", duree: 30 })).toMatchObject([{ moi: true, occupe: [{ titre: "Comité confidentiel" }] }, { id: fm }]);
     expect(await DI.disponibilites({ moiId: mv.moi.id, personneIds: [fm], jour: "2026-11-03", heure: "15:00", duree: 30 })).toEqual([]);
+  });
+  it("réunion récurrente : toutes les dates notées d'un coup ; modifier ou supprimer celle-ci et les suivantes", async () => {
+    const lp = await acces("ludovic.pierre");
+    const wb = qui("wesner.bazile").id;
+    const sansFin = await RE.noterReunion(lp, saisie({ titre: "Point d'équipe", jour: "2026-11-03", rythme: "semaine" }), "tous");
+    expect(sansFin).toEqual({ erreur: "Donnez la date de la dernière réunion de la série." });
+    const r = await RE.noterReunion(lp, saisie({ titre: "Point d'équipe", jour: "2026-11-03", heure: "09:00", rythme: "semaine", jusquau: "2026-11-24", participants: [wb] }), "tous");
+    expect(r).toMatchObject({ occurrences: 4 });
+    const id = (r as { id: string }).id;
+    const [premiere] = await D.db.select().from(D.schema.reunions).where(eq(D.schema.reunions.id, id));
+    const serie = async () => D.db.select().from(D.schema.reunions).where(eq(D.schema.reunions.serieId, premiere.serieId!));
+    expect((await serie()).map((x) => x.jour).sort()).toEqual(["2026-11-03", "2026-11-10", "2026-11-17", "2026-11-24"]);
+    // Chacune compte pour les deux participants.
+    const avecWesner = await RE.reunionsDe(wb, "2026-11-01", "2026-11-30");
+    expect(avecWesner.filter((x) => x.titre === "Point d'équipe")).toHaveLength(4);
+    expect(avecWesner.find((x) => x.titre === "Point d'équipe")!.serie).toMatchObject({ rythme: "semaine", jusquau: "2026-11-24" });
+    // Une seule alerte pour la série.
+    const alertes = await D.db.select().from(D.schema.notifications).where(eq(D.schema.notifications.personneId, wb));
+    expect(alertes.filter((n) => n.texte.includes("Point d'équipe"))).toHaveLength(1);
+    // Modifier la deuxième et les suivantes : heure et sujet ; la première ne bouge pas.
+    const deuxieme = (await serie()).find((x) => x.jour === "2026-11-10")!;
+    expect(await RE.modifierReunion(lp, deuxieme.id, saisie({ titre: "Point d'équipe (nouvelle heure)", jour: "2026-11-10", heure: "10:00", participants: [wb], portee: "suivantes" }), "tous")).toMatchObject({ ok: true });
+    const apres = await serie();
+    expect(apres.find((x) => x.jour === "2026-11-03")).toMatchObject({ titre: "Point d'équipe", heure: "09:00" });
+    expect(apres.filter((x) => x.jour >= "2026-11-10").every((x) => x.titre === "Point d'équipe (nouvelle heure)" && x.heure === "10:00")).toBe(true);
+    // Seul celui qui l'a notée la supprime ; celle-ci et les suivantes.
+    expect(await RE.supprimerReunion(await acces("wesner.bazile"), deuxieme.id, "suivantes")).toHaveProperty("erreur");
+    expect(await RE.supprimerReunion(lp, deuxieme.id, "suivantes")).toEqual({ ok: true, n: 3 });
+    expect((await serie()).map((x) => x.jour)).toEqual(["2026-11-03"]);
+    await RE.supprimerReunion(lp, id);
+    for (const n of alertes.filter((x) => x.texte.includes("Point d'équipe"))) await D.db.delete(D.schema.notifications).where(eq(D.schema.notifications.id, n.id));
   });
 });

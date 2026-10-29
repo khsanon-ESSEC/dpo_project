@@ -1,3 +1,4 @@
+import { RYTHMES_REUNION } from "@/lib/recurrence-reunion";
 import type { Metadata } from "next";
 import { acces, idsProjetsVisibles, contactsVisibles, peutVoirTache } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
@@ -187,6 +188,11 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
                           <span className="reunion__titre">
                             {r.projetCode ? <CodeProjet id={r.projetId} code={r.projetCode} titre={r.projetTitre} visible={visible(r.projetId)} /> : null}
                             {r.titre}
+                            {r.serie ? (
+                              <span className="marque-modele" style={{ marginLeft: 8 }} title={`Réunion récurrente : ${r.serie.texte}`}>
+                                <Icone nom="reprendre" taille={12} /> {r.serie.texte}
+                              </span>
+                            ) : null}
                           </span>
                           <span className="rangee__sous">
                             {autres.length ? (
@@ -249,11 +255,28 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
                               <a href={`/reunions?semaine=${semaine}&modifier=${r.id}#noter`} className="bouton-mini">
                                 Modifier
                               </a>
-                              <form action={supprimer.bind(null, r.id, semaine)}>
-                                <button type="submit" className="bouton-mini" aria-label={`Supprimer « ${r.titre} »`}>
-                                  Supprimer
-                                </button>
-                              </form>
+                              {r.serie ? (
+                                <details className="livrable__renvoi">
+                                  <summary className="bouton-mini">Supprimer</summary>
+                                  <form action={supprimer.bind(null, r.id, semaine)} className="livrable__renvoi-form">
+                                    <label className="choix-radio">
+                                      <input type="radio" name="portee" value="une" defaultChecked /> Celle-ci seulement
+                                    </label>
+                                    <label className="choix-radio">
+                                      <input type="radio" name="portee" value="suivantes" /> Celle-ci et les suivantes de la série
+                                    </label>
+                                    <button type="submit" className="bouton-contour" aria-label={`Supprimer « ${r.titre} »`}>
+                                      Supprimer
+                                    </button>
+                                  </form>
+                                </details>
+                              ) : (
+                                <form action={supprimer.bind(null, r.id, semaine)}>
+                                  <button type="submit" className="bouton-mini" aria-label={`Supprimer « ${r.titre} »`}>
+                                    Supprimer
+                                  </button>
+                                </form>
+                              )}
                             </>
                           ) : (
                             <form action={quitter.bind(null, r.id, semaine)}>
@@ -302,6 +325,43 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
                   </select>
                 </div>
               </div>
+              {!enModif ? (
+                <fieldset className="champ" style={{ border: 0, padding: 0, margin: 0 }}>
+                  <legend style={{ fontWeight: 500, fontSize: 13, marginBottom: 6 }}>Répéter</legend>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+                    <div className="champ" style={{ flex: "2 1 200px" }}>
+                      <label htmlFor="r-rythme" className="visuellement-cache">
+                        Rythme
+                      </label>
+                      <select id="r-rythme" name="rythme" defaultValue="" aria-describedby="r-rythme-aide">
+                        <option value="">Une seule fois</option>
+                        {Object.entries(RYTHMES_REUNION).map(([k, v]) => (
+                          <option key={k} value={k}>
+                            {v}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="champ" style={{ flex: "1 1 150px" }}>
+                      <label htmlFor="r-jusquau">Jusqu&apos;au</label>
+                      <input id="r-jusquau" name="jusquau" type="date" min={jourParDefaut} />
+                    </div>
+                  </div>
+                  <span className="aide" id="r-rythme-aide">
+                    Pour une réunion qui revient (comité, point d&apos;équipe) : toutes les dates jusqu&apos;à la dernière sont notées d&apos;un coup, pour chaque participant. Un an au plus.
+                  </span>
+                </fieldset>
+              ) : enModif.serie ? (
+                <fieldset className="champ" style={{ border: 0, padding: 0, margin: 0 }}>
+                  <legend style={{ fontWeight: 500, fontSize: 13, marginBottom: 6 }}>Réunion récurrente ({enModif.serie.texte})</legend>
+                  <label className="choix-radio">
+                    <input type="radio" name="portee" value="une" defaultChecked /> Modifier celle-ci seulement
+                  </label>
+                  <label className="choix-radio">
+                    <input type="radio" name="portee" value="suivantes" /> Modifier celle-ci et les suivantes (le jour ne change que pour celle-ci)
+                  </label>
+                </fieldset>
+              ) : null}
               <div className="champ">
                 <label htmlFor="r-projet">Projet (facultatif)</label>
                 <select id="r-projet" name="projetId" defaultValue={enModif?.projetId ?? ""}>

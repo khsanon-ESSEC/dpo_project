@@ -40,6 +40,9 @@ const saisie = (form: FormData): SaisieReunion => ({
   projetId: String(form.get("projetId") ?? ""),
   notes: String(form.get("notes") ?? ""),
   participants: form.getAll("participants").map(String).filter((id) => UUID.test(id)),
+  rythme: String(form.get("rythme") ?? ""),
+  jusquau: String(form.get("jusquau") ?? ""),
+  portee: form.get("portee") === "suivantes" ? "suivantes" : "une",
 });
 
 /**
@@ -102,7 +105,8 @@ export async function noter(form: FormData) {
   }
   const act = await creerActions(a, form, r.id, UUID.test(d.projetId) ? d.projetId : null);
   revalider();
-  const m = [messageActions(act), messageOccupes(r.occupes)].filter(Boolean).join(" ");
+  const serie = r.occurrences > 1 ? `Série de ${r.occurrences} réunions notée, jusqu'au ${dateCourte(String(d.jusquau))}.` : "";
+  const m = [serie, messageActions(act), messageOccupes(r.occupes)].filter(Boolean).join(" ");
   redirect(`/reunions?semaine=${s}&notee=1${m ? `&${act.refus.length ? "erreur" : "info"}=${encodeURIComponent(m)}` : ""}`);
 }
 
@@ -123,13 +127,14 @@ export async function modifier(id: string, form: FormData) {
   redirect(`/reunions?semaine=${s}${m ? `&${act.refus.length ? "erreur" : "info"}=${encodeURIComponent(m)}` : ""}`);
 }
 
-export async function supprimer(id: string, semaine: string) {
+export async function supprimer(id: string, semaine: string, form?: FormData) {
   if (!UUID.test(id)) return;
   const u = await exigerUtilisateur();
-  const r = await supprimerReunion(await acces(u), id);
+  const portee = form?.get("portee") === "suivantes" ? "suivantes" : "une";
+  const r = await supprimerReunion(await acces(u), id, portee);
   revalider();
   const s = semaineDe(semaine);
-  redirect(`/reunions?${s ? `semaine=${s}` : ""}${"erreur" in r ? `&erreur=${encodeURIComponent(r.erreur)}` : ""}`);
+  redirect(`/reunions?${s ? `semaine=${s}` : ""}${"erreur" in r ? `&erreur=${encodeURIComponent(r.erreur)}` : r.n > 1 ? `&info=${encodeURIComponent(`${r.n} réunions de la série supprimées.`)}` : ""}`);
 }
 
 export async function quitter(id: string, semaine: string) {

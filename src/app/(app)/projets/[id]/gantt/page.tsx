@@ -144,7 +144,7 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
               .join(" · ")
           : `${liste.length} tâche${liste.length > 1 ? "s" : ""} datée${liste.length > 1 ? "s" : ""}`,
         groupe: true,
-        lien: l ? `/projets/${id}#livrable-${l.id}` : undefined,
+        lien: l ? `/projets/${id}/livrables/${l.id}` : undefined,
         barres: deb && fn ? [{ debut: deb, fin: fn, classe: `gantt__barre--livrable${l && l.prevuLe && fn > l.prevuLe && l.etat !== "atteint" ? " gantt__barre--livrable-depasse" : ""}`, titre: `${l ? l.libelle : "Hors livrable"} : du ${dateCourte(deb)} au ${dateCourte(fn)}` }] : [],
         jalons:
           l && l.prevuLe

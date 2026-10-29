@@ -6,7 +6,7 @@
  * Les pages et les actions vérifient l'accès au projet avant d'appeler ces fonctions.
  */
 import "server-only";
-import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { acteur } from "@/lib/donnees/gestion";
 import type { Acces } from "@/lib/acces";
@@ -244,4 +244,45 @@ export async function agirSurLivrable(a: Acces, livrableId: string, action: Acti
 export function dateDuLivrable(l: Pick<Livrable, "prevuLe" | "enRetard">) {
   if (!l.prevuLe) return "sans date";
   return l.enRetard ? `prévu le ${dateCourte(l.prevuLe)}, en retard` : `prévu le ${dateCourte(l.prevuLe)}`;
+}
+
+export type EvenementLivrable = { le: Date; texte: string; qui: string | null; quiId: string | null; note: string | null; genre: "livrable" | "tache" };
+
+const LIBELLE_ACTION_LIVRABLE: Record<string, string> = {
+  livrable_pret: "Déclaré prêt à valider",
+  livrable_valider: "Validé",
+  livrable_renvoyer: "Renvoyé à reprendre",
+  livrable_rouvrir: "Rouvert",
+  livrable_modifie: "Modifié",
+};
+
+/**
+ * L'histoire d'un livrable, du plus récent au plus ancien : ce qu'on a fait sur lui (prêt, validé, renvoyé, rouvert,
+ * modifié, au journal) et les tâches qui y mènent quand elles ont été faites. Pour qui voit le projet.
+ */
+export async function histoireDuLivrable(livrableId: string, tacheIds: string[], titres: Map<string, string>): Promise<EvenementLivrable[]> {
+  const org = await chargerOrganisation();
+  const nom = (id: string | null) => (id && org.personnes.get(id) ? nomComplet(org.personnes.get(id)!) : null);
+  const journal = await db
+    .select()
+    .from(schema.journal)
+    .where(and(eq(schema.journal.objet, livrableId), inArray(schema.journal.action, Object.keys(LIBELLE_ACTION_LIVRABLE))))
+    .orderBy(desc(schema.journal.creeLe))
+    .limit(40);
+  const faites = tacheIds.length
+    ? await db
+        .select()
+        .from(schema.evenementsTache)
+        .where(and(inArray(schema.evenementsTache.tacheId, tacheIds), eq(schema.evenementsTache.type, "statut"), eq(schema.evenementsTache.apres, "faite")))
+        .orderBy(desc(schema.evenementsTache.creeLe))
+        .limit(40)
+    : [];
+  const ev: EvenementLivrable[] = [
+    ...journal.map((j) => {
+      const d = (j.details ?? {}) as { remarque?: string };
+      return { le: j.creeLe, texte: LIBELLE_ACTION_LIVRABLE[j.action] ?? j.action, qui: nom(j.personneId), quiId: j.personneId, note: d.remarque ?? null, genre: "livrable" as const };
+    }),
+    ...faites.map((e) => ({ le: e.creeLe, texte: `Tâche faite : « ${titres.get(e.tacheId) ?? "?"} »`, qui: nom(e.auteurId), quiId: e.auteurId, note: null, genre: "tache" as const })),
+  ];
+  return ev.sort((x, y) => y.le.getTime() - x.le.getTime()).slice(0, 40);
 }

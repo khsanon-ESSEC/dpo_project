@@ -144,7 +144,7 @@ export default async function PageAFaire({ searchParams }: { searchParams: Promi
                     <li key={l.id} className="rangee" style={{ minHeight: 64, alignItems: "flex-start", paddingTop: 10, paddingBottom: 10 }}>
                       <CodeProjet id={l.projetId} code={l.code} titre={l.projetTitre} visible={voit(l.projetId)} />
                       <span className="rangee__texte">
-                        <a href={`/projets/${l.projetId}#livrable-${l.id}`} className="rangee__titre lien-nom">
+                        <a href={`/projets/${l.projetId}/livrables/${l.id}`} className="rangee__titre lien-nom">
                           {l.libelle}
                         </a>
                         <span className="rangee__sous">

@@ -1,3 +1,4 @@
+import { PastilleStatut } from "@/components/PastilleStatut";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { acces, auteursLignesVisibles, exigerProjetVisible } from "@/lib/acces";
@@ -142,7 +143,9 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
             {l.affiche === "atteint" ? <CocheSeule /> : null}
           </span>
           <span className="livrable__texte">
-            <span className="livrable__nom">{l.libelle}</span>
+            <a href={`/projets/${p.id}/livrables/${l.id}`} className="livrable__nom livrable__lien">
+              {l.libelle}
+            </a>
             <span className="livrable__sous">
               {l.phaseId && nomPhase.get(l.phaseId) ? `${nomPhase.get(l.phaseId)} · ` : ""}
               {l.responsableId ? (
@@ -207,7 +210,10 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                         {t.initiales}
                       </span>
                       <span className="rangee__texte">
-                        <span className={`rangee__titre${t.statut === "faite" ? " rangee__titre--faite" : ""}`}>{t.titre}</span>
+                        <span className={`rangee__titre${t.statut === "faite" ? " rangee__titre--faite" : ""}`}>
+                          <PastilleStatut statut={t.statut} retard={t.retard} />
+                          {t.titre}
+                        </span>
                         <span className="rangee__sous">
                           {t.nom}
                           {t.apres ? <span className="ton-veille"> · après la date du livrable</span> : null}
@@ -593,6 +599,11 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 <Icone nom="modifier" taille={16} /> Modifier le projet
               </a>
             ) : null}
+            {peutModifier && actif ? (
+              <a href={`/projets/${p.id}/modifier#nouveau-livrable`} className="bouton-contour">
+                <Icone nom="drapeau" taille={16} /> Nouveau livrable
+              </a>
+            ) : null}
             {actif ? (
               <a href={`/taches/nouvelle?projet=${p.id}&retour=${encodeURIComponent(`/projets/${p.id}`)}`} className="bouton-contour">
                 <Icone nom="ajouter" taille={16} /> Nouvelle tâche
@@ -701,9 +712,14 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                     Livrables · {valides}/{lv.livrables.length} validés
                   </h2>
                   {peutModifier && actif ? (
-                    <a href={`/projets/${p.id}/modifier#livrables`} className="lien-discret">
-                      Gérer les livrables →
-                    </a>
+                    <span style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                      <a href={`/projets/${p.id}/modifier#nouveau-livrable`} className="lien-discret">
+                        + Ajouter un livrable
+                      </a>
+                      <a href={`/projets/${p.id}/modifier#livrables`} className="lien-discret">
+                        Gérer les livrables →
+                      </a>
+                    </span>
                   ) : null}
                 </div>
                 {lvMessage ? (
@@ -1276,7 +1292,11 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                       <span className="rangee__sous">Chef de projet{hors(p.chefProjetId) ? ` · ${hors(p.chefProjetId)!.toLowerCase()}` : ""}</span>
                     </span>
                     <span className="rangee__meta" style={{ fontSize: 12 }}>
-                      {ouvertesParPersonne.get(p.chefProjetId) === "Chef de projet" ? "" : (ouvertesParPersonne.get(p.chefProjetId) ?? "")}
+                      {/tâche/.test(ouvertesParPersonne.get(p.chefProjetId) ?? "") ? (
+                        <a href={`/projets/${p.id}/liste?pour=${p.chefProjetId}`} className="lien-discret">
+                          {ouvertesParPersonne.get(p.chefProjetId)}
+                        </a>
+                      ) : null}
                     </span>
                   </li>
                 ) : null}
@@ -1289,7 +1309,11 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                       <span className="rangee__sous">Référent DPO · gère le projet ici</span>
                     </span>
                     <span className="rangee__meta" style={{ fontSize: 12 }}>
-                      {ouvertesParPersonne.get(referentP.id) ?? ""}
+                      {/tâche/.test(ouvertesParPersonne.get(referentP.id) ?? "") ? (
+                        <a href={`/projets/${p.id}/liste?pour=${referentP.id}`} className="lien-discret">
+                          {ouvertesParPersonne.get(referentP.id)}
+                        </a>
+                      ) : null}
                     </span>
                   </li>
                 ) : null}
@@ -1312,7 +1336,14 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                       <span className="rangee__sous">{[m.role || m.poste, m.externe ? `hors division${m.organisation ? ` · ${m.organisation}` : ""}` : null].filter(Boolean).join(" · ")}</span>
                     </span>
                     <span className="rangee__meta" style={{ fontSize: 12 }}>
-                      {ouvertesParPersonne.get(m.personneId) ?? "Aucune tâche ouverte"}
+                      {/* Le nombre de tâches mène à ses tâches sur ce projet (vue Liste filtrée sur la personne). */}
+                      {ouvertesParPersonne.get(m.personneId) ? (
+                        <a href={`/projets/${p.id}/liste?pour=${m.personneId}`} className="lien-discret" aria-label={`${ouvertesParPersonne.get(m.personneId)} de ${m.nom} sur ce projet`}>
+                          {ouvertesParPersonne.get(m.personneId)}
+                        </a>
+                      ) : (
+                        "Aucune tâche ouverte"
+                      )}
                     </span>
                     {peutModifier && actif ? (
                       <form action={retirer.bind(null, p.id, m.id)}>
