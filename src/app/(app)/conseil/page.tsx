@@ -12,11 +12,15 @@ import { Icone } from "@/components/Icone";
 import { ONGLETS_CONSEIL, SousOnglets } from "@/components/SousOnglets";
 import { approuver } from "./actions";
 import { EtapesConseil, TableauConseil } from "./TableauConseil";
+import { PresentationConseil, type LivrablesProjet } from "./PresentationConseil";
+import { livrablesDe } from "@/lib/donnees/livrables";
 
 export const metadata: Metadata = { title: "Rapport au conseil" };
 
-export default async function PageConseil({ searchParams }: { searchParams: Promise<{ mois?: string }> }) {
-  const { mois: moisDemande } = await searchParams;
+export default async function PageConseil({ searchParams }: { searchParams: Promise<{ mois?: string; vue?: string }> }) {
+  const { mois: moisDemande, vue: vueDemandee } = await searchParams;
+  // Deux présentations des mêmes lignes, à comparer (29 octobre 2026) : le tableau habituel, et la présentation proposée.
+  const vue = vueDemandee === "presentation" ? "presentation" : "tableau";
   const u = await exigerUtilisateur();
   const a = await acces(u);
   exigerAccesConseil(a);
@@ -34,13 +38,13 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
   const navigation = (rapportId?: string) => (
     <nav className="bilan-periode__nav" aria-label="Autre mois" style={{ marginBottom: 12 }}>
       {precedent ? (
-        <a href={`/conseil?mois=${precedent}`} className="bouton-icone" aria-label={`Rapport ${deMois(precedent)}`} title={`Rapport ${deMois(precedent)}`}>
+        <a href={`/conseil?mois=${precedent}${vue === "presentation" ? "&vue=presentation" : ""}`} className="bouton-icone" aria-label={`Rapport ${deMois(precedent)}`} title={`Rapport ${deMois(precedent)}`}>
           <Icone nom="chevron-gauche" taille={20} />
         </a>
       ) : null}
       <span>{moisAnnee(mois).replace(/^./, (c) => c.toUpperCase())}</span>
       {suivant ? (
-        <a href={`/conseil?mois=${suivant}`} className="bouton-icone" aria-label={`Rapport ${deMois(suivant)}`} title={`Rapport ${deMois(suivant)}`}>
+        <a href={`/conseil?mois=${suivant}${vue === "presentation" ? "&vue=presentation" : ""}`} className="bouton-icone" aria-label={`Rapport ${deMois(suivant)}`} title={`Rapport ${deMois(suivant)}`}>
           <Icone nom="chevron-droite" taille={20} />
         </a>
       ) : null}
@@ -126,6 +130,24 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
         ) : (
           <p className="succes">Approuvé : dates et états sont figés. Ils serviront de « dernier rapport » le mois prochain.</p>
         )}
+        <nav className="vues" aria-label="Présentation du rapport">
+          <a href={`/conseil?mois=${mois}`} aria-current={vue === "tableau" ? "page" : undefined}>
+            <Icone nom="liste" taille={16} />
+            Tableau habituel
+          </a>
+          <a href={`/conseil?mois=${mois}&vue=presentation`} aria-current={vue === "presentation" ? "page" : undefined}>
+            <Icone nom="tableau-de-bord" taille={16} />
+            Présentation proposée
+          </a>
+        </nav>
+        {vue === "presentation" ? (
+          <>
+            <p className="note" style={{ margin: 0 }}>
+              Proposition à comparer avec le tableau habituel : les mêmes lignes, lues d&apos;un coup d&apos;œil. L&apos;état d&apos;avancement se corrige dans le tableau ; le fichier Word garde le format du tableau.
+            </p>
+            <PresentationConseil lignes={lignes} objectifs={await objectifsDesProjets(lignes.map((l) => l.projet.id))} livrables={await livrablesParProjet(lignes.map((l) => l.projet.id))} mois={mois} jour={aujourdhui()} visibles={visibles} />
+          </>
+        ) : (
         <TableauConseil
           lignes={lignes}
           objectifs={await objectifsDesProjets(lignes.map((l) => l.projet.id))}
@@ -142,7 +164,21 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
             </>
           }
         />
+        )}
       </div>
     </>
   );
+}
+
+/** Pour la présentation : livrables validés sur le total, et le prochain à venir (le plus proche non validé). */
+async function livrablesParProjet(ids: string[]): Promise<Map<string, LivrablesProjet>> {
+  const { livrables } = await livrablesDe(ids);
+  const m = new Map<string, LivrablesProjet>();
+  for (const id of ids) {
+    const siens = livrables.filter((l) => l.projetId === id);
+    const ouverts = siens.filter((l) => l.etat !== "atteint").sort((a, b) => (a.prevuLe ?? "9999").localeCompare(b.prevuLe ?? "9999"));
+    const p = ouverts[0];
+    m.set(id, { valides: siens.length - ouverts.length, total: siens.length, prochain: p ? { libelle: p.libelle, prevuLe: p.prevuLe, enRetard: p.enRetard } : null });
+  }
+  return m;
 }

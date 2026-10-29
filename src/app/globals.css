@@ -9479,3 +9479,511 @@ a.livrable__lien:focus-visible {
   padding-top: 18px;
   border-top: 1px solid var(--filet);
 }
+
+/* ---------- Rapport au conseil : présentation proposée (29 octobre 2026), à comparer avec le tableau ---------- */
+/* Une page de document : toujours claire, comme le tableau habituel ; couleurs fixes. */
+.presentation-conseil {
+  --pc-encre: #1f1f1f;
+  --pc-discret: #5f5e5e;
+  --pc-marine: #213e7d;
+  --pc-filet: #e3e1dc;
+  --pc-piste: #f3f2ee;
+  --pc-ok: #2e7d57;
+  --pc-veille: #d08a1c;
+  --pc-retard: #c0473a;
+  --pc-ambre-fond: #fff4dc;
+  --pc-ambre-encre: #3c2a08;
+  color: var(--pc-encre);
+}
+.presentation-conseil .papier__corps {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+.pc-entete {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding-bottom: 20px;
+  border-bottom: 3px solid var(--pc-marine);
+}
+.pc-entete__textes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.pc-surtitre {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--pc-marine);
+}
+.pc-titre {
+  margin: 0;
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 300;
+  color: var(--pc-marine);
+}
+.pc-sous {
+  font-size: 14px;
+  color: var(--pc-discret);
+}
+.pc-logo {
+  width: 120px;
+  height: auto;
+  flex: none;
+}
+.pc-chiffres {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+}
+.pc-chiffres > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--pc-filet);
+}
+.pc-chiffres dt {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--pc-discret);
+}
+.pc-chiffres dd {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.pc-chiffre {
+  font-size: 34px;
+  line-height: 38px;
+  font-weight: 200;
+  color: var(--pc-marine);
+}
+.pc-chiffre--alerte {
+  color: var(--pc-retard);
+}
+.pc-chiffre--date {
+  font-size: 22px;
+  line-height: 38px;
+  font-weight: 300;
+}
+.pc-chiffre__detail {
+  font-size: 12px;
+  color: var(--pc-discret);
+}
+.pc-chiffres__sante {
+  flex-direction: column;
+  align-items: flex-start !important;
+}
+.pc-chiffres__sante > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.pc-chiffres__sante strong {
+  min-width: 14px;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--pc-marine);
+}
+.pc-section {
+  margin: 0 0 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--pc-marine);
+}
+/* La santé : un point et un mot, jamais la couleur seule. */
+.pc-sante {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.pc-sante__point {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.pc-sante--dans_les_temps {
+  background: #e3f1ea;
+  color: #1d5a3d;
+}
+.pc-sante--a_surveiller {
+  background: #fdf0d9;
+  color: #7a4d00;
+}
+.pc-sante--en_retard {
+  background: #fbe4e1;
+  color: #8f2a1f;
+}
+/* Calendrier de livraison : une ligne par projet sur un axe commun. */
+.pc-grille {
+  display: flex;
+  flex-direction: column;
+}
+.pc-axe,
+.pc-ligne {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) 150px;
+  gap: 16px;
+  align-items: center;
+}
+.pc-axe {
+  height: 22px;
+}
+.pc-axe__piste {
+  position: relative;
+  height: 22px;
+}
+.pc-axe__repere {
+  position: absolute;
+  bottom: 2px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--pc-discret);
+  white-space: nowrap;
+}
+.pc-axe__repere--annee {
+  font-weight: 600;
+  color: var(--pc-encre);
+}
+.pc-ligne {
+  min-height: 52px;
+  border-top: 1px solid var(--pc-filet);
+}
+.pc-ligne:last-child {
+  border-bottom: 1px solid var(--pc-filet);
+}
+.pc-ligne__nom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 17px;
+}
+.pc-code {
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid #c8c8c8;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pc-marine);
+}
+.pc-piste {
+  position: relative;
+  height: 30px;
+  background: linear-gradient(var(--pc-piste), var(--pc-piste)) center / 100% 2px no-repeat;
+}
+.pc-piste__aujourdhui {
+  position: absolute;
+  top: -10px;
+  bottom: -10px;
+  border-left: 1.5px dashed rgba(31, 31, 31, 0.45);
+}
+.pc-barre,
+.pc-glissement {
+  position: absolute;
+  top: 10px;
+  height: 10px;
+}
+.pc-barre {
+  border-radius: 5px 0 0 5px;
+}
+.pc-barre--entiere {
+  border-radius: 5px;
+}
+.pc-barre--dans_les_temps,
+.pc-carte--dans_les_temps {
+  --pc-sante: var(--pc-ok);
+}
+.pc-barre--a_surveiller,
+.pc-carte--a_surveiller {
+  --pc-sante: var(--pc-veille);
+}
+.pc-barre--en_retard,
+.pc-carte--en_retard {
+  --pc-sante: var(--pc-retard);
+}
+.pc-barre {
+  background: var(--pc-sante);
+}
+/* Le retard sur la fin initiale : la même couleur, hachurée. */
+.pc-glissement {
+  border-radius: 0 5px 5px 0;
+  border: 1px solid var(--pc-retard);
+  background: repeating-linear-gradient(135deg, rgba(192, 71, 58, 0.55) 0 3px, #ffffff 3px 6px);
+}
+.pc-marque {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  width: 0;
+  border-left: 2px solid var(--pc-marine);
+  transform: translateX(-1px);
+}
+.pc-marque--dernier {
+  border-left: 2px dotted var(--pc-discret);
+}
+.pc-lancement {
+  position: absolute;
+  top: 9px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: #f4b22d;
+  transform: rotate(45deg);
+  box-shadow: 0 0 0 2px #ffffff;
+}
+.pc-ligne__fin {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.pc-ecart {
+  display: block;
+  font-size: 11px;
+  line-height: 15px;
+  color: #8f2a1f;
+  font-weight: 400;
+}
+.pc-legende {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  font-size: 12px;
+  color: var(--pc-discret);
+}
+.pc-legende li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.pc-legende__barre {
+  width: 22px;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--pc-ok) 0 33%, var(--pc-veille) 33% 66%, var(--pc-retard) 66%);
+}
+.pc-legende__glissement {
+  width: 22px;
+  height: 10px;
+  border: 1px solid var(--pc-retard);
+  background: repeating-linear-gradient(135deg, rgba(192, 71, 58, 0.55) 0 3px, #ffffff 3px 6px);
+}
+.pc-legende__marque {
+  width: 0;
+  height: 14px;
+  border-left: 2px solid var(--pc-marine);
+}
+.pc-legende__marque--dernier {
+  border-left-style: dotted;
+  border-left-color: var(--pc-discret);
+}
+.pc-legende__lancement {
+  width: 10px;
+  height: 10px;
+  margin: 0 2px;
+  background: #f4b22d;
+  transform: rotate(45deg);
+}
+.pc-legende__aujourdhui {
+  width: 0;
+  height: 14px;
+  border-left: 1.5px dashed rgba(31, 31, 31, 0.45);
+}
+/* Une fiche par projet. */
+.pc-cartes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.pc-carte {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 20px;
+  border: 1px solid var(--pc-filet);
+  border-top: 4px solid var(--pc-sante);
+  break-inside: avoid;
+}
+.pc-carte__entete {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.pc-carte__numero {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--pc-marine);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+}
+.pc-carte__titres {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pc-carte__titres h4 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 21px;
+  font-weight: 600;
+  color: var(--pc-marine);
+}
+.pc-carte__titres h4 a {
+  color: inherit;
+}
+.pc-carte__programme {
+  font-size: 12px;
+  color: var(--pc-discret);
+}
+.pc-carte__alerte {
+  margin: 0;
+  padding: 8px 12px;
+  background: var(--pc-ambre-fond);
+  color: var(--pc-ambre-encre);
+  font-size: 13px;
+  line-height: 18px;
+}
+.pc-carte__etat {
+  margin: 0;
+  font-size: 14px;
+  line-height: 21px;
+}
+.pc-livrables {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 12px;
+  font-size: 13px;
+}
+.pc-livrables__texte strong {
+  font-size: 15px;
+  color: var(--pc-marine);
+}
+.pc-livrables__piste {
+  height: 6px;
+  background: #ebe9e4;
+  overflow: hidden;
+}
+.pc-livrables__piste > span {
+  display: block;
+  height: 100%;
+  background: var(--pc-marine);
+}
+.pc-livrables__prochain {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--pc-discret);
+}
+.pc-livrables__prochain--retard {
+  color: #8f2a1f;
+}
+.pc-etiquette {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pc-discret);
+}
+.pc-objectifs ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 19px;
+}
+.pc-dates {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--pc-filet);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+.pc-dates dt {
+  font-size: 11px;
+  line-height: 15px;
+  color: var(--pc-discret);
+}
+.pc-dates dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
+}
+.pc-dates__change dd {
+  font-weight: 600;
+  color: var(--pc-ambre-encre);
+}
+@media (max-width: 899px) {
+  .presentation-conseil .papier__corps {
+    padding: 24px 18px 28px;
+  }
+  .pc-chiffres {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pc-axe,
+  .pc-ligne {
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 10px;
+  }
+  .pc-axe > span:last-child,
+  .pc-ligne__fin {
+    display: none;
+  }
+  .pc-ligne__nom > span:last-child {
+    display: none;
+  }
+  /* Sur un écran étroit, l'axe ne garde que les années. */
+  .pc-axe__repere:not(.pc-axe__repere--annee) {
+    display: none;
+  }
+  .pc-dates {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media print {
+  .presentation-conseil {
+    border: 0;
+  }
+  .presentation-conseil .papier__corps {
+    padding: 0;
+  }
+  .pc-cartes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
