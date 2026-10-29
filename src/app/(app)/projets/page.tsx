@@ -7,7 +7,7 @@ import { exigerUtilisateur } from "@/lib/auth/session";
 import { aujourdhui, dateCourte, dateLocale, moisAnnee } from "@/lib/dates";
 import { portefeuille } from "@/lib/donnees/projets";
 import { demandesDeProjet } from "@/lib/donnees/gestion";
-import { peutDecider } from "@/lib/projets";
+import { peutDecider, peutDeciderDemande } from "@/lib/projets";
 import { Anneau, Bandeau, LienChiffre } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { Chronologie } from "./Chronologie";
@@ -40,9 +40,11 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
     return l?.length ? phaseEnCours(l, jourPhase) : null;
   };
   const decideur = peutDecider(a);
-  const enAttente = demandes.filter((d) => d.statut === "requete");
+  // À décider : les demandes que cette personne peut décider (un directeur, celles de sa direction).
+  const aDecider = (d: (typeof demandes)[number]) => d.statut === "requete" && peutDeciderDemande(a, { demandeParId: d.demandeurId });
+  const enAttente = demandes.filter(aDecider);
   const miennes = demandes.filter((d) => d.demandeurId === u.id);
-  const aMontrer = decideur ? demandes.filter((d) => d.statut === "requete" || d.demandeurId === u.id) : miennes;
+  const aMontrer = decideur ? demandes.filter((d) => aDecider(d) || d.demandeurId === u.id) : miennes;
   const totalInd = tous.reduce((s, p) => s + p.totalIndicateurs, 0);
   const atteints = tous.reduce((s, p) => s + p.atteints, 0);
   const filtres = [
@@ -132,7 +134,7 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
                         {d.statut === "refuse" && d.motif ? ` · refusé : ${d.motif}` : ""}
                       </span>
                     </span>
-                    <span className={`rangee__meta ${d.statut === "refuse" ? "ton-retard" : "ton-veille"}`}>{d.statut === "refuse" ? "Refusé" : decideur ? "À décider" : "En attente"}</span>
+                    <span className={`rangee__meta ${d.statut === "refuse" ? "ton-retard" : "ton-veille"}`}>{d.statut === "refuse" ? "Refusé" : aDecider(d) ? "À décider" : "En attente"}</span>
                   </a>
                 </li>
               ))}

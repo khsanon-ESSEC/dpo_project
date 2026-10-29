@@ -22,9 +22,11 @@ export default async function PageAFaire({ searchParams }: { searchParams: Promi
   const voir = v && v in VOIR ? (v as keyof typeof VOIR) : null;
   const u = await exigerUtilisateur();
   const jour = aujourdhui();
-  const [taches, confiees, livrables] = await Promise.all([tachesDe([u.id]), confieesHorsDivision(u.id), mesLivrables(u.id, aujourdhui())]);
-  const c = compter(taches, jour);
   const visibles = await idsProjetsVisibles(await acces(u));
+  const [taches, confiees, livrablesTous] = await Promise.all([tachesDe([u.id]), confieesHorsDivision(u.id), mesLivrables(u.id, aujourdhui())]);
+  // Mes livrables : seulement sur les projets que je vois encore (revue de sécurité du 29 octobre 2026).
+  const livrables = livrablesTous.filter((l) => visibles === "tous" || visibles.has(l.projetId));
+  const c = compter(taches, jour);
   const voit = (id: string | null) => !!id && (visibles === "tous" || visibles.has(id));
   type T = { statut: string; echeance: string | null };
   const enRetard = (t: T) => t.statut !== "faite" && t.statut !== "bloquee" && t.echeance !== null && t.echeance < jour;

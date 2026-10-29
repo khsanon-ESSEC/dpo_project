@@ -12,7 +12,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/.test(id)) return new NextResponse("Introuvable", { status: 404 });
   const d = await lireDocument(await acces(u), id);
-  if (!d) return new NextResponse("Introuvable", { status: 404 });
+  if (!d) {
+    // Refus gardé au journal (même réponse « Introuvable » qu'un fichier qui n'existe pas).
+    await noter(u.id, "document_refuse", id);
+    return new NextResponse("Introuvable", { status: 404 });
+  }
   await noter(u.id, "document_telecharge", d.id, { projet: d.projetId });
   return new NextResponse(new Uint8Array(d.contenu), {
     headers: {

@@ -16,7 +16,7 @@ import { noter } from "@/lib/journal";
 import type { Champ } from "@/lib/modeles";
 import { motifReport, peutGererProjet, reportExigeMotif } from "@/lib/projets";
 import { redigeUnRapport } from "@/lib/regles";
-import { noterReportFin } from "./reports-fin";
+import { finDeReference, noterReportFin } from "./reports-fin";
 import { recalculerSante } from "./sante";
 
 export type ResultatBarre = { message: string; ok?: boolean; annulation?: string; lien?: string; projetId?: string };
@@ -116,7 +116,7 @@ export async function mettreAJourProjetDepuisBarre(u: Utilisateur, a: Acces, o: 
     return { message: "Seuls le chef de projet (ou le référent DPO), sa direction et les exécutifs mettent ce projet à jour." };
   if (p.archiveLe || p.statut === "requete" || p.statut === "refuse") return { message: "Ce projet ne se met plus à jour (demande, refusé ou archivé)." };
 
-  if (m.genre === "fin" && reportExigeMotif(p.dateFinPrevue, m.date) && !motifReport(m.motif))
+  if (m.genre === "fin" && reportExigeMotif(await finDeReference(p), m.date) && !motifReport(m.motif))
     return { message: "Dites pourquoi la fin est repoussée : « fin prévue 20/12 : le prestataire livre en retard »." };
   let annulation: string;
   if (m.genre === "jalon") {

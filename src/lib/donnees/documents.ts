@@ -33,6 +33,24 @@ export async function peutDeposerDocument(a: Acces, p: Projet): Promise<boolean>
   return !!m;
 }
 
+/**
+ * Lire les documents d'un projet : qui voit le projet. Une personne hors division seulement si elle est aujourd'hui
+ * dans l'équipe du projet (chef ou membre) : une ancienne tâche, ou le rôle de sponsor, lui ouvrent le projet mais
+ * pas ses documents (revue de sécurité du 29 octobre 2026).
+ */
+export async function peutLireDocuments(a: Acces, p: Pick<Projet, "id" | "chefProjetId" | "referentId">): Promise<boolean> {
+  const visibles = await idsProjetsVisibles(a);
+  if (visibles !== "tous" && !visibles.has(p.id)) return false;
+  if (!a.moi.externe) return true;
+  if (p.chefProjetId === a.moi.id || p.referentId === a.moi.id) return true;
+  const [m] = await db
+    .select({ id: schema.membresProjet.personneId })
+    .from(schema.membresProjet)
+    .where(and(eq(schema.membresProjet.projetId, p.id), eq(schema.membresProjet.personneId, a.moi.id)))
+    .limit(1);
+  return !!m;
+}
+
 /** Les documents d'un projet, sans leur contenu, du plus ancien au plus récent. */
 export async function documentsDuProjet(projetId: string) {
   return db
@@ -86,8 +104,8 @@ export async function lireDocument(a: Acces, documentId: string) {
   // D'abord le projet du document (sans le fichier) : on ne charge le contenu que pour qui peut le lire.
   const [m] = await db.select({ projetId: schema.documentsProjet.projetId }).from(schema.documentsProjet).where(eq(schema.documentsProjet.id, documentId)).limit(1);
   if (!m) return null;
-  const visibles = await idsProjetsVisibles(a);
-  if (visibles !== "tous" && !visibles.has(m.projetId)) return null;
+  const [p] = await db.select({ id: schema.projets.id, chefProjetId: schema.projets.chefProjetId, referentId: schema.projets.referentId }).from(schema.projets).where(eq(schema.projets.id, m.projetId)).limit(1);
+  if (!p || !(await peutLireDocuments(a, p))) return null;
   const [d] = await db.select().from(schema.documentsProjet).where(eq(schema.documentsProjet.id, documentId)).limit(1);
   return d ?? null;
 }

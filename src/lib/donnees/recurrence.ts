@@ -7,10 +7,10 @@
 import "server-only";
 import { and, eq, isNull, lte } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { peutModifierTache, type Acces } from "@/lib/acces";
+import { acces, idsProjetsVisibles, peutModifierTache, type Acces } from "@/lib/acces";
 import { ajouterJours, aujourdhui } from "@/lib/dates";
 import { noter } from "@/lib/journal";
-import { projetOuvert } from "@/lib/projets";
+import { peutAssigner, projetOuvert } from "@/lib/projets";
 import { DELAI_CREATION, lireRythme, premiereEcheance, prochaineOccurrence, type Frequence } from "@/lib/recurrence";
 
 type Tache = typeof schema.taches.$inferSelect;
@@ -61,6 +61,38 @@ export async function arreterRepetition(a: Acces, t: Tache): Promise<{ ok: true 
 }
 
 /**
+ * Avant chaque occurrence, la règle est revérifiée avec les droits d'aujourd'hui (revue de sécurité du 29 octobre
+ * 2026) : la personne est toujours dans l'équipe du projet, et qui a mis la tâche en répétition (ou l'a confiée en
+ * dernier) peut toujours la lui confier et voit toujours le projet. Sinon la répétition s'arrête : une personne
+ * retirée de l'équipe ne reçoit plus de tâches (qui lui rouvriraient le projet et ses documents).
+ */
+async function regleToujoursPermise(r: Regle): Promise<boolean> {
+  if (!r.creeParId) return false;
+  const [c] = await db.select().from(schema.personnes).where(eq(schema.personnes.id, r.creeParId));
+  const [assigne] = await db.select({ actif: schema.personnes.actif, externe: schema.personnes.externe }).from(schema.personnes).where(eq(schema.personnes.id, r.assigneId));
+  if (!c?.actif || !assigne?.actif) return false;
+  const a = await acces({ id: c.id, prenom: c.prenom, nom: c.nom, poste: c.poste, directeur: c.directeur, executif: c.executif, administrateur: c.administrateur, externe: c.externe, theme: c.theme, doitChangerMotDePasse: false });
+  let projet: { id: string; chefProjetId: string | null; referentId: string | null; membres: Set<string> } | null = null;
+  let livrable: { projetId: string; responsableId: string | null } | null = null;
+  if (r.projetId) {
+    const [p] = await db.select({ id: schema.projets.id, chefProjetId: schema.projets.chefProjetId, referentId: schema.projets.referentId }).from(schema.projets).where(eq(schema.projets.id, r.projetId));
+    if (!p) return false;
+    const membres = await db.select({ id: schema.membresProjet.personneId }).from(schema.membresProjet).where(eq(schema.membresProjet.projetId, p.id));
+    projet = { ...p, membres: new Set(membres.map((m) => m.id)) };
+    const dansLEquipe = r.assigneId === p.chefProjetId || r.assigneId === p.referentId || projet.membres.has(r.assigneId);
+    if (!dansLEquipe) return false;
+    const vus = await idsProjetsVisibles(a);
+    if (vus !== "tous" && !vus.has(p.id)) return false;
+    if (r.livrableId) {
+      const [lv] = await db.select({ projetId: schema.indicateurs.projetId, responsableId: schema.indicateurs.responsableId }).from(schema.indicateurs).where(eq(schema.indicateurs.id, r.livrableId));
+      livrable = lv ?? null;
+    }
+  }
+  const acteur = { moiId: a.moi.id, suivis: a.suivis, projetsDiriges: a.projetsDiriges, directeur: a.directeur, toutVoir: a.toutVoir };
+  return peutAssigner(acteur, r.assigneId, projet, assigne.externe, livrable);
+}
+
+/**
  * Crée les occurrences dues (toutes les règles actives, ou une seule). Une règle dont la personne n'est plus active,
  * ou dont le projet est fermé, s'arrête d'elle-même. Renvoie le nombre de tâches créées.
  */
@@ -81,8 +113,9 @@ export async function genererOccurrences(jour = aujourdhui(), regleId?: string):
     }
     const [personne] = await db.select({ actif: schema.personnes.actif }).from(schema.personnes).where(eq(schema.personnes.id, r.assigneId));
     const [projet] = r.projetId ? await db.select({ statut: schema.projets.statut, archiveLe: schema.projets.archiveLe }).from(schema.projets).where(eq(schema.projets.id, r.projetId)) : [null];
-    if (!personne?.actif || (r.projetId && (!projet || !projetOuvert(projet)))) {
+    if (!personne?.actif || (r.projetId && (!projet || !projetOuvert(projet))) || !(await regleToujoursPermise(r))) {
       await db.update(schema.tachesRecurrentes).set({ arreteeLe: new Date() }).where(eq(schema.tachesRecurrentes.id, r.id));
+      await noter(null, "repetition_arretee_auto", r.id, { assigne: r.assigneId, projet: r.projetId });
       continue;
     }
     // Réservation : seule la copie qui avance la règle crée l'occurrence.

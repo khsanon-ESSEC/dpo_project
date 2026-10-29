@@ -184,6 +184,15 @@ export function peutDecider(a: Pick<Acteur, "directeur" | "toutVoir">): boolean 
 }
 
 /**
+ * Décider d'une demande précise : un exécutif, ou un directeur dont la direction compte le demandeur (revue de
+ * sécurité du 29 octobre 2026 : voir la demande, comme sponsor métier ou chef suggéré, ne suffit pas à la décider).
+ */
+export function peutDeciderDemande(a: Pick<Acteur, "directeur" | "toutVoir" | "suivis">, p: { demandeParId: string | null }): boolean {
+  if (a.toutVoir) return true;
+  return a.directeur && !!p.demandeParId && suit(a, p.demandeParId);
+}
+
+/**
  * Une tâche se supprime vraiment seulement si elle n'a pas d'histoire : pas faite, aucun événement
  * autre que sa création, et aucune ligne de rapport qui la cite. Sinon, on l'annule.
  */
@@ -192,7 +201,7 @@ export function tacheSupprimable(t: { statut: string; evenements: string[]; lign
 }
 
 /** Un projet se supprime vraiment seulement s'il n'a rien : ni tâche, ni rapport, ni historique, ni réunion. Sinon on l'archive. */
-export function projetSupprimable(c: { taches: number; lignesRapport: number; reponsesRapport: number; lignesConseil: number; historique: number; reunions: number; documents?: number }): boolean {
+export function projetSupprimable(c: Record<string, number>): boolean {
   return Object.values(c).every((n) => n === 0);
 }
 

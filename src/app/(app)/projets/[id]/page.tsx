@@ -9,8 +9,8 @@ import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet } from "@/lib/regles";
 import { LigneMiseAJour } from "@/components/LigneMiseAJour";
 import { DocumentsProjet } from "./Documents";
-import { documentsDuProjet, peutDeposerDocument } from "@/lib/donnees/documents";
-import { LIBELLE_ETAT_LIVRABLE, LIBELLE_STATUT_PROJET, peutDecider, peutDeclarerPret, peutGererProjet, peutModifierDecision, peutNoterDecision, STATUTS_ACCEPTES } from "@/lib/projets";
+import { documentsDuProjet, peutDeposerDocument, peutLireDocuments } from "@/lib/donnees/documents";
+import { LIBELLE_ETAT_LIVRABLE, LIBELLE_STATUT_PROJET, peutDeciderDemande, peutDeclarerPret, peutGererProjet, peutModifierDecision, peutNoterDecision, STATUTS_ACCEPTES } from "@/lib/projets";
 import { ajouter, archiver, decider, retirer } from "../gestion-actions";
 import { lignesDuProjetCetteSemaine } from "@/lib/donnees/rapport";
 import { Anneau, Bandeau, LienChiffre } from "@/components/Bandeau";
@@ -70,7 +70,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const org = await chargerOrganisation();
   const [membres, roles] = await Promise.all([membresDuProjet(id), peutModifier && actif ? rolesDesEquipes() : Promise.resolve([] as string[])]);
   const nom = (pid: string | null) => (pid && org.personnes.get(pid) ? nomComplet(org.personnes.get(pid)!) : null);
-  const listesDivision = demande && peutDecider(a) ? (await choixListes()).division : [];
+  const listesDivision = demande && peutDeciderDemande(a, p) ? (await choixListes()).division : [];
   const personnesActives = [...org.personnes.values()]
     .filter((x) => x.actif)
     .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
@@ -84,7 +84,8 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   };
   const ouvertesParPersonne = new Map(f.equipe.map((m) => [m.id, m.detail]));
   const auteurs = auteursLignesVisibles(a, id);
-  const [documents, peutDeposer] = await Promise.all([documentsDuProjet(id), peutDeposerDocument(a, p)]);
+  const lisDocuments = await peutLireDocuments(a, p);
+  const [documents, peutDeposer] = lisDocuments ? await Promise.all([documentsDuProjet(id), peutDeposerDocument(a, p)]) : [[], false];
   const nomsDeposants = new Map(documents.filter((d) => d.deposeParId).map((d) => [d.deposeParId!, nom(d.deposeParId) ?? "—"]));
   const rapports = auteurs ? await lignesDuProjetCetteSemaine(id, auteurs) : null;
   const jour = aujourdhui();
@@ -474,7 +475,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 {p.decisionLe ? ` le ${dateCourte(dateLocale(p.decisionLe))}` : ""} : {p.motifDecision}
               </p>
             ) : null}
-            {demande && peutDecider(a) ? (
+            {demande && peutDeciderDemande(a, p) ? (
               <div className="colonnes" style={{ alignItems: "flex-start" }}>
                 <form action={decider.bind(null, p.id)} style={{ flex: "2 1 320px", display: "flex", flexDirection: "column", gap: 12 }}>
                   <input type="hidden" name="decision" value="accepter" />
@@ -973,6 +974,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 </section>
               ) : null}
 
+              {lisDocuments ? (
               <DocumentsProjet
                 projetId={p.id}
                 documents={documents}
@@ -984,6 +986,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 ajoutes={docOk ? Number(docOk) || 0 : undefined}
                 retire={docRetire === "1"}
               />
+              ) : null}
 
               {rapports ? (
                 <section className="carte carte--liste" aria-labelledby="p-rapports">

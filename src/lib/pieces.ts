@@ -13,8 +13,28 @@ export const PIECES_MAX_PAR_CHAMP = 10;
 type Format = { type: string; signature: (o: Uint8Array) => boolean; libelle: string };
 
 const commence = (o: Uint8Array, ...octets: number[]) => octets.every((b, i) => o[i] === b);
+/** Une suite d'octets dans le fichier (noms des parties d'un document Office, en clair dans l'archive). */
+function contient(o: Uint8Array, aiguille: number[]): boolean {
+  const n = aiguille.length;
+  const premier = aiguille[0];
+  for (let i = 0; i + n <= o.length; i++) {
+    if (o[i] !== premier) continue;
+    let k = 1;
+    while (k < n && o[i + k] === aiguille[k]) k++;
+    if (k === n) return true;
+  }
+  return false;
+}
+const ascii = (s: string) => [...s].map((c) => c.charCodeAt(0));
+const utf16 = (s: string) => [...s].flatMap((c) => [c.charCodeAt(0), 0]);
 const zip = (o: Uint8Array) => commence(o, 0x50, 0x4b, 0x03, 0x04);
-const ole = (o: Uint8Array) => commence(o, 0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1);
+/**
+ * Document Office récent : une archive qui contient bien un document de ce type ([Content_Types].xml et le dossier
+ * word/, xl/ ou ppt/), sans macro (vbaProject.bin). Une archive quelconque renommée en .docx est refusée.
+ */
+const ooxml = (dossier: string) => (o: Uint8Array) => zip(o) && contient(o, ascii("[Content_Types].xml")) && contient(o, ascii(dossier)) && !contient(o, ascii("vbaProject.bin"));
+/** Ancien format Office (OLE), sans projet de macros (_VBA_PROJECT). */
+const ole = (o: Uint8Array) => commence(o, 0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1) && !contient(o, utf16("_VBA_PROJECT"));
 /** Texte : pas d'octet nul ni de caractère de contrôle autre que tabulation et fins de ligne (premiers 8 Ko). */
 const texte = (o: Uint8Array) => {
   const n = Math.min(o.length, 8192);
@@ -31,9 +51,9 @@ export const FORMATS: Record<string, Format> = {
   jpg: { type: "image/jpeg", signature: (o) => commence(o, 0xff, 0xd8, 0xff), libelle: "Image" },
   jpeg: { type: "image/jpeg", signature: (o) => commence(o, 0xff, 0xd8, 0xff), libelle: "Image" },
   webp: { type: "image/webp", signature: (o) => commence(o, 0x52, 0x49, 0x46, 0x46) && o[8] === 0x57 && o[9] === 0x45 && o[10] === 0x42 && o[11] === 0x50, libelle: "Image" },
-  docx: { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", signature: zip, libelle: "Word" },
-  xlsx: { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", signature: zip, libelle: "Excel" },
-  pptx: { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation", signature: zip, libelle: "PowerPoint" },
+  docx: { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", signature: ooxml("word/"), libelle: "Word" },
+  xlsx: { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", signature: ooxml("xl/"), libelle: "Excel" },
+  pptx: { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation", signature: ooxml("ppt/"), libelle: "PowerPoint" },
   doc: { type: "application/msword", signature: ole, libelle: "Word" },
   xls: { type: "application/vnd.ms-excel", signature: ole, libelle: "Excel" },
   ppt: { type: "application/vnd.ms-powerpoint", signature: ole, libelle: "PowerPoint" },
@@ -55,6 +75,8 @@ export function nomPropre(nom: string): string {
   const base = (nom.split(/[\\/]/).pop() ?? "")
     .normalize("NFC")
     .replace(/[\u0000-\u001f\u007f"<>|:*?]/g, "")
+    // Caractères invisibles et de sens d'écriture (un nom « facture‮fdp.exe » s'afficherait trompeusement).
+    .replace(/[\u061c\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g, "")
     .replace(/\s+/g, " ")
     .trim();
   if (!base || base === "." || base === "..") return "fichier";
@@ -71,7 +93,7 @@ export function verifierFichier(nom: string, contenu: Uint8Array): Verdict {
   if (contenu.length > TAILLE_MAX) return { ok: false, erreur: `« ${propre} » dépasse 10 Mo.` };
   const f = FORMATS[extensionDe(propre)];
   if (!f) return { ok: false, erreur: `« ${propre} » : format non accepté (PDF, images, Word, Excel, PowerPoint, CSV ou texte).` };
-  if (!f.signature(contenu)) return { ok: false, erreur: `« ${propre} » ne ressemble pas à un fichier ${f.libelle} : il n'a pas été joint.` };
+  if (!f.signature(contenu)) return { ok: false, erreur: `« ${propre} » ne ressemble pas à un fichier ${f.libelle} (ou contient des macros) : il n'a pas été joint.` };
   return { ok: true, nom: propre, type: f.type, libelle: f.libelle };
 }
 
@@ -85,5 +107,6 @@ export function tailleLisible(octets: number): string {
 /** En-tête Content-Disposition sûr pour un nom accentué (RFC 6266 / 5987). */
 export function dispositionTelechargement(nom: string): string {
   const ascii = nom.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(nom)}`;
+  const encode = encodeURIComponent(nom).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encode}`;
 }

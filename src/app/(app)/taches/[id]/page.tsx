@@ -48,15 +48,19 @@ export default async function PageTache({ params, searchParams }: { params: Prom
   const projets = (await tousLesProjetsActifs()).filter((x) => visibles === "tous" || visibles.has(x.id) || x.id === t.projetId);
   if (projet && !projets.some((x) => x.id === projet.id)) projets.unshift({ id: projet.id, code: projet.code, titre: projet.titre });
   const { personnes, base, parProjet, parLivrable, externesPartout, horsProjet } = await assignables(a);
+  // Le projet de la tâche, si la personne le voit encore : sinon ni ses livrables ni ses tâches ne sont proposés
+  // (revue de sécurité du 29 octobre 2026 ; la tâche elle-même reste lisible par qui l'a confiée).
+  const projetVu = !t.projetId || visibles === "tous" || visibles.has(t.projetId);
   // Livrables : celui de la tâche (s'il y en a un), et ceux de chaque projet pour la changer de livrable.
   const choixLivrables = await choixDeLivrables(projets.map((x) => x.id));
+  if (t.projetId && !projetVu) choixLivrables[t.projetId] = (choixLivrables[t.projetId] ?? []).filter((x) => x.id === t.livrableId);
   const livrables = Object.fromEntries(Object.entries(choixLivrables).map(([k, l]) => [k, l.filter((x) => x.etat !== "atteint" || x.id === t.livrableId).map((x) => ({ id: x.id, libelle: x.libelle, prevuLe: x.prevuLe }))]));
   const leLivrable = t.livrableId && t.projetId ? (choixLivrables[t.projetId] ?? []).find((x) => x.id === t.livrableId) : undefined;
   const responsableLivrable = leLivrable?.responsableId ? org.personnes.get(leLivrable.responsableId) : undefined;
   const apresLivrable = !!leLivrable && apresLeLivrable(t, leLivrable.prevuLe);
   // Enchaînement : les tâches que celle-ci attend, et celles qui l'attendent (même projet).
   const ench = await enchainementDe(t);
-  const possibles = !t.annuleeLe && t.projetId && peutModifierTache(a, t) ? await precedentesPossibles(t) : [];
+  const possibles = !t.annuleeLe && t.projetId && projetVu && peutModifierTache(a, t) ? await precedentesPossibles(t) : [];
   // Temps passé : ce qui a été noté, comparé à l'estimation.
   const temps = await tempsDeLaTache(t.id);
   // Répétition : la règle de la tâche (si elle se répète), son rythme ; proposé par défaut : le jour de l'échéance.
@@ -528,6 +532,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
                 {retour ? <input type="hidden" name="retour" value={retour} /> : null}
                 <span className="note" style={{ flex: "1 1 260px" }}>
                   Elle n&apos;a encore aucune histoire : elle peut être supprimée définitivement.
+                  {regle && !regle.arreteeLe ? " Sa répétition s'arrête aussi." : ""}
                 </span>
                 <label className="confirmer">
                   <input type="checkbox" name="confirme" required /> Oui, la supprimer
@@ -543,6 +548,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
                   <input id="t-motif" name="motif" required maxLength={500} aria-describedby="t-motif-aide" />
                   <span className="aide" id="t-motif-aide">
                     Elle a une histoire (mises à jour, rapports) : annulée, elle quitte les listes et la charge, et reste lisible.
+                    {regle && !regle.arreteeLe ? " Sa répétition s'arrête aussi (elle reprend si la tâche est rétablie)." : ""}
                   </span>
                 </div>
                 <button type="submit" className="bouton-contour">

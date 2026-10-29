@@ -37,17 +37,17 @@ export type Annulable =
   | { genre: "note_ligne"; ligneId: string }
   | { genre: "note_reponse"; rapportId: string; champId: string; avant: string | null; apres?: string }
   | { genre: "projet"; projetId: string; apresMajLe: string; avant: { risqueMotif: string; risqueLe: string | null; risqueParId: string | null; dateFinPrevue: string | null; dateLancementPrevue: string | null } }
-  | { genre: "jalon"; projetId: string; indicateurId: string }
+  | { genre: "jalon"; projetId: string; indicateurId: string; depuis?: string; responsableId?: string | null }
   // Actions de la barre sur un projet (src/lib/donnees/commandes.ts).
   | { genre: "projet_cree"; projetId: string }
-  | { genre: "livrable"; projetId: string; livrableId: string; avant: { prevuLe: string | null; responsableId: string | null }; apres: { prevuLe: string | null; responsableId: string | null } }
+  | { genre: "livrable"; projetId: string; livrableId: string; avant: { prevuLe: string | null; responsableId: string | null }; apres: { prevuLe: string | null; responsableId: string | null }; depuis?: string }
   | { genre: "membre"; projetId: string; membreId: string }
-  | { genre: "decision"; projetId: string; decisionId: string }
-  | { genre: "risque"; projetId: string; risqueId: string }
-  | { genre: "risque_statut"; projetId: string; risqueId: string; avant: string }
+  | { genre: "decision"; projetId: string; decisionId: string; apres?: string }
+  | { genre: "risque"; projetId: string; risqueId: string; apres?: string }
+  | { genre: "risque_statut"; projetId: string; risqueId: string; avant: string; apresStatut?: string }
   | { genre: "phase"; projetId: string; phaseId: string }
   | { genre: "phase_ajoutee"; projetId: string; phaseId: string }
-  | { genre: "phases_types"; projetId: string }
+  | { genre: "phases_types"; projetId: string; phases?: { id: string; nom: string; debut: string | null; fin: string | null }[] }
   | { genre: "projet_champs"; projetId: string; apresMajLe: string; avant: Record<string, unknown> }
   | { genre: "cloture"; projetId: string; depuis: string };
 
@@ -60,6 +60,11 @@ export async function enregistrerAnnulation(personneId: string, a: Annulable): P
 }
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
+
+/** Empreinte du contenu d'une décision ou d'un risque : « Annuler » refuse si quelqu'un l'a changé depuis. */
+export const contenuDecision = (x: { texte: string; decideeLe: string; instance: string; contexte: string }) => JSON.stringify([x.texte, x.decideeLe, x.instance, x.contexte]);
+export const contenuRisque = (x: { titre: string; description: string; probabilite: number; impact: number; responsableId: string | null; reponse: string; statut: string; revueLe: string | null }) =>
+  JSON.stringify([x.titre, x.description, x.probabilite, x.impact, x.responsableId, x.reponse, x.statut, x.revueLe]);
 
 /** Le projet, si la personne le gère (pour défaire une action de gestion). */
 async function projetGere(a: Acces, projetId: string) {
@@ -95,6 +100,12 @@ async function sortirDeLEquipeSiAjoutee(projetId: string | null, personneId: str
     .where(and(eq(schema.taches.projetId, projetId), eq(schema.taches.assigneId, personneId), isNull(schema.taches.annuleeLe)))
     .limit(1);
   if (autre) return;
+  const [responsable] = await db
+    .select({ id: schema.indicateurs.id })
+    .from(schema.indicateurs)
+    .where(and(eq(schema.indicateurs.projetId, projetId), eq(schema.indicateurs.responsableId, personneId)))
+    .limit(1);
+  if (responsable) return;
   await db.delete(schema.membresProjet).where(eq(schema.membresProjet.id, m.id));
 }
 
@@ -264,6 +275,8 @@ async function defaire(a: Acces, d: Annulable): Promise<{ ok: true; message: str
       if (!l) return { ok: true, message: "Livrable introuvable." };
       if (l.prevuLe !== d.apres.prevuLe || l.responsableId !== d.apres.responsableId) return { erreur: "Le livrable a changé depuis : corrigez-le depuis « Modifier le projet »." };
       await db.update(schema.indicateurs).set({ prevuLe: d.avant.prevuLe, responsableId: d.avant.responsableId }).where(eq(schema.indicateurs.id, l.id));
+      // Confier le livrable avait fait entrer son responsable dans l'équipe : il en ressort si rien d'autre l'y retient.
+      if (d.depuis && d.apres.responsableId && d.apres.responsableId !== d.avant.responsableId) await sortirDeLEquipeSiAjoutee(p.id, d.apres.responsableId, a.moi.id, new Date(d.depuis));
       await recalculerSante([p.id]);
       return { ok: true, message: `Livrable « ${l.libelle} » revenu comme avant.` };
     }
@@ -274,14 +287,24 @@ async function defaire(a: Acces, d: Annulable): Promise<{ ok: true; message: str
       return { ok: true, message: "Retiré(e) de l'équipe." };
     }
     case "decision": {
+      // Corrigée depuis (par l'auteur ou un autre) : on ne la retire pas en aveugle.
+      const [x] = await db.select().from(schema.decisionsProjet).where(eq(schema.decisionsProjet.id, d.decisionId));
+      if (!x) return { ok: true, message: "Déjà retirée." };
+      if (d.apres && contenuDecision(x) !== d.apres) return { erreur: "La décision a changé depuis : retirez-la depuis la fiche du projet." };
       const r = await retirerDecision(a, d.projetId, d.decisionId);
       return "erreur" in r ? r : { ok: true, message: "Décision retirée du registre." };
     }
     case "risque": {
+      const [x] = await db.select().from(schema.risquesProjet).where(eq(schema.risquesProjet.id, d.risqueId));
+      if (!x) return { ok: true, message: "Déjà retiré." };
+      if (d.apres && contenuRisque(x) !== d.apres) return { erreur: "Le risque a changé depuis : retirez-le depuis la fiche du projet." };
       const r = await retirerRisque(a, d.projetId, d.risqueId);
       return "erreur" in r ? r : { ok: true, message: "Risque retiré du registre." };
     }
     case "risque_statut": {
+      const [x] = await db.select({ statut: schema.risquesProjet.statut }).from(schema.risquesProjet).where(eq(schema.risquesProjet.id, d.risqueId));
+      if (!x) return { erreur: "Risque introuvable." };
+      if (d.apresStatut && x.statut !== d.apresStatut) return { erreur: "Le risque a changé depuis : corrigez-le depuis la fiche du projet." };
       const r = await changerStatutRisque(a, d.projetId, d.risqueId, d.avant);
       return "erreur" in r ? r : { ok: true, message: "Le risque est revenu comme avant." };
     }
@@ -297,9 +320,13 @@ async function defaire(a: Acces, d: Annulable): Promise<{ ok: true; message: str
       const p = await projetGere(a, d.projetId);
       if (!p) return { erreur: "Projet introuvable." };
       const phases = await db.select().from(schema.phasesProjet).where(eq(schema.phasesProjet.projetId, p.id));
-      if (phases.some((x) => x.termineeLe)) return { erreur: "Une phase a déjà été terminée : retirez-les depuis « Modifier le projet »." };
-      await db.update(schema.indicateurs).set({ phaseId: null }).where(eq(schema.indicateurs.projetId, p.id));
-      await db.delete(schema.phasesProjet).where(eq(schema.phasesProjet.projetId, p.id));
+      // Seules les phases créées par cette action, et seulement si personne ne les a touchées depuis.
+      const creees = d.phases ?? [];
+      const ids = new Set(creees.map((x) => x.id));
+      const intactes = creees.every((c) => phases.some((x) => x.id === c.id && x.nom === c.nom && x.debut === c.debut && x.fin === c.fin && !x.termineeLe));
+      if (!creees.length || !intactes) return { erreur: "Les phases ont changé depuis : retirez-les depuis « Modifier le projet »." };
+      await db.update(schema.indicateurs).set({ phaseId: null }).where(and(eq(schema.indicateurs.projetId, p.id), inArray(schema.indicateurs.phaseId, [...ids])));
+      await db.delete(schema.phasesProjet).where(and(eq(schema.phasesProjet.projetId, p.id), inArray(schema.phasesProjet.id, [...ids])));
       await recalculerSante([p.id]);
       return { ok: true, message: "Phases retirées." };
     }
@@ -310,6 +337,7 @@ async function defaire(a: Acces, d: Annulable): Promise<{ ok: true; message: str
       const permis = ["sponsorId", "chefProjetId", "priorite", "budgetPrevu", "budgetEngage", "budgetDevise", "budgetNote", "budgetMajLe"];
       const valeurs = Object.fromEntries(Object.entries(d.avant).filter(([k]) => permis.includes(k)));
       await db.update(schema.projets).set({ ...valeurs, majLe: new Date() }).where(eq(schema.projets.id, p.id));
+      await noter(a.moi.id, "projet_champs_retablis", p.id, valeurs);
       return { ok: true, message: `« ${p.titre} » est revenu comme avant.` };
     }
     case "cloture": {
@@ -325,6 +353,7 @@ async function defaire(a: Acces, d: Annulable): Promise<{ ok: true; message: str
       if (!i) return { ok: true, message: "Déjà retiré." };
       if (i.etat !== "a_venir") return { erreur: "Le livrable a changé depuis : retirez-le depuis « Modifier le projet »." };
       await retirerIndicateur(p.id, d.indicateurId, a.moi.id);
+      if (d.depuis && d.responsableId) await sortirDeLEquipeSiAjoutee(p.id, d.responsableId, a.moi.id, new Date(d.depuis));
       return { ok: true, message: "Livrable retiré." };
     }
   }

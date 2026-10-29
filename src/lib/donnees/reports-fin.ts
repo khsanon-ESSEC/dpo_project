@@ -11,6 +11,22 @@ export async function noterReportFin(projetId: string, avant: string | null, apr
   await db.insert(schema.reportsFinProjet).values({ projetId, avant, apres, parId, motif: motif.slice(0, 300) });
 }
 
+/**
+ * La fin prévue à laquelle comparer une nouvelle date pour exiger un motif : la fin prévue actuelle, ou, si elle a été
+ * effacée, la dernière fin connue (puis la fin initiale). Sans cela, effacer la date puis en mettre une plus tardive
+ * repoussait la fin sans motif (revue de sécurité du 29 octobre 2026).
+ */
+export async function finDeReference(p: { id: string; dateFinPrevue: string | null; dateFinInitiale: string | null }): Promise<string | null> {
+  if (p.dateFinPrevue) return p.dateFinPrevue;
+  const [r] = await db
+    .select({ apres: schema.reportsFinProjet.apres, avant: schema.reportsFinProjet.avant })
+    .from(schema.reportsFinProjet)
+    .where(eq(schema.reportsFinProjet.projetId, p.id))
+    .orderBy(desc(schema.reportsFinProjet.creeLe))
+    .limit(1);
+  return r?.apres ?? r?.avant ?? p.dateFinInitiale;
+}
+
 /** « Annuler » d'une mise à jour de la barre : retire le dernier report qu'elle avait noté. */
 export async function oublierReportFin(projetId: string, avant: string | null, apres: string | null) {
   const p = schema.reportsFinProjet;

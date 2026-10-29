@@ -3,7 +3,8 @@
 // Au premier lancement, la base est créée et remplie avec les données de démonstration.
 //
 // Usage : npm run local            (Ctrl+C pour arrêter)
-//         npm run local -- --vraie-date   pour ne pas figer la date au vendredi 30 octobre 2026
+//         npm run local -- --date-demo    pour figer la date au vendredi 30 octobre 2026 (démonstration) ;
+//                                         sans cette option, l'application vit à la date du jour
 //         npm run local -- --reseau       pour l'ouvrir aussi aux appareils du même Wi-Fi (téléphone)
 //
 // Paramètres facultatifs dans .env.local (même format que .env.example), par exemple IA_FOURNISSEUR.
@@ -54,7 +55,9 @@ function portLibre(depart, hote = "127.0.0.1") {
 }
 
 const envLocal = lireEnvLocal();
-const vraieDate = process.argv.includes("--vraie-date");
+// La date du jour par défaut (demandé le 29 octobre 2026 : « Ma semaine » s'ouvre sur aujourd'hui). « --date-demo »
+// fige la date de la démonstration ; « --vraie-date » reste accepté (c'est désormais le comportement normal).
+const dateFigee = process.argv.includes("--date-demo");
 // --reseau : l'application écoute aussi sur le réseau local (téléphone sur le même Wi-Fi). La base reste locale.
 const reseau = process.argv.includes("--reseau");
 
@@ -74,7 +77,7 @@ const portBase = await portLibre(Number(envLocal.PORT_BASE_LOCALE || 54329));
 const portApp = await portLibre(Number(envLocal.PORT || 3000), reseau ? "0.0.0.0" : "127.0.0.1");
 const MOT_DE_PASSE_BASE = "dpo-local";
 const DATABASE_URL = `postgres://dpo:${MOT_DE_PASSE_BASE}@127.0.0.1:${portBase}/dpo`;
-const DATE_DEMO = vraieDate ? "" : envLocal.DATE_DEMO ?? "2026-10-30";
+const DATE_DEMO = dateFigee ? envLocal.DATE_DEMO || "2026-10-30" : (envLocal.DATE_DEMO ?? "");
 
 // ---------- 1. Base PostgreSQL embarquée ----------
 const journalPg = [];
@@ -257,7 +260,7 @@ if (!prete) echouer("L'application ne répond pas. Voir les messages ci-dessus."
 
 console.log(`
 \x1b[32m✓ Pilotage des projets DPO est prêt : ${adresse}\x1b[0m
-${DATE_DEMO ? `  Date figée au ${DATE_DEMO} (démonstration). Pour la vraie date : npm run local -- --vraie-date\n` : ""}
+${DATE_DEMO ? `  Date figée au ${DATE_DEMO} (démonstration). Sans --date-demo ni DATE_DEMO dans .env.local : la date du jour.\n` : ""}
   Comptes de démonstration (mot de passe : Demo-DPO-2026)
     daphnee.joseph@demo.dpo.local       chargée de projets
     myriam.valcin@demo.dpo.local        cheffe d'équipe et cheffe de projet

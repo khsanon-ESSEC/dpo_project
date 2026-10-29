@@ -11,11 +11,11 @@ import type { Utilisateur } from "@/lib/auth/session";
 import { analyserCommande, type ContexteCommande } from "@/lib/commandes";
 import { aujourdhui, dateCourte } from "@/lib/dates";
 import { chargerOrganisation } from "@/lib/organisation";
-import { peutDecider, peutGererProjet } from "@/lib/projets";
+import { peutDeciderDemande, peutGererProjet } from "@/lib/projets";
 import { nomComplet, redigeUnRapport } from "@/lib/regles";
 import { phaseEnCours } from "@/lib/risques";
 import { LIBELLE_OBJECTIFS, LIBELLE_PRIORITE, montantTexte } from "@/lib/suivi";
-import { enregistrerAnnulation } from "./annulations";
+import { contenuDecision, contenuRisque, enregistrerAnnulation } from "./annulations";
 import type { ResultatBarre } from "./barre";
 import { cloturerProjet, enregistrerBudget, rouvrirProjet } from "./cloture";
 import { creerRapportPonctuel } from "./conseil";
@@ -108,7 +108,7 @@ export async function executerCommande(u: Utilisateur, a: Acces, o: { saisie: st
     if ("erreur" in n) return { message: n.erreur };
     const [p] = await db.select({ code: schema.projets.code }).from(schema.projets).where(eq(schema.projets.id, n.id));
     let accepte = false;
-    if (c.chefId && peutDecider(a)) {
+    if (c.chefId && peutDeciderDemande(a, { demandeParId: u.id })) {
       const d = await deciderDemande(n.id, { accepte: true, motif: "", statut: "en_cours", chefProjetId: c.chefId, dateEntree: jour, dateFinPrevue: c.fin ?? "", strategique: c.strategique }, u.id);
       accepte = !("erreur" in d);
     }
@@ -165,20 +165,22 @@ export async function executerCommande(u: Utilisateur, a: Acces, o: { saisie: st
   switch (c.type) {
     case "livrable_creer": {
       if (!gere(p)) return refusGestion;
+      const depuis = new Date().toISOString();
       const n = await ajouterLivrable(pid, { libelle: c.libelle, prevuLe: c.prevuLe, responsableId: c.responsableId, critere: "" }, u.id);
       if ("erreur" in n) return { message: n.erreur };
-      return finir(`Livrable « ${c.libelle} » ajouté${c.prevuLe ? `, prévu le ${dateCourte(c.prevuLe)}` : ""}${c.responsableId ? `, responsable ${nomDe(ctx, c.responsableId)}${c.responsableId !== u.id ? " (prévenu)" : ""}` : ""}.`, { genre: "jalon", projetId: pid, indicateurId: n.id });
+      return finir(`Livrable « ${c.libelle} » ajouté${c.prevuLe ? `, prévu le ${dateCourte(c.prevuLe)}` : ""}${c.responsableId ? `, responsable ${nomDe(ctx, c.responsableId)}${c.responsableId !== u.id ? " (prévenu)" : ""}` : ""}.`, { genre: "jalon", projetId: pid, indicateurId: n.id, depuis, responsableId: c.responsableId ?? null });
     }
     case "livrable_modifier": {
       if (!gere(p)) return refusGestion;
       const [l] = await db.select().from(schema.indicateurs).where(and(eq(schema.indicateurs.id, c.livrableId), eq(schema.indicateurs.projetId, pid)));
       if (!l) return { message: "Livrable introuvable." };
       const apres = { prevuLe: c.prevuLe ?? l.prevuLe, responsableId: c.responsableId ?? l.responsableId };
+      const depuis = new Date().toISOString();
       const m = await modifierLivrable(pid, l.id, { libelle: l.libelle, prevuLe: apres.prevuLe, responsableId: apres.responsableId, critere: l.critere }, u.id);
       if ("erreur" in m) return { message: m.erreur };
       return finir(
         `Livrable « ${l.libelle} » : ${[c.responsableId ? `confié à ${nomDe(ctx, c.responsableId)}${c.responsableId !== u.id && c.responsableId !== l.responsableId ? " (prévenu)" : ""}` : null, c.prevuLe ? `prévu le ${dateCourte(c.prevuLe)}` : null].filter(Boolean).join(", ")}.`,
-        { genre: "livrable", projetId: pid, livrableId: l.id, avant: { prevuLe: l.prevuLe, responsableId: l.responsableId }, apres },
+        { genre: "livrable", projetId: pid, livrableId: l.id, avant: { prevuLe: l.prevuLe, responsableId: l.responsableId }, apres, depuis },
       );
     }
     case "livrable_etat": {
@@ -208,13 +210,15 @@ export async function executerCommande(u: Utilisateur, a: Acces, o: { saisie: st
     case "decision": {
       const d = await noterDecision(a, pid, { texte: c.texte, decideeLe: jour, instance: c.instance, contexte: "" });
       if ("erreur" in d) return { message: d.erreur };
-      return finir(`Décision notée au registre : « ${c.texte} »${c.instance ? ` (${c.instance})` : ""}.`, { genre: "decision", projetId: pid, decisionId: d.id });
+      const [dn] = await db.select().from(schema.decisionsProjet).where(eq(schema.decisionsProjet.id, d.id));
+      return finir(`Décision notée au registre : « ${c.texte} »${c.instance ? ` (${c.instance})` : ""}.`, { genre: "decision", projetId: pid, decisionId: d.id, apres: dn ? contenuDecision(dn) : undefined });
     }
     case "risque_creer": {
       const n = await enregistrerRisque(a, pid, null, { titre: c.titre, description: "", probabilite: c.probabilite, impact: c.impact, responsableId: c.responsableId, reponse: "", revueLe: null });
       if ("erreur" in n) return { message: n.erreur };
       const crit = c.probabilite * c.impact;
-      return finir(`Risque noté au registre : « ${c.titre} » (${crit >= 6 ? "critique" : crit >= 3 ? "modéré" : "faible"}).`, { genre: "risque", projetId: pid, risqueId: n.id });
+      const [rn] = await db.select().from(schema.risquesProjet).where(eq(schema.risquesProjet.id, n.id));
+      return finir(`Risque noté au registre : « ${c.titre} » (${crit >= 6 ? "critique" : crit >= 3 ? "modéré" : "faible"}).`, { genre: "risque", projetId: pid, risqueId: n.id, apres: rn ? contenuRisque(rn) : undefined });
     }
     case "risque_statut": {
       const [x] = await db.select().from(schema.risquesProjet).where(and(eq(schema.risquesProjet.id, c.risqueId), eq(schema.risquesProjet.projetId, pid)));
@@ -222,7 +226,7 @@ export async function executerCommande(u: Utilisateur, a: Acces, o: { saisie: st
       if (x.statut === c.statut) return { message: `Ce risque est déjà ${c.statut === "maitrise" ? "maîtrisé" : c.statut === "clos" ? "clos" : "ouvert"}.` };
       const s = await changerStatutRisque(a, pid, c.risqueId, c.statut);
       if ("erreur" in s) return { message: s.erreur };
-      return finir(`Risque « ${x.titre} » ${c.statut === "maitrise" ? "maîtrisé" : c.statut === "clos" ? "clos" : "rouvert"}.`, { genre: "risque_statut", projetId: pid, risqueId: x.id, avant: x.statut });
+      return finir(`Risque « ${x.titre} » ${c.statut === "maitrise" ? "maîtrisé" : c.statut === "clos" ? "clos" : "rouvert"}.`, { genre: "risque_statut", projetId: pid, risqueId: x.id, avant: x.statut, apresStatut: c.statut });
     }
     case "phase_terminer": {
       const phases = await db.select().from(schema.phasesProjet).where(eq(schema.phasesProjet.projetId, pid));
@@ -236,13 +240,12 @@ export async function executerCommande(u: Utilisateur, a: Acces, o: { saisie: st
     case "phases_types": {
       const t = await utiliserPhasesTypes(a, pid);
       if ("erreur" in t) return { message: t.erreur };
-      return finir("Projet découpé en phases types, réparties sur sa durée : ajustez-les dans « Modifier le projet ».", { genre: "phases_types", projetId: pid });
+      return finir("Projet découpé en phases types, réparties sur sa durée : ajustez-les dans « Modifier le projet ».", { genre: "phases_types", projetId: pid, phases: t.phases });
     }
     case "phase_ajouter": {
       const t = await ajouterPhase(a, pid, { nom: c.nom, debut: c.debut, fin: c.fin });
       if ("erreur" in t) return { message: t.erreur };
-      const [n] = await db.select({ id: schema.phasesProjet.id }).from(schema.phasesProjet).where(eq(schema.phasesProjet.projetId, pid)).orderBy(desc(schema.phasesProjet.ordre)).limit(1);
-      return finir(`Phase « ${c.nom} » ajoutée.`, n ? { genre: "phase_ajoutee", projetId: pid, phaseId: n.id } : undefined);
+      return finir(`Phase « ${c.nom} » ajoutée.`, { genre: "phase_ajoutee", projetId: pid, phaseId: t.id });
     }
     case "sponsor":
     case "chef":

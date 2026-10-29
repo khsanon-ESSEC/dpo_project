@@ -5,7 +5,7 @@
  */
 import "server-only";
 import { priorite as lirePriorite } from "@/lib/suivi";
-import { and, asc, count, eq, isNull, max, ne } from "drizzle-orm";
+import { and, asc, count, eq, isNull, max, ne, or } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { idsProjetsVisibles, type Acces } from "@/lib/acces";
 import { noter } from "@/lib/journal";
@@ -14,7 +14,7 @@ import { codeSuggere, codeValide, motifReport, peutAssigner, reportExigeMotif, p
 import { membresDeLaDirection, nomComplet, resoudreSuperieur } from "@/lib/regles";
 import { trouverOuCreerExterne } from "./externes";
 import { MESSAGE_HORS_LISTE, valeurDeListe } from "./listes";
-import { noterReportFin } from "./reports-fin";
+import { finDeReference, noterReportFin } from "./reports-fin";
 import { recalculerSante } from "./sante";
 
 const date = (v: unknown) => {
@@ -232,7 +232,10 @@ export async function modifierProjet(projetId: string, d: ModifProjet, parId: st
     majLe: new Date(),
   };
   const motif = motifReport(d.motifReport);
-  if (reportExigeMotif(p.dateFinPrevue, valeurs.dateFinPrevue) && !motif) return { erreur: "Dites pourquoi la fin prévue est repoussée : le motif est lu dans les glissements et dans le rapport au conseil." };
+  // Repousser la fin, ou l'effacer sur un projet accepté, demande un motif.
+  const finEffacee = !!p.dateFinPrevue && !valeurs.dateFinPrevue && p.statut !== "requete" && p.statut !== "refuse";
+  if (finEffacee && !motif) return { erreur: "Dites pourquoi la fin prévue est retirée : le motif est lu dans les glissements et dans le rapport au conseil." };
+  if (reportExigeMotif(await finDeReference(p), valeurs.dateFinPrevue) && !motif) return { erreur: "Dites pourquoi la fin prévue est repoussée : le motif est lu dans les glissements et dans le rapport au conseil." };
   await db.update(schema.projets).set(valeurs).where(eq(schema.projets.id, projetId));
   await noterReportFin(projetId, p.dateFinPrevue, valeurs.dateFinPrevue, parId, motif);
   // Dates ou statut changés : la santé calculée suit.
@@ -250,7 +253,17 @@ export async function modifierProjet(projetId: string, d: ModifProjet, parId: st
 /** Ce qui empêche de supprimer un projet (il s'archive alors). */
 export async function activiteDuProjet(projetId: string) {
   const compte = async (
-    table: typeof schema.taches | typeof schema.lignesRapport | typeof schema.reponsesRapport | typeof schema.lignesConseil | typeof schema.historiqueProjet | typeof schema.reunions | typeof schema.documentsProjet,
+    table:
+      | typeof schema.taches
+      | typeof schema.lignesRapport
+      | typeof schema.reponsesRapport
+      | typeof schema.lignesConseil
+      | typeof schema.historiqueProjet
+      | typeof schema.reunions
+      | typeof schema.documentsProjet
+      | typeof schema.decisionsProjet
+      | typeof schema.risquesProjet
+      | typeof schema.reportsFinProjet,
   ) => {
     const [{ n }] = await db.select({ n: count() }).from(table).where(eq(table.projetId, projetId));
     return Number(n);
@@ -263,6 +276,12 @@ export async function activiteDuProjet(projetId: string) {
     historique: await compte(schema.historiqueProjet),
     reunions: await compte(schema.reunions),
     documents: await compte(schema.documentsProjet),
+    // Les registres comptent aussi (revue de sécurité du 29 octobre 2026) : un projet qui a des décisions, des risques,
+    // des reports motivés ou un livrable validé s'archive au lieu de se supprimer.
+    decisions: await compte(schema.decisionsProjet),
+    risques: await compte(schema.risquesProjet),
+    reportsFin: await compte(schema.reportsFinProjet),
+    livrablesValides: Number((await db.select({ n: count() }).from(schema.indicateurs).where(and(eq(schema.indicateurs.projetId, projetId), eq(schema.indicateurs.etat, "atteint"))))[0].n),
   };
 }
 
@@ -273,7 +292,7 @@ export async function archiverProjet(projetId: string, archiver: boolean, parId:
 
 /** Supprime un projet sans activité (sinon : refus, il faut l'archiver). */
 export async function supprimerProjet(projetId: string, parId: string): Promise<{ ok: true } | { erreur: string }> {
-  if (!projetSupprimable(await activiteDuProjet(projetId))) return { erreur: "Ce projet a une histoire (tâches, rapports, réunions ou documents) : archivez-le plutôt." };
+  if (!projetSupprimable(await activiteDuProjet(projetId))) return { erreur: "Ce projet a une histoire (tâches, rapports, réunions, documents, décisions, risques ou reports) : archivez-le plutôt." };
   const [p] = await db.delete(schema.projets).where(eq(schema.projets.id, projetId)).returning({ titre: schema.projets.titre, code: schema.projets.code });
   await noter(parId, "projet_supprime", projetId, p ?? {});
   return { ok: true };
@@ -422,8 +441,10 @@ export async function ajouterMembre(projetId: string, personneId: string, role: 
   if (n) await noter(parId, "membre_ajoute", projetId, { personne: personneId });
 }
 
-export async function changerRoleMembre(projetId: string, membreId: string, role: string) {
-  await db.update(schema.membresProjet).set({ role: await roleNormalise(role) }).where(and(eq(schema.membresProjet.id, membreId), eq(schema.membresProjet.projetId, projetId)));
+export async function changerRoleMembre(projetId: string, membreId: string, role: string, parId?: string) {
+  const r = await roleNormalise(role);
+  const [m] = await db.update(schema.membresProjet).set({ role: r }).where(and(eq(schema.membresProjet.id, membreId), eq(schema.membresProjet.projetId, projetId))).returning({ personneId: schema.membresProjet.personneId });
+  if (m && parId) await noter(parId, "membre_role", projetId, { personne: m.personneId, role: r });
 }
 
 /** Retirer un membre : ses tâches ouvertes sur le projet restent à lui (le chef de projet les réassigne). */
@@ -574,10 +595,30 @@ export async function modifierDefinitionTache(
   if (change.assigne && !assigne?.actif) return { erreur: "Cette personne n'est plus active." };
   if ((change.assigne || change.projet) && !peutAssigner(acteur(a), d.assigneId, projet, !!assigne?.externe, lv.livrable)) return { erreur: "Vous ne pouvez pas confier cette tâche à cette personne." };
   await db.update(schema.taches).set({ titre, description: texte(d.description, 4000), projetId: d.projetId, assigneId: d.assigneId, livrableId: lv.livrable?.id ?? null, priorite: prio, majLe: new Date() }).where(eq(schema.taches.id, tache.id));
+  // Une tâche qui se répète : les occurrences suivantes suivent la tâche (personne, projet, livrable, titre). La règle
+  // passe à qui vient de la confier (il a passé la règle d'assignation) ; elle est revérifiée à chaque occurrence.
+  if (tache.recurrenceId && !tache.annuleeLe)
+    await db
+      .update(schema.tachesRecurrentes)
+      .set({
+        titre,
+        description: texte(d.description, 4000),
+        projetId: d.projetId,
+        assigneId: d.assigneId,
+        livrableId: lv.livrable?.id ?? null,
+        priorite: prio,
+        ...(change.assigne || change.projet ? { creeParId: a.moi.id } : {}),
+      })
+      .where(and(eq(schema.tachesRecurrentes.id, tache.recurrenceId), isNull(schema.tachesRecurrentes.arreteeLe)));
   if (change.priorite) await db.insert(schema.evenementsTache).values({ tacheId: tache.id, auteurId: a.moi.id, type: "priorite", avant: tache.priorite, apres: prio });
   if (change.livrable) await db.insert(schema.evenementsTache).values({ tacheId: tache.id, auteurId: a.moi.id, type: "livrable", avant: tache.livrableId, apres: lv.livrable?.id ?? null });
   if (change.titre) await db.insert(schema.evenementsTache).values({ tacheId: tache.id, auteurId: a.moi.id, type: "titre", avant: tache.titre, apres: titre });
-  if (change.projet) await db.insert(schema.evenementsTache).values({ tacheId: tache.id, auteurId: a.moi.id, type: "projet", avant: tache.projetId, apres: d.projetId });
+  if (change.projet) {
+    await db.insert(schema.evenementsTache).values({ tacheId: tache.id, auteurId: a.moi.id, type: "projet", avant: tache.projetId, apres: d.projetId });
+    // Une dépendance relie deux tâches du même projet : changer de projet les retire (sinon les titres et les
+    // personnes de l'autre projet resteraient visibles depuis la tâche).
+    await db.delete(schema.dependancesTache).where(or(eq(schema.dependancesTache.tacheId, tache.id), eq(schema.dependancesTache.precedenteId, tache.id)));
+  }
   if (change.assigne) {
     // Lu en base : la personne peut avoir été ajoutée (hors division) dans cette même requête.
     const [nouveau] = await db.select({ prenom: schema.personnes.prenom, nom: schema.personnes.nom }).from(schema.personnes).where(eq(schema.personnes.id, d.assigneId));
@@ -603,7 +644,14 @@ export async function histoireDeTache(tacheId: string) {
 export async function annulerTache(a: Acces, tache: typeof schema.taches.$inferSelect, motif: string): Promise<{ ok: true } | { erreur: string }> {
   const m = texte(motif, 500);
   if (!m) return { erreur: "Dites en une phrase pourquoi la tâche est annulée." };
-  await db.update(schema.taches).set({ annuleeLe: new Date(), annuleeParId: a.moi.id, motifAnnulation: m, majLe: new Date() }).where(eq(schema.taches.id, tache.id));
+  const maintenant = new Date();
+  await db.update(schema.taches).set({ annuleeLe: maintenant, annuleeParId: a.moi.id, motifAnnulation: m, majLe: maintenant }).where(eq(schema.taches.id, tache.id));
+  // Une tâche qui se répète : l'annuler arrête sa répétition (au même instant, pour que « Rétablir » la reprenne).
+  if (tache.recurrenceId)
+    await db
+      .update(schema.tachesRecurrentes)
+      .set({ arreteeLe: maintenant })
+      .where(and(eq(schema.tachesRecurrentes.id, tache.recurrenceId), isNull(schema.tachesRecurrentes.arreteeLe)));
   await db.insert(schema.evenementsTache).values({ tacheId: tache.id, auteurId: a.moi.id, type: "annulation", note: m });
   if (tache.assigneId !== a.moi.id) await db.insert(schema.notifications).values({ personneId: tache.assigneId, type: "tache", texte: `« ${tache.titre} » est annulée : ${m}`, lien: `/taches/${tache.id}` });
   await noter(a.moi.id, "tache_annulee", tache.id, { motif: m });
@@ -612,6 +660,12 @@ export async function annulerTache(a: Acces, tache: typeof schema.taches.$inferS
 
 export async function retablirTache(a: Acces, tache: typeof schema.taches.$inferSelect) {
   await db.update(schema.taches).set({ annuleeLe: null, annuleeParId: null, motifAnnulation: "", majLe: new Date() }).where(eq(schema.taches.id, tache.id));
+  // La répétition arrêtée par cette annulation reprend.
+  if (tache.recurrenceId && tache.annuleeLe)
+    await db
+      .update(schema.tachesRecurrentes)
+      .set({ arreteeLe: null })
+      .where(and(eq(schema.tachesRecurrentes.id, tache.recurrenceId), eq(schema.tachesRecurrentes.arreteeLe, tache.annuleeLe)));
   await db.insert(schema.evenementsTache).values({ tacheId: tache.id, auteurId: a.moi.id, type: "retablie" });
   await noter(a.moi.id, "tache_retablie", tache.id);
 }
@@ -620,6 +674,12 @@ export async function retablirTache(a: Acces, tache: typeof schema.taches.$infer
 export async function supprimerTache(a: Acces, tache: typeof schema.taches.$inferSelect): Promise<{ ok: true } | { erreur: string }> {
   if (!tacheSupprimable({ statut: tache.statut, ...(await histoireDeTache(tache.id)) })) return { erreur: "Cette tâche a déjà une histoire : annulez-la plutôt." };
   await db.delete(schema.taches).where(eq(schema.taches.id, tache.id));
+  // Supprimer une tâche qui se répète arrête sa répétition.
+  if (tache.recurrenceId)
+    await db
+      .update(schema.tachesRecurrentes)
+      .set({ arreteeLe: new Date() })
+      .where(and(eq(schema.tachesRecurrentes.id, tache.recurrenceId), isNull(schema.tachesRecurrentes.arreteeLe)));
   await noter(a.moi.id, "tache_supprimee", tache.id, { titre: tache.titre });
   return { ok: true };
 }

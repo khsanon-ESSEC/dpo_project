@@ -29,6 +29,9 @@ async function droits(a: Acces, projetId: string) {
   return { projet: p, gere, equipe: peutNoterDecision(a.moi.id, gere, projet), ouvert };
 }
 
+/** Un projet archivé, refusé ou encore en demande : ses registres et ses phases sont figés (revue du 29 octobre 2026). */
+const FIGE = "Ce projet n'est pas en cours (archivé, refusé ou en demande) : son registre est figé.";
+
 // ---------------------------------------------------------------------------
 // Risques
 // ---------------------------------------------------------------------------
@@ -53,6 +56,12 @@ export async function enregistrerRisque(a: Acces, projetId: string, risqueId: st
   if (d.responsableId) {
     const p = await personneActuelle(d.responsableId);
     if (!p?.actif) return { erreur: "Ce responsable n'est plus actif." };
+    // Le responsable d'un risque est dans l'équipe du projet (chef, référent, membre) : l'alerte qu'il reçoit ne
+    // peut pas servir à écrire à n'importe qui (revue de sécurité du 29 octobre 2026). Un responsable déjà nommé reste.
+    const equipe = await projetPourAssignation(projetId);
+    const dansLEquipe = !!equipe && (p.id === equipe.chefProjetId || p.id === equipe.referentId || equipe.membres.has(p.id));
+    const dejaNomme = risqueId ? (await db.select({ r: schema.risquesProjet.responsableId }).from(schema.risquesProjet).where(eq(schema.risquesProjet.id, risqueId)))[0]?.r === p.id : false;
+    if (!dansLEquipe && !dejaNomme) return { erreur: "Le responsable d'un risque fait partie de l'équipe du projet : ajoutez-le d'abord à l'équipe." };
     responsableId = p.id;
   }
   const valeurs = {
@@ -89,6 +98,7 @@ export async function changerStatutRisque(a: Acces, projetId: string, risqueId: 
   const [x] = await db.select().from(schema.risquesProjet).where(and(eq(schema.risquesProjet.id, risqueId), eq(schema.risquesProjet.projetId, projetId)));
   if (!r || !x) return { erreur: "Risque introuvable." };
   if (!r.equipe) return { erreur: "Seuls l'équipe du projet et ceux qui le gèrent tiennent son registre des risques." };
+  if (!r.ouvert) return { erreur: FIGE };
   await db.update(schema.risquesProjet).set({ statut: statutRisque(statut), majLe: new Date() }).where(eq(schema.risquesProjet.id, risqueId));
   await noter(a.moi.id, "risque_statut", risqueId, { statut: statutRisque(statut) });
   await recalculerSante([projetId]);
@@ -100,6 +110,7 @@ export async function retirerRisque(a: Acces, projetId: string, risqueId: string
   const [x] = await db.select().from(schema.risquesProjet).where(and(eq(schema.risquesProjet.id, risqueId), eq(schema.risquesProjet.projetId, projetId)));
   if (!r || !x) return { erreur: "Risque introuvable." };
   if (!peutModifierDecision(a.moi.id, r.gere, x.auteurId)) return { erreur: "Seuls son auteur et ceux qui gèrent le projet retirent un risque ; vous pouvez le passer à « Clos »." };
+  if (!r.ouvert) return { erreur: FIGE };
   await db.delete(schema.risquesProjet).where(eq(schema.risquesProjet.id, risqueId));
   await noter(a.moi.id, "risque_retire", projetId, { titre: x.titre });
   await recalculerSante([projetId]);
@@ -141,23 +152,24 @@ async function exigerGestion(a: Acces, projetId: string) {
   const r = await droits(a, projetId);
   if (!r) return { erreur: "Projet introuvable." } as const;
   if (!r.gere) return { erreur: "Seuls le chef de projet (ou le référent DPO), sa direction et les exécutifs organisent les phases." } as const;
+  if (!r.ouvert) return { erreur: FIGE } as const;
   return r;
 }
 
-export async function ajouterPhase(a: Acces, projetId: string, d: DonneesPhase): Promise<{ ok: true } | { erreur: string }> {
+export async function ajouterPhase(a: Acces, projetId: string, d: DonneesPhase): Promise<{ ok: true; id: string } | { erreur: string }> {
   const r = await exigerGestion(a, projetId);
   if ("erreur" in r) return r;
   const v = validerPhase(d);
   if ("erreur" in v) return v;
   const [{ m }] = await db.select({ m: max(schema.phasesProjet.ordre) }).from(schema.phasesProjet).where(eq(schema.phasesProjet.projetId, projetId));
-  await db.insert(schema.phasesProjet).values({ projetId, ordre: (m ?? 0) + 1, ...v.valeurs });
-  await noter(a.moi.id, "phase_ajoutee", projetId, { nom: v.valeurs.nom });
+  const [n] = await db.insert(schema.phasesProjet).values({ projetId, ordre: (m ?? 0) + 1, ...v.valeurs }).returning({ id: schema.phasesProjet.id });
+  await noter(a.moi.id, "phase_ajoutee", projetId, { nom: v.valeurs.nom, phase: n.id });
   await recalculerSante([projetId]);
-  return { ok: true };
+  return { ok: true, id: n.id };
 }
 
 /** Démarrer avec les phases types, réparties sur la durée du projet (de l'entrée à la fin prévue), quand il n'en a pas. */
-export async function utiliserPhasesTypes(a: Acces, projetId: string): Promise<{ ok: true } | { erreur: string }> {
+export async function utiliserPhasesTypes(a: Acces, projetId: string): Promise<{ ok: true; phases: { id: string; nom: string; debut: string | null; fin: string | null }[] } | { erreur: string }> {
   const r = await exigerGestion(a, projetId);
   if ("erreur" in r) return r;
   if ((await phasesDuProjet(projetId)).length) return { erreur: "Ce projet a déjà ses phases." };
@@ -165,12 +177,13 @@ export async function utiliserPhasesTypes(a: Acces, projetId: string): Promise<{
   const fin = r.projet.dateFinPrevue;
   const jours = debut && fin && fin > debut ? (new Date(`${fin}T12:00:00Z`).getTime() - new Date(`${debut}T12:00:00Z`).getTime()) / 86400000 : 0;
   const jour = (k: number) => new Date(new Date(`${debut}T12:00:00Z`).getTime() + Math.round((jours * k) / PHASES_TYPES.length) * 86400000).toISOString().slice(0, 10);
-  await db.insert(schema.phasesProjet).values(
-    PHASES_TYPES.map((nom, i) => ({ projetId, ordre: i + 1, nom, debut: jours ? jour(i) : null, fin: jours ? (i === PHASES_TYPES.length - 1 ? fin : jour(i + 1)) : null })),
-  );
+  const phases = await db
+    .insert(schema.phasesProjet)
+    .values(PHASES_TYPES.map((nom, i) => ({ projetId, ordre: i + 1, nom, debut: jours ? jour(i) : null, fin: jours ? (i === PHASES_TYPES.length - 1 ? fin : jour(i + 1)) : null })))
+    .returning({ id: schema.phasesProjet.id, nom: schema.phasesProjet.nom, debut: schema.phasesProjet.debut, fin: schema.phasesProjet.fin });
   await noter(a.moi.id, "phases_types", projetId);
   await recalculerSante([projetId]);
-  return { ok: true };
+  return { ok: true, phases };
 }
 
 export async function modifierPhase(a: Acces, projetId: string, phaseId: string, d: DonneesPhase): Promise<{ ok: true } | { erreur: string }> {
@@ -179,6 +192,7 @@ export async function modifierPhase(a: Acces, projetId: string, phaseId: string,
   const v = validerPhase(d);
   if ("erreur" in v) return v;
   await db.update(schema.phasesProjet).set(v.valeurs).where(and(eq(schema.phasesProjet.id, phaseId), eq(schema.phasesProjet.projetId, projetId)));
+  await noter(a.moi.id, "phase_modifiee", phaseId, { projet: projetId, ...v.valeurs });
   await recalculerSante([projetId]);
   return { ok: true };
 }
@@ -199,7 +213,10 @@ export async function terminerPhase(a: Acces, projetId: string, phaseId: string,
 export async function retirerPhase(a: Acces, projetId: string, phaseId: string): Promise<{ ok: true } | { erreur: string }> {
   const r = await exigerGestion(a, projetId);
   if ("erreur" in r) return r;
-  await db.delete(schema.phasesProjet).where(and(eq(schema.phasesProjet.id, phaseId), eq(schema.phasesProjet.projetId, projetId)));
+  const [x] = await db.select().from(schema.phasesProjet).where(and(eq(schema.phasesProjet.id, phaseId), eq(schema.phasesProjet.projetId, projetId)));
+  if (!x) return { ok: true };
+  await db.delete(schema.phasesProjet).where(eq(schema.phasesProjet.id, x.id));
+  await noter(a.moi.id, "phase_retiree", projetId, { phase: x.id, nom: x.nom, debut: x.debut, fin: x.fin });
   const reste = await phasesDuProjet(projetId);
   for (const [i, x] of reste.entries()) await db.update(schema.phasesProjet).set({ ordre: i + 1 }).where(eq(schema.phasesProjet.id, x.id));
   await recalculerSante([projetId]);
@@ -215,6 +232,7 @@ export async function deplacerPhase(a: Acces, projetId: string, phaseId: string,
   if (i < 0 || j < 0 || j >= liste.length) return { ok: true };
   [liste[i], liste[j]] = [liste[j], liste[i]];
   for (const [k, x] of liste.entries()) await db.update(schema.phasesProjet).set({ ordre: k + 1 }).where(eq(schema.phasesProjet.id, x.id));
+  await noter(a.moi.id, "phase_deplacee", phaseId, { projet: projetId, sens });
   return { ok: true };
 }
 

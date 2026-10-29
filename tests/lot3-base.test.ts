@@ -90,7 +90,7 @@ describe.skipIf(!URL_TEST)("risques, phases et temps passé", () => {
     expect((await sante("UN")).motif).toMatch(/Phase « Intégration avec TMS » pas terminée/);
     // Ajouter, déplacer, retirer.
     expect(await R.ajouterPhase(lp, un, { nom: "pilote", debut: "2026-12-10", fin: "2026-12-01" })).toEqual({ erreur: "La fin d'une phase suit son début." });
-    expect(await R.ajouterPhase(lp, un, { nom: "pilote au siège", debut: null, fin: null })).toEqual({ ok: true });
+    expect(await R.ajouterPhase(lp, un, { nom: "pilote au siège", debut: null, fin: null })).toMatchObject({ ok: true });
     let l = await R.phasesDuProjet(un);
     const pilote = l.at(-1)!;
     expect(pilote.nom).toBe("Pilote au siège");
@@ -105,7 +105,7 @@ describe.skipIf(!URL_TEST)("risques, phases et temps passé", () => {
   it("phases types : réparties de l'entrée à la fin prévue, seulement s'il n'y en a pas", async () => {
     const pr = projets.get("PR")!; // Plateforme de recrutement : du 4 mai 2026 au 29 janvier 2027
     const dj = await acces("daphnee.joseph");
-    expect(await R.utiliserPhasesTypes(dj, pr)).toEqual({ ok: true });
+    expect(await R.utiliserPhasesTypes(dj, pr)).toMatchObject({ ok: true });
     const l = await R.phasesDuProjet(pr);
     expect(l.map((x) => x.nom)).toEqual(["Cadrage", "Conception", "Réalisation", "Validation métier", "Déploiement", "Clôture"]);
     expect(l[0].debut).toBe("2026-05-04");

@@ -20,7 +20,7 @@ import {
   retirerMembre,
   supprimerProjet,
 } from "@/lib/donnees/gestion";
-import { peutDecider, peutGererProjet } from "@/lib/projets";
+import { peutDeciderDemande, peutGererProjet } from "@/lib/projets";
 import { externeDuFormulaire } from "@/lib/donnees/externes";
 
 const UUID = /^[0-9a-f-]{36}$/;
@@ -32,6 +32,13 @@ async function exigerGestion(projetId: string) {
   const p = await exigerProjetVisible(a, projetId);
   if (!peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir, suivis: a.suivis }, p)) throw new Error("Seuls le chef de projet, sa direction et les exécutifs gèrent ce projet.");
   return { u, a, p };
+}
+
+/** Modifier un projet (fiche, livrables, équipe) : pas archivé ni refusé (revue du 29 octobre 2026). */
+async function exigerGestionModifiable(projetId: string) {
+  const r = await exigerGestion(projetId);
+  if (r.p.archiveLe || r.p.statut === "refuse") throw new Error("Ce projet est archivé ou refusé : désarchivez-le pour le modifier.");
+  return r;
 }
 
 const revalider = (projetId?: string) => {
@@ -64,8 +71,8 @@ export async function decider(projetId: string, form: FormData) {
   if (!UUID.test(projetId)) notFound();
   const u = await exigerUtilisateur();
   const a = await acces(u);
-  await exigerProjetVisible(a, projetId);
-  if (!peutDecider(a)) throw new Error("Seuls un directeur ou un exécutif décident d'une demande de projet.");
+  const projet = await exigerProjetVisible(a, projetId);
+  if (!peutDeciderDemande(a, projet)) throw new Error("Seuls un exécutif, ou un directeur de la direction du demandeur, décident de cette demande.");
   const accepte = form.get("decision") === "accepter";
   const r = await deciderDemande(
     projetId,
@@ -88,7 +95,8 @@ export async function decider(projetId: string, form: FormData) {
 }
 
 export async function enregistrerProjet(projetId: string, form: FormData) {
-  const { u } = await exigerGestion(projetId);
+  const { u, p } = await exigerGestion(projetId);
+  if (p.archiveLe || p.statut === "refuse") redirect(`/projets/${projetId}/modifier?erreur=${encodeURIComponent("Ce projet est archivé ou refusé : désarchivez-le pour le modifier.")}`);
   const champ = (k: string) => String(form.get(k) ?? "");
   const r = await modifierProjet(
     projetId,
@@ -143,7 +151,7 @@ const donneesLivrable = (form: FormData) => ({
 });
 
 export async function nouveauLivrable(projetId: string, form: FormData) {
-  const { u } = await exigerGestion(projetId);
+  const { u } = await exigerGestionModifiable(projetId);
   const r = await ajouterLivrable(projetId, donneesLivrable(form), u.id);
   revalider(projetId);
   if ("erreur" in r) redirect(`/projets/${projetId}/modifier?erreur=${encodeURIComponent(r.erreur)}#livrables`);
@@ -151,7 +159,7 @@ export async function nouveauLivrable(projetId: string, form: FormData) {
 }
 
 export async function enregistrerLivrable(projetId: string, livrableId: string, form: FormData) {
-  const { u } = await exigerGestion(projetId);
+  const { u } = await exigerGestionModifiable(projetId);
   const r = await modifierLivrable(projetId, livrableId, donneesLivrable(form), u.id);
   revalider(projetId);
   if ("erreur" in r) redirect(`/projets/${projetId}/modifier?erreur=${encodeURIComponent(r.erreur)}#livrable-${livrableId}`);
@@ -159,25 +167,25 @@ export async function enregistrerLivrable(projetId: string, livrableId: string, 
 }
 
 export async function nouvelIndicateur(projetId: string, form: FormData) {
-  const { u } = await exigerGestion(projetId);
+  const { u } = await exigerGestionModifiable(projetId);
   await ajouterIndicateur(projetId, String(form.get("libelle") ?? ""), u.id);
   revalider(projetId);
 }
 
 export async function renommer(projetId: string, indicateurId: string, form: FormData) {
-  const { u } = await exigerGestion(projetId);
+  const { u } = await exigerGestionModifiable(projetId);
   await renommerIndicateur(projetId, indicateurId, String(form.get("libelle") ?? ""), u.id);
   revalider(projetId);
 }
 
 export async function retirerInd(projetId: string, indicateurId: string) {
-  const { u } = await exigerGestion(projetId);
+  const { u } = await exigerGestionModifiable(projetId);
   await retirerIndicateur(projetId, indicateurId, u.id);
   revalider(projetId);
 }
 
 export async function deplacerInd(projetId: string, indicateurId: string, sens: -1 | 1) {
-  await exigerGestion(projetId);
+  await exigerGestionModifiable(projetId);
   await deplacerIndicateur(projetId, indicateurId, sens);
   revalider(projetId);
 }
@@ -185,20 +193,20 @@ export async function deplacerInd(projetId: string, indicateurId: string, sens: 
 // ---------- Équipe projet ----------
 
 export async function ajouter(projetId: string, form: FormData) {
-  const { u } = await exigerGestion(projetId);
+  const { u } = await exigerGestionModifiable(projetId);
   const personneId = (await externeDuFormulaire(form, "membre", u.id)) ?? String(form.get("personneId") ?? "");
   if (UUID.test(personneId)) await ajouterMembre(projetId, personneId, String(form.get("role") ?? ""), u.id);
   revalider(projetId);
 }
 
 export async function role(projetId: string, membreId: string, form: FormData) {
-  await exigerGestion(projetId);
-  await changerRoleMembre(projetId, membreId, String(form.get("role") ?? ""));
+  const { u } = await exigerGestionModifiable(projetId);
+  await changerRoleMembre(projetId, membreId, String(form.get("role") ?? ""), u.id);
   revalider(projetId);
 }
 
 export async function retirer(projetId: string, membreId: string) {
-  const { u } = await exigerGestion(projetId);
+  const { u } = await exigerGestionModifiable(projetId);
   await retirerMembre(projetId, membreId, u.id);
   revalider(projetId);
 }

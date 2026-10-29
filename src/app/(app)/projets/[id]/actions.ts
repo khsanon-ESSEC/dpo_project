@@ -10,7 +10,7 @@ import { exigerUtilisateur } from "@/lib/auth/session";
 import { agirSurLivrable, livrableEtProjet, type ActionLivrable } from "@/lib/donnees/livrables";
 import { modifierDecision, noterDecision, retirerDecision } from "@/lib/donnees/decisions";
 import { ajouterPhase, changerStatutRisque, deplacerPhase, enregistrerRisque, modifierPhase, retirerPhase, retirerRisque, terminerPhase, utiliserPhasesTypes } from "@/lib/donnees/risques";
-import { noterReportFin } from "@/lib/donnees/reports-fin";
+import { finDeReference, noterReportFin } from "@/lib/donnees/reports-fin";
 import { cloturerProjet, enregistrerBudget, rouvrirProjet } from "@/lib/donnees/cloture";
 import { lireMontant } from "@/lib/suivi";
 import { recalculerSante, signalerRisque } from "@/lib/donnees/sante";
@@ -25,6 +25,13 @@ async function exigerDroitProjet(projetId: string) {
   const p = await exigerProjetVisible(a, projetId);
   if (!peutGererProjet({ moiId: u.id, directeur: a.directeur, toutVoir: a.toutVoir, suivis: a.suivis }, p)) throw new Error("Seuls le chef de projet (ou le référent DPO), sa direction et les exécutifs modifient ce projet.");
   return { u, p };
+}
+
+/** Dates et signal de risque : sur un projet en cours seulement (ni archivé, ni refusé, ni en demande). */
+async function exigerProjetEnCours(projetId: string) {
+  const r = await exigerDroitProjet(projetId);
+  if (r.p.archiveLe || r.p.statut === "refuse" || r.p.statut === "requete") throw new Error("Ce projet n'est pas en cours : ses dates ne se changent pas ici.");
+  return r;
 }
 
 const date = (v: FormDataEntryValue | null) => {
@@ -43,6 +50,7 @@ export async function agirLivrable(projetId: string, livrableId: string, action:
   if (!["pret", "valider", "renvoyer", "rouvrir"].includes(action)) return;
   const l = await livrableEtProjet(livrableId);
   if (!l || l.projet.id !== projetId) redirect(`/projets/${projetId}?erreur=${encodeURIComponent("Livrable introuvable.")}#livrables`);
+  if (l.projet.archiveLe || l.projet.statut === "refuse") redirect(`/projets/${projetId}?erreur=${encodeURIComponent("Ce projet est archivé : ses livrables sont figés.")}#livrables`);
   const r = await agirSurLivrable(a, livrableId, action, String(form.get("remarque") ?? ""));
   revalidatePath(`/projets/${projetId}`, "layout");
   if ("erreur" in r) redirect(`/projets/${projetId}?erreur=${encodeURIComponent(r.erreur)}#livrable-${livrableId}`);
@@ -51,7 +59,7 @@ export async function agirLivrable(projetId: string, livrableId: string, action:
 
 /** Dates du projet. La santé n'est pas choisie : elle est calculée (src/lib/sante.ts), puis recalculée ici. */
 export async function mettreAJourProjet(projetId: string, form: FormData) {
-  const { u, p } = await exigerDroitProjet(projetId);
+  const { u, p } = await exigerProjetEnCours(projetId);
   const valeurs = {
     dateFinPrevue: date(form.get("dateFinPrevue")) ?? p.dateFinPrevue,
     dateLancementPrevue: date(form.get("dateLancementPrevue")),
@@ -59,7 +67,7 @@ export async function mettreAJourProjet(projetId: string, form: FormData) {
   };
   // Repousser la fin demande un motif.
   const motif = motifReport(form.get("motifReport"));
-  if (reportExigeMotif(p.dateFinPrevue, valeurs.dateFinPrevue) && !motif)
+  if (reportExigeMotif(await finDeReference(p), valeurs.dateFinPrevue) && !motif)
     redirect(`/projets/${projetId}?erreur=${encodeURIComponent("Dites pourquoi la fin est repoussée : le motif est lu dans les glissements et dans le rapport au conseil.")}`);
   await db.update(schema.projets).set(valeurs).where(eq(schema.projets.id, projetId));
   await noterReportFin(projetId, p.dateFinPrevue, valeurs.dateFinPrevue, u.id, motif);
@@ -73,7 +81,7 @@ export async function mettreAJourProjet(projetId: string, form: FormData) {
  * le projet passe « à surveiller » pendant 30 jours ; un signal ne rend jamais un projet meilleur que le calcul.
  */
 export async function signalerUnRisque(projetId: string, form: FormData) {
-  const { u } = await exigerDroitProjet(projetId);
+  const { u } = await exigerProjetEnCours(projetId);
   const retirer = form.get("retirer") === "1";
   const motif = retirer ? "" : String(form.get("motif") ?? "");
   if (!retirer && !motif.trim()) return;

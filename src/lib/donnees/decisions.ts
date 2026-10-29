@@ -38,6 +38,10 @@ export async function instancesConnues(): Promise<string[]> {
   return [...new Set([...l.map((x) => x.instance), ...INSTANCES])];
 }
 
+/** Un projet archivé, refusé ou encore en demande : son registre est figé (revue du 29 octobre 2026). */
+const fige = (p: { archiveLe: Date | null; statut: string }) => !!p.archiveLe || p.statut === "requete" || p.statut === "refuse";
+const FIGE = "Ce projet n'est pas en cours (archivé, refusé ou en demande) : son registre est figé.";
+
 /** Le projet, et ce que la personne peut y faire (noter, gérer). */
 async function droits(a: Acces, projetId: string) {
   const projet = await projetPourAssignation(projetId);
@@ -72,6 +76,7 @@ export async function modifierDecision(a: Acces, projetId: string, decisionId: s
   const [x] = await db.select().from(schema.decisionsProjet).where(and(eq(schema.decisionsProjet.id, decisionId), eq(schema.decisionsProjet.projetId, projetId)));
   if (!r || !x) return { erreur: "Décision introuvable." };
   if (!peutModifierDecision(a.moi.id, r.gere, x.auteurId)) return { erreur: "Seuls son auteur et ceux qui gèrent le projet corrigent une décision." };
+  if (fige(r.projet)) return { erreur: FIGE };
   const v = valider(d);
   if ("erreur" in v) return v;
   await db.update(schema.decisionsProjet).set({ ...v.valeurs, majLe: new Date() }).where(eq(schema.decisionsProjet.id, decisionId));
@@ -84,6 +89,7 @@ export async function retirerDecision(a: Acces, projetId: string, decisionId: st
   const [x] = await db.select().from(schema.decisionsProjet).where(and(eq(schema.decisionsProjet.id, decisionId), eq(schema.decisionsProjet.projetId, projetId)));
   if (!r || !x) return { erreur: "Décision introuvable." };
   if (!peutModifierDecision(a.moi.id, r.gere, x.auteurId)) return { erreur: "Seuls son auteur et ceux qui gèrent le projet retirent une décision." };
+  if (fige(r.projet)) return { erreur: FIGE };
   await db.delete(schema.decisionsProjet).where(eq(schema.decisionsProjet.id, decisionId));
   await noter(a.moi.id, "decision_retiree", projetId, { texte: x.texte.slice(0, 200) });
   return { ok: true };

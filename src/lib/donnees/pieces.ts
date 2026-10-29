@@ -65,9 +65,11 @@ export async function retirerPiece(pieceId: string, rapportId: string, auteurId:
  * direction si le champ ne lui est pas réservé. Un chef de projet ne lit pas les pièces jointes.
  */
 export async function lirePiece(a: Acces, pieceId: string) {
+  // D'abord où se trouve la pièce (sans le fichier) : le contenu n'est chargé que pour qui peut la lire.
+  const [m] = await db.select({ rapportId: schema.piecesJointes.rapportId, champId: schema.piecesJointes.champId }).from(schema.piecesJointes).where(eq(schema.piecesJointes.id, pieceId)).limit(1);
+  if (!m) return null;
+  const lu = await lireRapport(a, m.rapportId);
+  if (!lu || !lu.complet || !lu.formulaire.some((c) => c.id === m.champId && c.type === "piece_jointe")) return null;
   const [p] = await db.select().from(schema.piecesJointes).where(eq(schema.piecesJointes.id, pieceId)).limit(1);
-  if (!p) return null;
-  const lu = await lireRapport(a, p.rapportId);
-  if (!lu || !lu.complet || !lu.formulaire.some((c) => c.id === p.champId && c.type === "piece_jointe")) return null;
-  return p;
+  return p ?? null;
 }
