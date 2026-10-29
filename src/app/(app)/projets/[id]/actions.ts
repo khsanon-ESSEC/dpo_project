@@ -1,6 +1,6 @@
 "use server";
 
-import { peutGererProjet } from "@/lib/projets";
+import { motifReport, peutGererProjet, reportExigeMotif } from "@/lib/projets";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
@@ -8,6 +8,7 @@ import { db, schema } from "@/db";
 import { acces, exigerProjetVisible } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { agirSurLivrable, livrableEtProjet, type ActionLivrable } from "@/lib/donnees/livrables";
+import { modifierDecision, noterDecision, retirerDecision } from "@/lib/donnees/decisions";
 import { noterReportFin } from "@/lib/donnees/reports-fin";
 import { recalculerSante, signalerRisque } from "@/lib/donnees/sante";
 import { noter } from "@/lib/journal";
@@ -53,8 +54,12 @@ export async function mettreAJourProjet(projetId: string, form: FormData) {
     dateLancementPrevue: date(form.get("dateLancementPrevue")),
     majLe: new Date(),
   };
+  // Repousser la fin demande un motif.
+  const motif = motifReport(form.get("motifReport"));
+  if (reportExigeMotif(p.dateFinPrevue, valeurs.dateFinPrevue) && !motif)
+    redirect(`/projets/${projetId}?erreur=${encodeURIComponent("Dites pourquoi la fin est repoussée : le motif est lu dans les glissements et dans le rapport au conseil.")}`);
   await db.update(schema.projets).set(valeurs).where(eq(schema.projets.id, projetId));
-  await noterReportFin(projetId, p.dateFinPrevue, valeurs.dateFinPrevue, u.id);
+  await noterReportFin(projetId, p.dateFinPrevue, valeurs.dateFinPrevue, u.id, motif);
   await noter(u.id, "projet_modifie", projetId, { ...valeurs, majLe: undefined });
   await recalculerSante([projetId]);
   revalidatePath(`/projets/${projetId}`);
@@ -99,4 +104,41 @@ export async function retirerDocumentProjet(projetId: string, documentId: string
   const erreur = await retirerDocument(a, p, documentId);
   revalidatePath(`/projets/${projetId}`);
   redirect(`/projets/${projetId}?${erreur ? `doc=${encodeURIComponent(erreur)}` : "docRetire=1"}#documents`);
+}
+
+// ---------- Registre des décisions ----------
+
+const donneesDecision = (form: FormData) => ({
+  texte: String(form.get("texte") ?? ""),
+  decideeLe: String(form.get("decideeLe") ?? ""),
+  instance: String(form.get("instance") ?? ""),
+  contexte: String(form.get("contexte") ?? ""),
+});
+
+async function exigerVisible(projetId: string) {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  await exigerProjetVisible(a, projetId);
+  return a;
+}
+
+const apresDecision = (projetId: string, r: { erreur: string } | { ok: true }, fait: string): never => {
+  revalidatePath(`/projets/${projetId}`);
+  if ("erreur" in r) redirect(`/projets/${projetId}?erreur=${encodeURIComponent(r.erreur)}#decisions`);
+  redirect(`/projets/${projetId}?decision=${fait}#decisions`);
+};
+
+export async function noterUneDecision(projetId: string, form: FormData) {
+  const a = await exigerVisible(projetId);
+  apresDecision(projetId, await noterDecision(a, projetId, donneesDecision(form)), "notee");
+}
+
+export async function corrigerDecision(projetId: string, decisionId: string, form: FormData) {
+  const a = await exigerVisible(projetId);
+  apresDecision(projetId, await modifierDecision(a, projetId, decisionId, donneesDecision(form)), "corrigee");
+}
+
+export async function retirerUneDecision(projetId: string, decisionId: string) {
+  const a = await exigerVisible(projetId);
+  apresDecision(projetId, await retirerDecision(a, projetId, decisionId), "retiree");
 }

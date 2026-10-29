@@ -106,6 +106,7 @@ export async function enregistrerProjet(projetId: string, form: FormData) {
       dateFinInitiale: champ("dateFinInitiale"),
       dateFinPrevue: champ("dateFinPrevue"),
       dateLancementPrevue: champ("dateLancementPrevue"),
+      motifReport: champ("motifReport"),
     },
     u.id,
   );

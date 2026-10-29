@@ -6,6 +6,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { acces, exigerTacheVisible, idsProjetsVisibles, peutModifierTache } from "@/lib/acces";
 import { annulerTache, creerTacheGeree, modifierDefinitionTache, retablirTache, supprimerTache } from "@/lib/donnees/gestion";
+import { ajouterDependance, prevenirSuivantes, retirerDependance } from "@/lib/donnees/dependances";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
 import { enregistrerAnnulation } from "@/lib/donnees/annulations";
@@ -48,6 +49,8 @@ async function changerStatut(tacheId: string, statut: Statut, auteurId: string, 
     .where(eq(schema.taches.id, tacheId));
   if (changeStatut) await db.insert(schema.evenementsTache).values({ tacheId, auteurId, type: "statut", avant: t.statut, apres: statut, note: statut === "bloquee" ? blocage ?? null : null });
   else if (statut === "bloquee" && blocage && blocage !== t.blocage) await db.insert(schema.evenementsTache).values({ tacheId, auteurId, type: "blocage", note: blocage });
+  // Faite : les tâches qui l'attendaient peuvent commencer ; leurs personnes sont prévenues.
+  if (changeStatut && statut === "faite") await prevenirSuivantes(tacheId, auteurId);
   return t;
 }
 
@@ -299,4 +302,26 @@ export async function deplacerTache(tacheId: string, statut: string): Promise<{ 
   await noter(u.id, "tache_deplacee", tacheId, { statut });
   if (t.projetId) revalidatePath(`/projets/${t.projetId}`, "layout");
   return { ok: true };
+}
+
+// ---------- Dépendances entre tâches ----------
+
+/** « Attend » : ajouter une tâche précédente (même projet, sans boucle). */
+export async function ajouterPrecedente(tacheId: string, form: FormData) {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const t = await exigerTacheVisible(a, tacheId);
+  const r = await ajouterDependance(a, t, String(form.get("precedenteId") ?? ""));
+  revalidatePath("/", "layout");
+  if ("erreur" in r) redirect(`/taches/${t.id}?erreur=${encodeURIComponent(r.erreur)}#enchainement`);
+  redirect(`/taches/${t.id}#enchainement`);
+}
+
+export async function retirerPrecedente(tacheId: string, precedenteId: string) {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const t = await exigerTacheVisible(a, tacheId);
+  await retirerDependance(a, t, precedenteId);
+  revalidatePath("/", "layout");
+  redirect(`/taches/${t.id}#enchainement`);
 }

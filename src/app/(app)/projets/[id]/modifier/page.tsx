@@ -154,6 +154,10 @@ export default async function PageModifierProjet({ params, searchParams }: { par
               </div>
             ))}
           </div>
+          <div className="champ">
+            <label htmlFor="mp-motifReport">Si vous repoussez la fin prévue : pourquoi</label>
+            <input id="mp-motifReport" name="motifReport" maxLength={300} placeholder="Ex. : la DTI livre le serveur de test le 13 novembre" />
+          </div>
           <label className="role-manuel">
             <span className="rangee__texte">
               <span className="rangee__titre">Projet stratégique</span>

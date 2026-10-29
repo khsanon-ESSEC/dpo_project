@@ -215,3 +215,56 @@ export function dureeValide(v: unknown): number | null {
   const n = Math.round(Number(v));
   return Number.isFinite(n) && n >= 5 && n <= 600 ? n : null;
 }
+
+/**
+ * Repousser la fin prévue d'un projet demande un motif (décision du 28 octobre 2026) : on le lit ensuite sur la
+ * fiche, dans les glissements et dans le rapport au conseil. Avancer la date ou la fixer pour la première fois, non.
+ */
+export function reportExigeMotif(avant: string | null, apres: string | null): boolean {
+  return !!avant && !!apres && apres > avant;
+}
+
+/** Un motif utilisable : au moins quelques mots (3 caractères), sur une ligne, 300 caractères au plus. */
+export function motifReport(m: unknown): string {
+  const t = String(m ?? "").replace(/\s+/g, " ").trim().slice(0, 300);
+  return t.length >= 3 ? t.charAt(0).toUpperCase() + t.slice(1) : "";
+}
+
+/**
+ * Registre des décisions d'un projet : l'équipe du projet (chef, référent, membres) et ceux qui le gèrent y notent
+ * une décision ; seul son auteur (ou qui gère le projet) la corrige ou la retire.
+ */
+export function peutNoterDecision(moiId: string, gere: boolean, projet: { chefProjetId: string | null; referentId?: string | null; membres: Set<string> }): boolean {
+  return gere || moiId === projet.chefProjetId || moiId === projet.referentId || projet.membres.has(moiId);
+}
+
+export function peutModifierDecision(moiId: string, gere: boolean, auteurId: string | null): boolean {
+  return gere || (!!auteurId && auteurId === moiId);
+}
+
+/**
+ * Dépendances entre tâches : relier « tache » à « precedente » créerait-il une boucle ? (La précédente dépend déjà,
+ * directement ou non, de la tâche.) `liens` : les dépendances existantes, [tâche, précédente].
+ */
+export function creeUneBoucle(liens: [string, string][], tache: string, precedente: string): boolean {
+  if (tache === precedente) return true;
+  const avant = new Map<string, string[]>();
+  for (const [t, p] of liens) avant.set(t, [...(avant.get(t) ?? []), p]);
+  const vus = new Set<string>();
+  const pile = [precedente];
+  while (pile.length) {
+    const x = pile.pop()!;
+    if (x === tache) return true;
+    if (vus.has(x)) continue;
+    vus.add(x);
+    pile.push(...(avant.get(x) ?? []));
+  }
+  return false;
+}
+
+/** Une tâche prévue pour commencer (ou finir) avant la fin prévue de sa précédente, encore ouverte. */
+export function commenceAvantSaPrecedente(t: { debut: string | null; echeance: string | null }, p: { statut: string; echeance: string | null }): boolean {
+  if (p.statut === "faite" || !p.echeance) return false;
+  const depart = t.debut ?? t.echeance;
+  return !!depart && depart < p.echeance;
+}

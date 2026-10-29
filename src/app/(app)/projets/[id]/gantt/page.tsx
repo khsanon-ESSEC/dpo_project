@@ -4,6 +4,7 @@ import { debutPrevu, heuresDe, heuresTexte } from "@/lib/charge";
 import { Gantt, LIBELLE_ZOOM, type BarreGantt, type LigneGantt, type Zoom } from "@/components/Gantt";
 import { chargerVueProjet, cheminVue, EnTeteVue, LIBELLE_STATUT } from "../commun";
 import { livrablesDuProjet } from "@/lib/donnees/livrables";
+import { attentesDuProjet } from "@/lib/donnees/dependances";
 
 export const metadata: Metadata = { title: "Gantt du projet" };
 
@@ -14,7 +15,7 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
   const ctx = await chargerVueProjet(id);
   const { projet, taches } = ctx;
   const jour = aujourdhui();
-  const { livrables } = await livrablesDuProjet(id, jour);
+  const [{ livrables }, attentes] = await Promise.all([livrablesDuProjet(id, jour), attentesDuProjet(id)]);
   // Par livrable quand le projet en a (le plan du projet), sinon par personne.
   const parLivrable = livrables.length > 0 && par !== "personne";
   const lienVue = (zz: Zoom, pp: "livrable" | "personne") => {
@@ -73,10 +74,14 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
     const apres = !!prevuLivrable && t.statut !== "faite" && p.fin > prevuLivrable;
     const etat = t.retard ? "En retard" : LIBELLE_STATUT[t.statut];
     const titre = `${t.titre} — ${t.personne} — du ${dateCourte(p.debut)} au ${dateCourte(p.fin)} — ${etat}${t.estimationHeures ? ` — ${t.estimationHeures} h` : ""}${apres ? " — après la date du livrable" : ""}`;
+    // Ce que la tâche attend encore (dépendances) : la première, et combien d'autres.
+    const att = t.statut !== "faite" ? attentes.get(t.id) : undefined;
+    const attend = att?.length ? `attend « ${att[0].titre} »${att.length > 1 ? ` et ${att.length - 1} autre${att.length > 2 ? "s" : ""}` : ""}` : null;
+    const sous = [avecPersonne ? t.personne : null, apres ? "après la date du livrable" : null, attend].filter(Boolean).join(" · ");
     return {
       id: t.id,
       libelle: t.titre,
-      sous: avecPersonne ? `${t.personne}${apres ? " · après la date du livrable" : ""}` : undefined,
+      sous: sous || undefined,
       lien: t.ouvrable ? `/taches/${t.id}?retour=${retour}` : undefined,
       barres: [
         {

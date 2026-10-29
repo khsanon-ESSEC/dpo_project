@@ -1,0 +1,1 @@
+ALTER TABLE "reports_fin_projet" ADD COLUMN "motif" text DEFAULT '' NOT NULL;

@@ -212,6 +212,21 @@ export const taches = pgTable(
 );
 
 /**
+ * Dépendances entre tâches d'un même projet (décision du 28 octobre 2026) : « tache » ne peut vraiment commencer
+ * qu'une fois « precedente » faite. Pas de boucle ; quand la précédente est faite, la personne est prévenue.
+ */
+export const dependancesTache = pgTable(
+  "dependances_tache",
+  {
+    tacheId: uuid("tache_id").notNull().references(() => taches.id, { onDelete: "cascade" }),
+    precedenteId: uuid("precedente_id").notNull().references(() => taches.id, { onDelete: "cascade" }),
+    creeParId: uuid("cree_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.tacheId, t.precedenteId] }), index("dependances_precedente_idx").on(t.precedenteId)],
+);
+
+/**
  * Réunions notées par l'équipe : elles prennent du temps de travail (la charge en tient compte),
  * apparaissent dans le rapport de la semaine, et la direction voit le temps passé en réunion.
  */
@@ -453,9 +468,33 @@ export const reportsFinProjet = pgTable(
     avant: date(),
     apres: date(),
     parId: uuid("par_id").references(() => personnes.id, { onDelete: "set null" }),
+    /** Pourquoi la fin est repoussée (demandé à chaque report vers une date plus tardive). */
+    motif: text().notNull().default(""),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("reports_fin_projet_idx").on(t.projetId, t.creeLe)],
+);
+
+/**
+ * Registre des décisions d'un projet (décision du 28 octobre 2026) : ce qui a été décidé, quand, par quelle instance
+ * (comité de pilotage, direction…), et pourquoi. Noté par l'équipe du projet ou ceux qui le gèrent.
+ */
+export const decisionsProjet = pgTable(
+  "decisions_projet",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    projetId: uuid("projet_id").notNull().references(() => projets.id, { onDelete: "cascade" }),
+    texte: text().notNull(),
+    decideeLe: date("decidee_le").notNull(),
+    /** Qui a décidé : « Comité de pilotage », « Direction », « Chef de projet »… (texte libre, suggestions). */
+    instance: text().notNull().default(""),
+    /** Pourquoi, ou ce qui l'a motivée (facultatif). */
+    contexte: text().notNull().default(""),
+    auteurId: uuid("auteur_id").references(() => personnes.id, { onDelete: "set null" }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+    majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("decisions_projet_idx").on(t.projetId, t.decideeLe)],
 );
 
 /**

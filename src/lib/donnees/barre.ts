@@ -14,7 +14,7 @@ import { formulaireDe, obtenirOuCreerRapport, ordreSuivant, semaineCourante } fr
 import { projetsPourSaisie } from "@/lib/donnees/saisie";
 import { noter } from "@/lib/journal";
 import type { Champ } from "@/lib/modeles";
-import { peutGererProjet } from "@/lib/projets";
+import { motifReport, peutGererProjet, reportExigeMotif } from "@/lib/projets";
 import { redigeUnRapport } from "@/lib/regles";
 import { noterReportFin } from "./reports-fin";
 import { recalculerSante } from "./sante";
@@ -116,6 +116,8 @@ export async function mettreAJourProjetDepuisBarre(u: Utilisateur, a: Acces, o: 
     return { message: "Seuls le chef de projet (ou le référent DPO), sa direction et les exécutifs mettent ce projet à jour." };
   if (p.archiveLe || p.statut === "requete" || p.statut === "refuse") return { message: "Ce projet ne se met plus à jour (demande, refusé ou archivé)." };
 
+  if (m.genre === "fin" && reportExigeMotif(p.dateFinPrevue, m.date) && !motifReport(m.motif))
+    return { message: "Dites pourquoi la fin est repoussée : « fin prévue 20/12 : le prestataire livre en retard »." };
   let annulation: string;
   if (m.genre === "jalon") {
     if (!m.libelle) return { message: "Donnez un nom au livrable : « livrable validation métier 15/11 »." };
@@ -143,7 +145,7 @@ export async function mettreAJourProjetDepuisBarre(u: Utilisateur, a: Acces, o: 
       .where(eq(schema.projets.id, p.id))
       .returning({ majLe: schema.projets.majLe });
     await noter(u.id, "projet_modifie", p.id, { ...valeurs, barre: true });
-    if (m.genre === "fin") await noterReportFin(p.id, p.dateFinPrevue, m.date, u.id);
+    if (m.genre === "fin") await noterReportFin(p.id, p.dateFinPrevue, m.date, u.id, m.motif);
     await recalculerSante([p.id]);
     annulation = await enregistrerAnnulation(u.id, { genre: "projet", projetId: p.id, apresMajLe: apres.majLe.toISOString(), avant });
   }

@@ -247,6 +247,13 @@ Nouvelles lectures de données, vérifiées à la lecture du code et par des tes
 - **Page de retour** : `retourValide` accepte désormais une ancre sur la page (`#livrable-…`, lettres, chiffres et tirets seulement) ; toujours aucune adresse externe ni paramètre. **[vérifié par tests]**
 - **Listes derrière les chiffres** (Équipe : tâches en retard, faites cette semaine) : mêmes personnes que la page (celles qu'on suit) ; un projet qu'on ne voit pas reste en texte, sans lien. **[déduction]**
 
+## Reports, décisions, dépendances (28 octobre 2026, nuit)
+
+- **Motif des reports** : exigé côté serveur sur les trois chemins qui changent la fin prévue (fiche, *Modifier le projet*, barre), raccourci à 300 caractères, affiché comme texte. **[vérifié par tests]**
+- **Registre des décisions** : noter est réservé à l'équipe du projet et à ceux qui le gèrent, sur un projet en cours que la personne voit ; corriger et retirer, à l'auteur et à ceux qui gèrent ; la décision est vérifiée comme appartenant au projet de l'adresse. **[vérifié par tests]**
+- **Dépendances** : ajoutées ou retirées seulement par qui peut modifier la tâche (mêmes règles que la tâche), entre deux tâches du même projet que la personne voit ; boucles refusées ; dix précédentes au plus. Les titres proposés sont ceux des tâches du projet, déjà visibles dans sa liste. **[vérifié par tests]**
+- **Alerte « vous pouvez commencer »** : envoyée seulement à la personne de la tâche suivante, quand plus aucune précédente n'est ouverte. **[vérifié par tests]**
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.

@@ -1,14 +1,14 @@
 /**
  * Reports de la date de fin prévue d'un projet : chaque changement est gardé (quand, de quelle date à
- * quelle date, par qui), pour montrer le glissement sur la fiche du projet.
+ * quelle date, par qui, pourquoi), pour montrer le glissement sur la fiche du projet.
  */
 import "server-only";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 
-export async function noterReportFin(projetId: string, avant: string | null, apres: string | null, parId: string | null) {
+export async function noterReportFin(projetId: string, avant: string | null, apres: string | null, parId: string | null, motif = "") {
   if ((avant ?? null) === (apres ?? null)) return;
-  await db.insert(schema.reportsFinProjet).values({ projetId, avant, apres, parId });
+  await db.insert(schema.reportsFinProjet).values({ projetId, avant, apres, parId, motif: motif.slice(0, 300) });
 }
 
 /** « Annuler » d'une mise à jour de la barre : retire le dernier report qu'elle avait noté. */
@@ -28,6 +28,8 @@ export async function reportsFinDe(projetId: string) {
     .select({
       avant: schema.reportsFinProjet.avant,
       apres: schema.reportsFinProjet.apres,
+      motif: schema.reportsFinProjet.motif,
+      parId: schema.reportsFinProjet.parId,
       creeLe: schema.reportsFinProjet.creeLe,
     })
     .from(schema.reportsFinProjet)

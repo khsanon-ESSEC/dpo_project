@@ -17,9 +17,11 @@ import { DefinitionTache } from "./DefinitionTache";
 import { LigneMiseAJour } from "@/components/LigneMiseAJour";
 import { assignables, histoireDeTache } from "@/lib/donnees/gestion";
 import { choixDeLivrables } from "@/lib/donnees/livrables";
+import { enchainementDe, precedentesPossibles } from "@/lib/donnees/dependances";
+import { ListeFiltrable } from "@/components/ListeFiltrable";
 import { tousLesProjetsActifs } from "@/lib/donnees/projets";
 import { tacheSupprimable, apresLeLivrable } from "@/lib/projets";
-import { annuler, retablir, supprimer } from "../actions";
+import { ajouterPrecedente, annuler, retablir, retirerPrecedente, supprimer } from "../actions";
 
 export const metadata: Metadata = { title: "Tâche" };
 
@@ -46,6 +48,9 @@ export default async function PageTache({ params, searchParams }: { params: Prom
   const leLivrable = t.livrableId && t.projetId ? (choixLivrables[t.projetId] ?? []).find((x) => x.id === t.livrableId) : undefined;
   const responsableLivrable = leLivrable?.responsableId ? org.personnes.get(leLivrable.responsableId) : undefined;
   const apresLivrable = !!leLivrable && apresLeLivrable(t, leLivrable.prevuLe);
+  // Enchaînement : les tâches que celle-ci attend, et celles qui l'attendent (même projet).
+  const ench = await enchainementDe(t);
+  const possibles = !t.annuleeLe && t.projetId && peutModifierTache(a, t) ? await precedentesPossibles(t) : [];
   const actuel = org.personnes.get(t.assigneId)!;
   if (!personnes.some((x) => x.id === t.assigneId)) personnes.push({ id: t.assigneId, nom: nomComplet(actuel), externe: actuel.externe, organisation: actuel.organisation });
   // « @ » ou « pour … » dans la ligne de mise à jour : les personnes à qui l'on peut confier cette tâche
@@ -211,6 +216,108 @@ export default async function PageTache({ params, searchParams }: { params: Prom
           retour={retour ?? null}
         />
         )}
+        {t.projetId && !t.annuleeLe && (ench.precedentes.length || ench.suivantes.length || peutModifierTache(a, t)) ? (
+          <section className="carte carte--liste" id="enchainement" aria-labelledby="t-enchainement" style={{ scrollMarginTop: 80 }}>
+            <h2 id="t-enchainement" className="carte__titre">
+              Enchaînement
+            </h2>
+            {ench.attend.length && t.statut !== "faite" ? (
+              <p className="note-livrable note-livrable--apres" role="status">
+                <Icone nom="horloge" taille={16} />
+                <span>
+                  Attend {ench.attend.map((x, i) => (
+                    <span key={x.id}>
+                      {i ? (i === ench.attend.length - 1 ? " et " : ", ") : ""}« {x.titre} »
+                    </span>
+                  ))}
+                  , pas encore faite{ench.attend.length > 1 ? "s" : ""}. La personne sera prévenue quand {ench.attend.length > 1 ? "elles le seront" : "elle le sera"}.
+                </span>
+              </p>
+            ) : null}
+            {ench.conflits.length && t.statut !== "faite" ? (
+              <p className="livrable__alerte" style={{ marginLeft: 0 }}>
+                Prévue pour commencer avant la fin prévue de {ench.conflits.map((x) => `« ${x.titre} » (${dateCourte(x.echeance!)})`).join(", ")} : décalez son début ou son échéance.
+              </p>
+            ) : null}
+            <h3 className="sante-barre__titre" style={{ margin: "12px 0 4px" }}>
+              Après
+            </h3>
+            {ench.precedentes.length ? (
+              <ul className="liste">
+                {ench.precedentes.map((x) => (
+                  <li key={x.id} className="rangee rangee--etiree">
+                    <span className="mono mono--petit" aria-hidden="true">
+                      {x.initiales}
+                    </span>
+                    <span className="rangee__texte">
+                      <a href={`/taches/${x.id}`} className="rangee__titre rangee__lien">
+                        {x.titre}
+                      </a>
+                      <span className="rangee__sous">{x.nom}</span>
+                    </span>
+                    <span className={`rangee__meta ${x.statut === "faite" ? "ton-ok" : x.statut === "bloquee" ? "ton-veille" : ""}`} style={{ fontSize: 12 }}>
+                      {x.statut === "faite" ? "Faite" : x.statut === "bloquee" ? "Bloquée" : x.echeance ? `fin prévue ${dateCourte(x.echeance)}` : "sans échéance"}
+                    </span>
+                    {peutModifierTache(a, t) ? (
+                      <form action={retirerPrecedente.bind(null, t.id, x.id)}>
+                        <button type="submit" className="bouton-icone" style={{ width: 32, height: 32 }} aria-label={`Ne plus attendre « ${x.titre} »`} title="Retirer">
+                          <Icone nom="fermer" taille={16} />
+                        </button>
+                      </form>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="note" style={{ margin: "0 0 4px" }}>
+                Cette tâche n&apos;attend aucune autre tâche.
+              </p>
+            )}
+            {possibles.length ? (
+              <form action={ajouterPrecedente.bind(null, t.id)} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginTop: 8 }}>
+                <div className="champ" style={{ flex: "1 1 260px", minWidth: 0 }}>
+                  <label htmlFor="dep-precedente">Attend la fin de</label>
+                  <ListeFiltrable
+                    id="dep-precedente"
+                    name="precedenteId"
+                    required
+                    placeholder="Tapez le titre d'une tâche du projet"
+                    aucun="Aucune tâche ne correspond à"
+                    options={possibles.map((x) => ({ value: x.id, label: x.titre, detail: `${x.nom}${x.statut === "faite" ? " · faite" : x.echeance ? ` · ${dateCourte(x.echeance)}` : ""}` }))}
+                  />
+                </div>
+                <button type="submit" className="bouton-contour">
+                  <Icone nom="ajouter" taille={16} /> Ajouter
+                </button>
+              </form>
+            ) : null}
+            {ench.suivantes.length ? (
+              <>
+                <h3 className="sante-barre__titre" style={{ margin: "14px 0 4px" }}>
+                  Ensuite, elle débloque
+                </h3>
+                <ul className="liste">
+                  {ench.suivantes.map((x) => (
+                    <li key={x.id} className="rangee rangee--etiree">
+                      <span className="mono mono--petit" aria-hidden="true">
+                        {x.initiales}
+                      </span>
+                      <span className="rangee__texte">
+                        <a href={`/taches/${x.id}`} className="rangee__titre rangee__lien">
+                          {x.titre}
+                        </a>
+                        <span className="rangee__sous">{x.nom}</span>
+                      </span>
+                      <span className="rangee__meta" style={{ fontSize: 12 }}>
+                        {x.statut === "faite" ? "Faite" : x.debut ? `début prévu ${dateCourte(x.debut)}` : x.echeance ? `échéance ${dateCourte(x.echeance)}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </section>
+        ) : null}
         {t.annuleeLe ? null : (
           <DefinitionTache
             key={`def-${t.majLe.toISOString()}`}

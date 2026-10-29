@@ -311,6 +311,33 @@ await sql.begin(async (tx) => {
   // Notification : les maquettes de paie attendent la validation de Marc-Antoine.
   await tx`insert into notifications (personne_id, type, texte, lien) values (${P.ml}, 'projet', ${"Jean-Robert Noël : « Maquettes graphiques validées » (UC) est prêt à valider"}, ${`/projets/${PJ.UC}#livrables`})`;
 
+  // ---------- Dépendances entre tâches (même projet) ----------
+  const attend = async (pj, titre, ...precedentes) => {
+    const [t] = await tx`select id from taches where projet_id = ${PJ[pj]} and titre = ${titre}`;
+    for (const p of precedentes) {
+      const [x] = await tx`select id from taches where projet_id = ${PJ[pj]} and titre = ${p}`;
+      if (!t || !x) throw new Error(`Dépendance introuvable : ${pj} · ${titre} ← ${p}`);
+      await tx`insert into dependances_tache (tache_id, precedente_id, cree_par_id) select ${t.id}, ${x.id}, chef_projet_id from projets where id = ${PJ[pj]}`;
+    }
+  };
+  await attend("UR", "Validation métier des correctifs de l'audit", "Correctifs de sécurité (points 4 à 6)", "Contre-audit de sécurité (points 4 à 6)");
+  await attend("UR", "Mise en ligne d'UNIBANKOnline Retail", "Validation métier des correctifs de l'audit", "Correctifs du module de virements");
+  await attend("CR", "Validation métier de Credos", "Serveur de test");
+  await attend("PR", "Développement du formulaire de candidature", "Cahier des charges, version 1", "Signature de la DRH sur le cahier des charges");
+  await attend("UC", "Tests d'intégration du module de paie", "Spécifications du module de paie");
+  await attend("UN", "Migration des contenus de l'intranet", "Plan de migration des données", "Accès de test DTI");
+
+  // ---------- Registre des décisions ----------
+  const decision = async (pj, qui, j, texte, instance, contexte = "") =>
+    tx`insert into decisions_projet (projet_id, texte, decidee_le, instance, contexte, auteur_id, cree_le) values (${PJ[pj]}, ${texte}, ${jour(j)}, ${instance}, ${contexte}, ${P[qui]}, ${moment(j, 16)})`;
+  await decision("UR", "mv", -20, "La mise en ligne se fera en deux vagues : d'abord les clients « Early adopters », puis tous les clients", "Comité de pilotage", "Limiter le risque après les remarques de l'audit de sécurité");
+  await decision("UR", "mv", -8, "Le contre-audit de sécurité est confié à un cabinet externe", "Direction de la division", "Un regard indépendant, demandé par la conformité");
+  await decision("UR", "mv", -3, "La fin du projet est repoussée au 26 novembre", "Comité de pilotage", "Le temps de corriger les points 4 à 6 de l'audit");
+  await decision("CR", "wb", -14, "La validation métier se fait avec trois agences pilotes", "Comité de pilotage");
+  await decision("CR", "wb", -1, "Le serveur de test est fourni par la DTI, pas par le prestataire", "Direction de la division", "Respect de la politique de sécurité de la banque");
+  await decision("PR", "dj", -6, "La plateforme sera une solution existante adaptée, pas un développement sur mesure", "Comité de pilotage", "Coût et délai");
+  await decision("UC", "ml", -10, "Le module de paie passe avant les virements de masse", "Chef de projet", "Demande des clients entreprises");
+
   // ---------- Tâches terminées des semaines passées (pour le bilan semaine sur semaine) ----------
   // Tirage déterministe : mêmes données à chaque semis.
   let graine = 7;

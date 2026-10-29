@@ -110,6 +110,12 @@ Ces règles sont écrites dans `src/lib/charge.ts` et vérifiées par les tests.
 - Le **Gantt** se regroupe par livrable (avec la date de chaque livrable) ou par personne ; la liste des tâches se regroupe ou se filtre par livrable ; le calendrier montre les dates des livrables ; le rapport au conseil cite les livrables validés et le prochain attendu ; la santé du projet en tient compte.
 - Dans la barre : « /UR livrable modèle conceptuel validé 20/11 » ajoute un livrable daté (« jalon » est compris aussi).
 
+## Reports, décisions et dépendances
+
+- **Motif des reports** : repousser la fin prévue d'un projet (fiche, *Modifier le projet*, ou la barre : « /UR fin prévue 20/12 : le prestataire livre en retard ») demande de dire pourquoi. Le motif se lit dans l'historique des reports de la fiche, il est repris dans l'état d'avancement préparé pour le rapport au conseil et transmis à l'assistant. Avancer la date ne demande rien.
+- **Registre des décisions** : sur la fiche du projet, ce qui a été décidé, quand, par quelle instance (comité de pilotage, direction… : les instances déjà notées sont proposées) et pourquoi. L'équipe du projet et ceux qui le gèrent y notent une décision ; seuls son auteur et ceux qui gèrent le projet la corrigent ou la retirent. Une décision se note une fois prise (pas de date future). Les décisions récentes sont transmises à l'assistant pour le rapport au conseil.
+- **Dépendances entre tâches** : sur la fiche d'une tâche, *Enchaînement* : les tâches du même projet qu'elle attend, et celles qu'elle débloque. Pas de boucle ; dix précédentes au plus. Tant qu'une précédente n'est pas faite, la tâche l'affiche (et le Gantt aussi) ; une tâche prévue pour commencer avant la fin de sa précédente est signalée. Quand la dernière précédente est faite, la personne de la tâche suivante reçoit une alerte : elle peut commencer.
+
 ## Santé d'un projet : comment elle est calculée
 
 Le chef de projet ne choisit plus la santé : l'application la calcule à partir des données du projet, l'enregistre avec ses raisons en clair, et la recalcule à chaque changement, à l'ouverture du portefeuille ou de la fiche, et toutes les heures.

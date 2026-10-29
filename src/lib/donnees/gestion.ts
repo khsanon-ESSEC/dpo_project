@@ -9,7 +9,7 @@ import { db, schema } from "@/db";
 import { idsProjetsVisibles, type Acces } from "@/lib/acces";
 import { noter } from "@/lib/journal";
 import { chargerOrganisation, personneActuelle } from "@/lib/organisation";
-import { codeSuggere, codeValide, peutAssigner, projetOuvert, projetSupprimable, STATUTS_ACCEPTES, tacheSupprimable, verifierChefEtReferent, type StatutProjet } from "@/lib/projets";
+import { codeSuggere, codeValide, motifReport, peutAssigner, reportExigeMotif, projetOuvert, projetSupprimable, STATUTS_ACCEPTES, tacheSupprimable, verifierChefEtReferent, type StatutProjet } from "@/lib/projets";
 import { membresDeLaDirection, nomComplet, resoudreSuperieur } from "@/lib/regles";
 import { trouverOuCreerExterne } from "./externes";
 import { noterReportFin } from "./reports-fin";
@@ -164,6 +164,8 @@ export type ModifProjet = {
   dateFinInitiale: string;
   dateFinPrevue: string;
   dateLancementPrevue: string;
+  /** Pourquoi la fin prévue est repoussée (obligatoire dans ce cas). */
+  motifReport?: string;
 };
 
 export async function modifierProjet(projetId: string, d: ModifProjet, parId: string): Promise<{ ok: true } | { erreur: string }> {
@@ -200,8 +202,10 @@ export async function modifierProjet(projetId: string, d: ModifProjet, parId: st
     dateLancementPrevue: date(d.dateLancementPrevue),
     majLe: new Date(),
   };
+  const motif = motifReport(d.motifReport);
+  if (reportExigeMotif(p.dateFinPrevue, valeurs.dateFinPrevue) && !motif) return { erreur: "Dites pourquoi la fin prévue est repoussée : le motif est lu dans les glissements et dans le rapport au conseil." };
   await db.update(schema.projets).set(valeurs).where(eq(schema.projets.id, projetId));
-  await noterReportFin(projetId, p.dateFinPrevue, valeurs.dateFinPrevue, parId);
+  await noterReportFin(projetId, p.dateFinPrevue, valeurs.dateFinPrevue, parId, motif);
   // Dates ou statut changés : la santé calculée suit.
   await recalculerSante([projetId]);
   if (chef && chef !== p.chefProjetId && chef !== parId && !chefP?.externe)

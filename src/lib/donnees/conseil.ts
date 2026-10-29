@@ -46,7 +46,15 @@ async function etatParRegles(projet: typeof schema.projets.$inferSelect, ancienn
   const prochain = ind.filter((i) => i.etat !== "atteint" && i.prevuLe).sort((x, y) => x.prevuLe!.localeCompare(y.prevuLe!))[0];
   if (prochain) phrases.push(`Prochain livrable : ${minuscule(prochain.libelle)}, prévu le ${dateLongue(prochain.prevuLe!)}.`);
   if (ancienneFin && projet.dateFinPrevue && ancienneFin !== projet.dateFinPrevue) {
-    phrases.push(`La fin prévue passe du ${dateLongue(ancienneFin)} au ${dateLongue(projet.dateFinPrevue)}.`);
+    // Le motif du dernier report vers cette date, s'il a été noté.
+    const [r] = await db
+      .select({ motif: schema.reportsFinProjet.motif })
+      .from(schema.reportsFinProjet)
+      .where(and(eq(schema.reportsFinProjet.projetId, projet.id), eq(schema.reportsFinProjet.apres, projet.dateFinPrevue)))
+      .orderBy(desc(schema.reportsFinProjet.creeLe))
+      .limit(1);
+    const motif = r?.motif ? ` : ${r.motif.charAt(0).toLowerCase()}${r.motif.slice(1).replace(/[.]$/, "")}` : "";
+    phrases.push(`La fin prévue passe du ${dateLongue(ancienneFin)} au ${dateLongue(projet.dateFinPrevue)}${motif}.`);
   }
   return phrases.join(" ");
 }

@@ -66,9 +66,11 @@ describe.skipIf(!URL_TEST)("données des graphiques (base de démonstration)", (
     const mv = qui("myriam.valcin");
     const ur = projets.get("UR")!;
     const avant = finsAvant.get("UR")!;
-    const r = await B.mettreAJourProjetDepuisBarre(mv, await A.acces(mv), { saisie: "UR fin prévue 20/12", projetId: "" });
+    // Repousser la fin sans dire pourquoi : refusé.
+    expect(await B.mettreAJourProjetDepuisBarre(mv, await A.acces(mv), { saisie: "UR fin prévue 20/12", projetId: "" })).toEqual({ message: "Dites pourquoi la fin est repoussée : « fin prévue 20/12 : le prestataire livre en retard »." });
+    const r = await B.mettreAJourProjetDepuisBarre(mv, await A.acces(mv), { saisie: "UR fin prévue 20/12 : le contre-audit glisse d'une semaine", projetId: "" });
     expect(r).toMatchObject({ ok: true });
-    expect(await R.reportsFinDe(ur)).toEqual([expect.objectContaining({ avant, apres: "2026-12-20" })]);
+    expect(await R.reportsFinDe(ur)).toEqual([expect.objectContaining({ avant, apres: "2026-12-20", motif: "Le contre-audit glisse d'une semaine" })]);
     expect(await N.annulerAction(await A.acces(mv), r.annulation!)).toMatchObject({ ok: true });
     expect((await projet(ur)).dateFinPrevue).toBe(avant);
     expect(await R.reportsFinDe(ur)).toEqual([]);
@@ -80,12 +82,16 @@ describe.skipIf(!URL_TEST)("données des graphiques (base de démonstration)", (
     const base = { code: p.code, titre: p.titre, description: p.description, programme: p.programme, strategique: p.strategique, statut: p.statut, chefProjetId: p.chefProjetId ?? "", referentId: p.referentId ?? "", division: p.division, dateEntree: p.dateEntree ?? "", dateFinInitiale: p.dateFinInitiale ?? "", dateFinPrevue: p.dateFinPrevue ?? "", dateLancementPrevue: p.dateLancementPrevue ?? "" };
     expect(await G.modifierProjet(p.id, { ...base, description: `${p.description} ` }, ex)).toEqual({ ok: true });
     expect(await R.reportsFinDe(p.id)).toEqual([]);
-    expect(await G.modifierProjet(p.id, { ...base, dateFinPrevue: "2027-03-31" }, ex)).toEqual({ ok: true });
-    expect(await G.modifierProjet(p.id, { ...base, dateFinPrevue: "2027-06-30" }, ex)).toEqual({ ok: true });
+    expect(await G.modifierProjet(p.id, { ...base, dateFinPrevue: "2027-03-31" }, ex)).toHaveProperty("erreur");
+    expect(await G.modifierProjet(p.id, { ...base, dateFinPrevue: "2027-03-31", motifReport: "  le Crédit revoit son besoin " }, ex)).toEqual({ ok: true });
+    expect(await G.modifierProjet(p.id, { ...base, dateFinPrevue: "2027-06-30", motifReport: "Ressource réaffectée" }, ex)).toEqual({ ok: true });
+    // Avancer la date ne demande pas de motif.
+    expect(await G.modifierProjet(p.id, { ...base, dateFinPrevue: "2027-05-31" }, ex)).toEqual({ ok: true });
     const reports = await R.reportsFinDe(p.id);
-    expect(reports.map((x) => [x.avant, x.apres])).toEqual([
-      [p.dateFinPrevue, "2027-03-31"],
-      ["2027-03-31", "2027-06-30"],
+    expect(reports.map((x) => [x.avant, x.apres, x.motif])).toEqual([
+      [p.dateFinPrevue, "2027-03-31", "Le Crédit revoit son besoin"],
+      ["2027-03-31", "2027-06-30", "Ressource réaffectée"],
+      ["2027-06-30", "2027-05-31", ""],
     ]);
   });
 

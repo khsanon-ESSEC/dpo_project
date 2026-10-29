@@ -184,3 +184,45 @@ describe("page de retour après une action", () => {
     expect(retourValide("https://exemple.com/semaine")).toBeNull();
   });
 });
+
+describe("motif d'un report de la fin prévue", () => {
+  it("demandé seulement quand la fin est repoussée", async () => {
+    const { reportExigeMotif, motifReport } = await import("@/lib/projets");
+    expect(reportExigeMotif("2026-11-26", "2026-12-20")).toBe(true);
+    expect(reportExigeMotif("2026-12-20", "2026-11-26")).toBe(false);
+    expect(reportExigeMotif(null, "2026-12-20")).toBe(false);
+    expect(motifReport("  le   prestataire ")).toBe("Le prestataire");
+    expect(motifReport("ok")).toBe("");
+  });
+});
+
+describe("dépendances entre tâches", () => {
+  it("pas de boucle, directe ou non", async () => {
+    const { creeUneBoucle } = await import("@/lib/projets");
+    const liens: [string, string][] = [["B", "A"], ["C", "B"]]; // B attend A, C attend B
+    expect(creeUneBoucle(liens, "A", "C")).toBe(true); // A attendrait C, qui attend B, qui attend A
+    expect(creeUneBoucle(liens, "A", "A")).toBe(true);
+    expect(creeUneBoucle(liens, "C", "A")).toBe(false);
+    expect(creeUneBoucle(liens, "D", "C")).toBe(false);
+  });
+  it("une tâche prévue avant la fin de sa précédente ouverte est signalée", async () => {
+    const { commenceAvantSaPrecedente } = await import("@/lib/projets");
+    expect(commenceAvantSaPrecedente({ debut: "2026-11-02", echeance: "2026-11-10" }, { statut: "a_faire", echeance: "2026-11-06" })).toBe(true);
+    expect(commenceAvantSaPrecedente({ debut: null, echeance: "2026-11-10" }, { statut: "a_faire", echeance: "2026-11-06" })).toBe(false);
+    expect(commenceAvantSaPrecedente({ debut: "2026-11-02", echeance: null }, { statut: "faite", echeance: "2026-11-06" })).toBe(false);
+  });
+});
+
+describe("registre des décisions", () => {
+  it("l'équipe du projet et ceux qui le gèrent notent ; l'auteur ou qui gère corrige", async () => {
+    const { peutNoterDecision, peutModifierDecision } = await import("@/lib/projets");
+    const projet = { chefProjetId: "chef", referentId: null, membres: new Set(["m"]) };
+    expect(peutNoterDecision("m", false, projet)).toBe(true);
+    expect(peutNoterDecision("chef", false, projet)).toBe(true);
+    expect(peutNoterDecision("dir", true, projet)).toBe(true);
+    expect(peutNoterDecision("x", false, projet)).toBe(false);
+    expect(peutModifierDecision("m", false, "m")).toBe(true);
+    expect(peutModifierDecision("m", false, "chef")).toBe(false);
+    expect(peutModifierDecision("chef", true, "m")).toBe(true);
+  });
+});

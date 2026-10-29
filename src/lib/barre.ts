@@ -58,7 +58,7 @@ export const LIBELLES_SANTE: Record<SanteProjet, string> = { dans_les_temps: "Da
 export type MajProjet =
   | { genre: "sante"; sante: SanteProjet; motif: string }
   | { genre: "jalon"; libelle: string; prevuLe: string | null }
-  | { genre: "fin"; date: string }
+  | { genre: "fin"; date: string; motif: string }
   | { genre: "lancement"; date: string };
 
 /** Date d'un jalon ou d'une fin prévue : 15/11, 15/11/2027, « 15 novembre », « fin du mois », « vendredi ». */
@@ -87,7 +87,9 @@ export function analyserMajProjet(texte: string, aujourdhui: string): MajProjet 
   const fin = /^fin(?:\s+pr[ée]vue)?(?=$|[\s:,–—-])[\s:,–—-]*(.*)$/i.exec(t);
   if (fin) {
     const d = dateFuture(` ${fin[1]} `, aujourdhui);
-    return d.date ? { genre: "fin", date: d.date } : null;
+    // « fin prévue 20/12 : le prestataire livre en retard » (ou « car … ») : le motif du report.
+    const motif = d.reste.replace(/^[\s:,;.–—-]*(?:car|parce\s+que|pour\s+cause\s+de)?[\s:,]*/i, "").trim().slice(0, 300);
+    return d.date ? { genre: "fin", date: d.date, motif: motif ? motif.charAt(0).toUpperCase() + motif.slice(1) : "" } : null;
   }
   const lancement = /^lancement(?:\s+pr[ée]vu)?(?=$|[\s:,–—-])[\s:,–—-]*(.*)$/i.exec(t);
   if (lancement) {
@@ -100,7 +102,7 @@ export function analyserMajProjet(texte: string, aujourdhui: string): MajProjet 
 export function texteMajProjet(m: MajProjet): string {
   if (m.genre === "sante") return m.sante === "a_surveiller" ? `Signaler un risque${m.motif ? ` : ${m.motif}` : ""}` : m.sante === "dans_les_temps" ? "Retirer le risque signalé" : "La santé est calculée : « risque : … » pour signaler un risque";
   if (m.genre === "jalon") return `Livrable : ${m.libelle || "(sans libellé)"}${m.prevuLe ? `, prévu ${jourComplet(m.prevuLe).toLowerCase()}` : ""}`;
-  if (m.genre === "fin") return `Fin prévue : ${jourComplet(m.date).toLowerCase()}`;
+  if (m.genre === "fin") return `Fin prévue : ${jourComplet(m.date).toLowerCase()}${m.motif ? ` (${m.motif})` : ""}`;
   return `Lancement prévu : ${jourComplet(m.date).toLowerCase()}`;
 }
 

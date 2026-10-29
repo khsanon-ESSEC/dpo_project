@@ -10,7 +10,7 @@ import { nomComplet } from "@/lib/regles";
 import { LigneMiseAJour } from "@/components/LigneMiseAJour";
 import { DocumentsProjet } from "./Documents";
 import { documentsDuProjet, peutDeposerDocument } from "@/lib/donnees/documents";
-import { LIBELLE_ETAT_LIVRABLE, LIBELLE_STATUT_PROJET, peutDecider, peutDeclarerPret, peutGererProjet, STATUTS_ACCEPTES } from "@/lib/projets";
+import { LIBELLE_ETAT_LIVRABLE, LIBELLE_STATUT_PROJET, peutDecider, peutDeclarerPret, peutGererProjet, peutModifierDecision, peutNoterDecision, STATUTS_ACCEPTES } from "@/lib/projets";
 import { ajouter, archiver, decider, retirer } from "../gestion-actions";
 import { lignesDuProjetCetteSemaine } from "@/lib/donnees/rapport";
 import { Anneau, Bandeau, LienChiffre } from "@/components/Bandeau";
@@ -19,7 +19,8 @@ import { Icone } from "@/components/Icone";
 import { LienPersonne } from "@/components/Liens";
 import { ChoixPersonne } from "@/components/ChoixPersonne";
 import { ListeFiltrable } from "@/components/ListeFiltrable";
-import { agirLivrable, mettreAJourProjet, signalerUnRisque } from "./actions";
+import { agirLivrable, corrigerDecision, mettreAJourProjet, noterUneDecision, retirerUneDecision, signalerUnRisque } from "./actions";
+import { decisionsDuProjet, instancesConnues } from "@/lib/donnees/decisions";
 import { livrablesDuProjet } from "@/lib/donnees/livrables";
 import { recalculerSante } from "@/lib/donnees/sante";
 import { signalActif } from "@/lib/sante";
@@ -41,9 +42,9 @@ const SANTE = {
   dans_les_temps: { texte: "Dans les temps", classe: "ton-ok" },
 } as const;
 
-export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string }> }) {
+export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string; decision?: string }> }) {
   const { id } = await params;
-  const { propose, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut } = await searchParams;
+  const { propose, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut, decision: decisionBrut } = await searchParams;
   const livrableFait = livrableBrut === "pret" || livrableBrut === "valider" || livrableBrut === "renvoyer" || livrableBrut === "rouvrir" ? livrableBrut : null;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
@@ -79,6 +80,11 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const rapports = auteurs ? await lignesDuProjetCetteSemaine(id, auteurs) : null;
   const jour = aujourdhui();
   const lv = await livrablesDuProjet(id, jour);
+  // Registre des décisions : l'équipe du projet et ceux qui le gèrent y notent ; l'auteur (ou qui gère) corrige.
+  const decisions = await decisionsDuProjet(id);
+  const noteDecisions = actif && peutNoterDecision(u.id, peutModifier, { chefProjetId: p.chefProjetId, referentId: p.referentId, membres: new Set(membres.map((m) => m.personneId)) });
+  const instances = noteDecisions ? await instancesConnues() : [];
+  const decisionFaite = decisionBrut === "notee" ? "Décision notée au registre." : decisionBrut === "corrigee" ? "Décision corrigée." : decisionBrut === "retiree" ? "Décision retirée du registre." : null;
   const valides = lv.livrables.filter((l) => l.etat === "atteint").length;
   const lvMessage = livrableFait ? { pret: "Livrable déclaré prêt à valider : le chef de projet est prévenu.", valider: "Livrable validé : son responsable est prévenu.", renvoyer: "Livrable renvoyé à reprendre : son responsable est prévenu.", rouvrir: "Livrable rouvert." }[livrableFait] : null;
   // Avancement sur la période choisie (le même sélecteur que le bilan), comparé à la période d'avant.
@@ -240,6 +246,51 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
       </li>
     );
   };
+  const rendreDecision = (d: (typeof decisions)[number]) => (
+    <li key={d.id} className="decision" id={`decision-${d.id}`}>
+      <span className="decision__date">{dateCourte(d.decideeLe)}</span>
+      <div className="decision__corps">
+        <p className="decision__texte">{d.texte}</p>
+        <p className="decision__sous">
+          {d.instance ? `${d.instance} · ` : ""}noté par {d.auteur ?? "—"}
+        </p>
+        {d.contexte ? <p className="decision__contexte">{d.contexte}</p> : null}
+        {actif && peutModifierDecision(u.id, peutModifier, d.auteurId) ? (
+          <details className="decision__corriger">
+            <summary className="lien-discret">Corriger</summary>
+            <form action={corrigerDecision.bind(null, p.id, d.id)} className="decision__form">
+              <div className="champ">
+                <label htmlFor={`dec-t-${d.id}`}>Décision</label>
+                <textarea id={`dec-t-${d.id}`} name="texte" rows={2} required maxLength={1000} defaultValue={d.texte} />
+              </div>
+              <div className="decision__form-ligne">
+                <div className="champ">
+                  <label htmlFor={`dec-d-${d.id}`}>Décidée le</label>
+                  <input id={`dec-d-${d.id}`} name="decideeLe" type="date" max={jour} defaultValue={d.decideeLe} />
+                </div>
+                <div className="champ">
+                  <label htmlFor={`dec-i-${d.id}`}>Par</label>
+                  <input id={`dec-i-${d.id}`} name="instance" maxLength={120} defaultValue={d.instance} />
+                </div>
+              </div>
+              <div className="champ">
+                <label htmlFor={`dec-c-${d.id}`}>Pourquoi (facultatif)</label>
+                <input id={`dec-c-${d.id}`} name="contexte" maxLength={1000} defaultValue={d.contexte} />
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="submit" className="bouton-contour">
+                  <Icone nom="coche" taille={16} /> Enregistrer
+                </button>
+                <button type="submit" formAction={retirerUneDecision.bind(null, p.id, d.id)} formNoValidate className="bouton-mini" style={{ color: "var(--retard)", borderColor: "var(--retard-point)", alignSelf: "center" }}>
+                  Retirer du registre
+                </button>
+              </div>
+            </form>
+          </details>
+        ) : null}
+      </div>
+    </li>
+  );
   const actifs = lv.livrables.filter((l) => l.etat !== "atteint");
   const livrablesValides = lv.livrables.filter((l) => l.etat === "atteint");
 
@@ -534,6 +585,57 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
               </ol>
             </section>
 
+            <section className="carte carte--liste" id="decisions" aria-labelledby="p-decisions" style={{ scrollMarginTop: 80 }}>
+              <h2 id="p-decisions" className="carte__titre">
+                Décisions · {decisions.length}
+              </h2>
+              {decisionFaite ? (
+                <p className="succes" role="status" style={{ margin: "8px 0" }}>
+                  {decisionFaite}
+                </p>
+              ) : null}
+              {decisions.length === 0 ? <p className="note" style={{ margin: "4px 0 8px" }}>Ce qui a été décidé sur le projet, quand, par qui et pourquoi : la mémoire du projet, pour ceux qui le rejoignent et pour le rapport au conseil.</p> : null}
+              <ol className="decisions">{decisions.slice(0, 5).map(rendreDecision)}</ol>
+              {decisions.length > 5 ? (
+                <details className="decisions__anciennes">
+                  <summary className="lien-discret">
+                    {decisions.length - 5} décision{decisions.length - 5 > 1 ? "s" : ""} plus ancienne{decisions.length - 5 > 1 ? "s" : ""}
+                  </summary>
+                  <ol className="decisions">{decisions.slice(5).map(rendreDecision)}</ol>
+                </details>
+              ) : null}
+              {noteDecisions ? (
+                <details className="decision__nouvelle" open={decisions.length === 0 ? true : undefined}>
+                  <summary className="bouton-mini">
+                    <Icone nom="ajouter" taille={14} /> Noter une décision
+                  </summary>
+                  <form action={noterUneDecision.bind(null, p.id)} className="decision__form">
+                    <div className="champ">
+                      <label htmlFor="dec-texte">Décision</label>
+                      <textarea id="dec-texte" name="texte" rows={2} required maxLength={1000} placeholder="Ex. : la mise en ligne se fera en deux vagues, d'abord les clients « Early adopters »" />
+                    </div>
+                    <div className="decision__form-ligne">
+                      <div className="champ">
+                        <label htmlFor="dec-le">Décidée le</label>
+                        <input id="dec-le" name="decideeLe" type="date" max={jour} defaultValue={jour} />
+                      </div>
+                      <div className="champ">
+                        <label htmlFor="dec-par">Par</label>
+                        <ListeFiltrable id="dec-par" name="instance" libre options={instances.map((x) => ({ value: x, label: x }))} maxLength={120} placeholder="Ex. : Comité de pilotage" nouveau="Nouvelle instance" />
+                      </div>
+                    </div>
+                    <div className="champ">
+                      <label htmlFor="dec-contexte">Pourquoi (facultatif)</label>
+                      <input id="dec-contexte" name="contexte" maxLength={1000} placeholder="Ex. : limiter le risque après l'audit de sécurité" />
+                    </div>
+                    <button type="submit" className="bouton-contour" style={{ alignSelf: "flex-start" }}>
+                      <Icone nom="ajouter" taille={16} /> Noter la décision
+                    </button>
+                  </form>
+                </details>
+              ) : null}
+            </section>
+
             {pointsAv.some((x) => !x.avant) ? (
               <section className="carte" aria-labelledby="p-avancement" id="avancement" style={{ scrollMarginTop: 80 }}>
                 <h2 id="p-avancement" className="carte__titre" style={{ marginBottom: 4 }}>
@@ -688,7 +790,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                   <h3 className="carte__titre" style={{ marginBottom: 10 }}>
                     Reports de la fin
                   </h3>
-                  <FriseReports initiale={p.dateFinInitiale} actuelle={p.dateFinPrevue} reports={reports.map((r) => ({ avant: r.avant, apres: r.apres, le: dateLocale(r.creeLe) }))} jour={jour} />
+                  <FriseReports initiale={p.dateFinInitiale} actuelle={p.dateFinPrevue} reports={reports.map((r) => ({ avant: r.avant, apres: r.apres, le: dateLocale(r.creeLe), motif: r.motif, par: nom(r.parId) }))} jour={jour} />
                 </div>
               ) : null}
             </section>
@@ -702,7 +804,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                   cible={{ genre: "projet", projetId: p.id }}
                   aujourdhui={aujourdhui()}
                   libelle="Mettre à jour le projet en une ligne"
-                  placeholder="« risque : retard du prestataire », « livrable validation métier 15/11 », « fin prévue 20/12 »"
+                  placeholder="« risque : retard du prestataire », « livrable validation métier 15/11 », « fin prévue 20/12 : motif »"
                 />
                 <p className="note" style={{ margin: "16px 0 12px" }}>
                   Ou champ par champ :
@@ -711,6 +813,13 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                   <div className="champ">
                     <label htmlFor="fin">Fin prévue</label>
                     <input id="fin" name="dateFinPrevue" type="date" defaultValue={p.dateFinPrevue ?? ""} />
+                  </div>
+                  <div className="champ">
+                    <label htmlFor="fin-motif">Si vous repoussez la fin : pourquoi</label>
+                    <input id="fin-motif" name="motifReport" maxLength={300} placeholder="Ex. : le prestataire livre le module en retard" aria-describedby="fin-motif-aide" />
+                    <span className="aide" id="fin-motif-aide">
+                      Obligatoire pour une date plus tardive : il se lit dans les glissements et dans le rapport au conseil.
+                    </span>
                   </div>
                   <div className="champ">
                     <label htmlFor="lancement">Lancement prévu</label>

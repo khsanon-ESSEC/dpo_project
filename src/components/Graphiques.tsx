@@ -146,6 +146,9 @@ export type ReportFin = {
   avant: string | null;
   apres: string | null;
   le: string;
+  /** Pourquoi (facultatif : les reports d'avant n'en ont pas). */
+  motif?: string;
+  par?: string | null;
 };
 
 export function FriseReports({ initiale, actuelle, reports, jour }: { initiale: string | null; actuelle: string | null; reports: ReportFin[]; jour: string }) {
@@ -215,6 +218,14 @@ export function FriseReports({ initiale, actuelle, reports, jour }: { initiale: 
                     · {ecartJours(r.avant, r.apres!) >= 0 ? "+" : "−"}
                     {semainesTexte(Math.abs(ecartJours(r.avant, r.apres!)))}
                   </span>
+                ) : null}
+                {r.motif ? (
+                  <span className="reports-fin__motif">
+                    {r.motif}
+                    {r.par ? <span className="ton-discret"> · {r.par}</span> : null}
+                  </span>
+                ) : r.avant && r.apres && r.apres > r.avant ? (
+                  <span className="reports-fin__motif ton-discret">Motif non noté</span>
                 ) : null}
               </span>
             </li>

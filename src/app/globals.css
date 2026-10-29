@@ -7347,3 +7347,111 @@ a.pastille-rapport:hover {
 .livrable__taches > summary {
   gap: 4px;
 }
+/* Le motif d'un report de la fin prévue, sous la ligne du report. */
+.reports-fin__motif {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--encre-2);
+}
+
+/* ---------- Registre des décisions (fiche projet) ---------- */
+.decisions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.decision {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--filet);
+}
+.decisions > .decision:first-child {
+  border-top: 0;
+}
+.decision__date {
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--discret);
+  font-variant-numeric: tabular-nums;
+}
+.decision__corps {
+  min-width: 0;
+}
+.decision__texte {
+  margin: 0;
+  font-size: 15px;
+  line-height: 21px;
+  color: var(--encre);
+}
+.decision__sous {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--discret);
+}
+.decision__contexte {
+  margin: 6px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--filet-fort);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--encre-2);
+}
+.decision__corriger {
+  margin-top: 6px;
+}
+.decision__corriger > summary {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  font-size: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.decision__corriger > summary::-webkit-details-marker,
+.decision__nouvelle > summary::-webkit-details-marker {
+  display: none;
+}
+.decision__nouvelle {
+  margin-top: 10px;
+}
+.decision__nouvelle > summary {
+  list-style: none;
+}
+.decision__nouvelle[open] > summary {
+  background: var(--choisi);
+}
+.decision__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.decision__form-ligne {
+  display: grid;
+  grid-template-columns: minmax(0, 170px) minmax(0, 1fr);
+  gap: 12px;
+}
+.decisions__anciennes {
+  margin-top: 6px;
+}
+.decisions__anciennes > summary {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  font-size: 13px;
+  cursor: pointer;
+}
+@media (max-width: 520px) {
+  .decision {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .decision__form-ligne {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

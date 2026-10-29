@@ -161,6 +161,24 @@ async function reports() {
   messages.push(`Reports de date de fin : ${lignes.length}, sur ${projets.length} projets.`);
 }
 
+// Le motif de chaque report vers une date plus tardive (demandé depuis le 28 octobre 2026) : pour la démonstration,
+// un motif plausible, posé une fois sur les reports qui n'en ont pas (y compris dans une base déjà semée).
+const MOTIFS = [
+  "Le prestataire a livré le module en retard",
+  "Correctifs demandés par l'audit de sécurité",
+  "Serveur de test livré tard par la DTI",
+  "Validation métier plus longue que prévu",
+  "Arbitrage budgétaire attendu de la direction",
+  "Ressource clé réaffectée à un projet prioritaire",
+  "Périmètre élargi à la demande du métier",
+  "Dépendance à un autre projet de la banque",
+];
+async function motifsReports() {
+  const sans = await sql`select id from reports_fin_projet where motif = '' and apres > avant order by cree_le`;
+  for (const [i, r] of sans.entries()) await sql`update reports_fin_projet set motif = ${MOTIFS[i % MOTIFS.length]} where id = ${r.id}`;
+  if (sans.length) messages.push(`Motifs de report de démonstration : ${sans.length}.`);
+}
+
 // Charge prévue de chaque semaine passée (une fois) : dans l'application, elle est notée chaque lundi. Pour la
 // démonstration, elle est tirée autour de ce qui a été réalisé (parfois sous-estimée, parfois sur-estimée).
 async function prevues() {
@@ -260,6 +278,7 @@ async function conseil() {
 
 if (!deja) await activite();
 await reports();
+await motifsReports();
 await prevues();
 await conseil();
 await fin(messages.join("\n"));

@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { decisionsDepuis } from "@/lib/donnees/decisions";
 import { acces, exigerAccesConseil, idsProjetsVisibles, type Acces } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
-import { dateLongue } from "@/lib/dates";
+import { aujourdhui, dateLongue, premierDuMois } from "@/lib/dates";
 import {
   ajouterProjetAuRapport,
   approuverRapportConseil,
@@ -74,6 +75,15 @@ export async function redigerAvecAssistant(ligneId: string) {
     `Livrables : ${ind.map((i) => `${i.libelle} (${i.etat === "atteint" ? "validé" : i.etat === "pret" ? "prêt à valider" : i.etat === "en_cours" ? "en cours" : "à venir"}${i.prevuLe ? `, prévu le ${dateLongue(i.prevuLe)}` : ""})`).join(" ; ")}`,
     `Fin prévue au dernier rapport : ${dateLongue(ligne.dateFinDernierRapport)} ; fin prévue aujourd'hui : ${dateLongue(ligne.nouvelleDateFin)}.`,
   ];
+  // Pourquoi la fin a été repoussée (les motifs notés à chaque report).
+  const motifs = (await db.select({ apres: schema.reportsFinProjet.apres, motif: schema.reportsFinProjet.motif }).from(schema.reportsFinProjet).where(eq(schema.reportsFinProjet.projetId, p.id)).orderBy(asc(schema.reportsFinProjet.creeLe)))
+    .filter((r) => r.motif)
+    .slice(-3);
+  if (motifs.length) donnees.push(`Motifs des derniers reports de la fin : ${motifs.map((r) => `${r.motif} (fin portée au ${dateLongue(r.apres)})`).join(" ; ")}.`);
+  // Les décisions notées au registre du projet depuis le début de la période (ou depuis le mois d'avant).
+  const depuisDecisions = rapport.genre === "ponctuel" && rapport.depuis ? rapport.depuis : premierDuMois(aujourdhui(), -1);
+  const decisions = await decisionsDepuis(p.id, depuisDecisions);
+  if (decisions.length) donnees.push(`Décisions notées depuis le ${dateLongue(depuisDecisions)} : ${decisions.map((d) => `${d.texte}${d.instance ? ` (${d.instance}, ${dateLongue(d.decideeLe)})` : ` (${dateLongue(d.decideeLe)})`}`).join(" ; ")}.`);
   if (rapport.genre === "ponctuel" && rapport.depuis) {
     const f = await faitsDepuis(p.id, rapport.depuis);
     donnees.push(`Objet du rapport : ${rapport.titre}. ${rapport.objet}`);
