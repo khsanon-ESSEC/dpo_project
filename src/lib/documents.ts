@@ -4,6 +4,7 @@
  * Testé dans tests/documents.test.ts. Les formats acceptés sont ceux des pièces jointes (src/lib/pieces.ts).
  */
 export const CATEGORIES_DOCUMENT = {
+  note_de_cadrage: "Note de cadrage",
   cahier_des_charges: "Cahier des charges",
   specification: "Spécification technique",
   compte_rendu: "Compte rendu de réunion",
@@ -25,6 +26,7 @@ export function categorieDevinee(nom: string): CategorieDocument {
     .toLowerCase()
     .replace(/\.[a-z0-9]{1,5}$/, "")
     .replace(/[^a-z0-9]+/g, " ")} `;
+  if (/ (note de cadrage|cadrage|ndc|fiche projet|fiche de projet|charte projet|charte de projet) /.test(n)) return "note_de_cadrage";
   if (/ (cahier des charges|cdc|expression des besoins|besoins) /.test(n)) return "cahier_des_charges";
   if (/ (spec|specs|specification|specifications|sfd|std|stb|architecture|conception|technique) /.test(n)) return "specification";
   if (/ (compte rendu|cr|pv|proces verbal|minute|minutes|reunion|comite|copil) /.test(n)) return "compte_rendu";

@@ -331,6 +331,45 @@ export const phasesProjet = pgTable(
 );
 
 /**
+ * Objectifs et bénéfices attendus d'un projet (demandé le 29 octobre 2026) : « objectif » (une phrase, dit atteint
+ * ou non à la clôture) ou « benefice » (avec, facultatifs, un indicateur, une valeur de départ, une cible, puis la
+ * valeur constatée après le lancement). Règles : src/lib/objectifs.ts.
+ */
+export const objectifsProjet = pgTable(
+  "objectifs_projet",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    projetId: uuid("projet_id").notNull().references(() => projets.id, { onDelete: "cascade" }),
+    genre: text().notNull(),
+    ordre: integer().notNull(),
+    libelle: text().notNull(),
+    indicateur: text().notNull().default(""),
+    depart: text().notNull().default(""),
+    cible: text().notNull().default(""),
+    constate: text().notNull().default(""),
+    constateLe: date("constate_le"),
+    /** À la clôture : « oui », « en_partie » ou « non » (objectifs seulement). */
+    evaluation: text().notNull().default(""),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+    majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("objectifs_projet_idx").on(t.projetId, t.genre, t.ordre)],
+);
+
+/**
+ * RACI (demandé le 29 octobre 2026) : le RACI type de la DPO (cle « type », sans projet), et celui d'un projet qui
+ * s'en écarte (cle = l'identifiant du projet). Règles : src/lib/raci.ts.
+ */
+export const raci = pgTable("raci", {
+  cle: text().primaryKey(),
+  projetId: uuid("projet_id").references(() => projets.id, { onDelete: "cascade" }),
+  colonnes: jsonb().$type<{ libelle: string; qui: string }[]>().notNull(),
+  lignes: jsonb().$type<{ activite: string; lettres: string[] }[]>().notNull(),
+  majParId: uuid("maj_par_id").references(() => personnes.id, { onDelete: "set null" }),
+  majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
  * Temps réellement passé sur une tâche (décision du 28 octobre 2026), noté par jour : pour comparer à l'estimation.
  * Compté pour la personne de la tâche ; noté par elle, ou par qui peut modifier la tâche (une tâche confiée hors division).
  */

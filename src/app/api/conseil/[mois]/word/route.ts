@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { objectifsDesProjets } from "@/lib/donnees/objectifs";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
@@ -18,6 +19,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ mois: stri
   if (!r) return new NextResponse("Rapport introuvable", { status: 404 });
   const visibles = await idsProjetsVisibles(a);
   const lignes = (await lignesConseil(r.id, r.statut)).filter((l) => visibles === "tous" || visibles.has(l.projet.id));
+  const objectifs = await objectifsDesProjets(lignes.map((l) => l.projet.id));
   const fichier = await rapportConseilWord(
     lignes.map(({ ligne, projet }) => ({
       titre: projet.titre,
@@ -29,6 +31,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ mois: stri
       dateFinDernierRapport: ligne.dateFinDernierRapport,
       nouvelleDateFin: ligne.nouvelleDateFin,
       dateLancement: ligne.dateLancement,
+      objectifs: objectifs.get(projet.id),
     })),
   );
   await noter(u.id, "conseil_word", mois);

@@ -1,5 +1,6 @@
 "use server";
 
+import { objectifsDeLaDemande } from "@/lib/donnees/objectifs";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { acces, exigerProjetVisible } from "@/lib/acces";
@@ -63,6 +64,7 @@ export async function proposer(form: FormData) {
     u.id,
   );
   if ("erreur" in r) redirect(`/projets/nouveau?erreur=${encodeURIComponent(r.erreur)}`);
+  await objectifsDeLaDemande(r.id, form.get("objectifs"));
   revalider();
   redirect(`/projets/${r.id}?propose=1`);
 }

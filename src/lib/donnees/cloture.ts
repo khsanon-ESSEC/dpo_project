@@ -10,7 +10,9 @@ import type { Acces } from "@/lib/acces";
 import { aujourdhui } from "@/lib/dates";
 import { noter } from "@/lib/journal";
 import { peutGererProjet } from "@/lib/projets";
-import { dateClotureValide, devise, objectifs, peutEtreCloture } from "@/lib/suivi";
+import { dateClotureValide, devise, objectifs, peutEtreCloture, type Objectifs } from "@/lib/suivi";
+import { bilanDesObjectifs } from "@/lib/objectifs";
+import { enregistrerEvaluations, lireEvaluations } from "./objectifs";
 import { acteur } from "./gestion";
 import { recalculerSante } from "./sante";
 
@@ -35,7 +37,11 @@ export async function etatAvantCloture(projetId: string) {
   return { tachesOuvertes: Number(t.n), livrablesNonValides: Number(l.n), risquesOuverts: Number(r.n), phasesOuvertes: Number(ph.n) };
 }
 
-export type DonneesCloture = { clotureLe: string | null; bilan: string; objectifs: string; lecons: string };
+/**
+ * evaluations : pour un projet qui a ses objectifs écrits, chacun dit atteint, en partie ou non (identifiant →
+ * valeur) ; le bilan d'ensemble en est tiré. Sans evaluations (la barre), le bilan d'ensemble se donne directement.
+ */
+export type DonneesCloture = { clotureLe: string | null; bilan: string; objectifs: string; lecons: string; evaluations?: Record<string, unknown> };
 
 export async function cloturerProjet(a: Acces, projetId: string, d: DonneesCloture): Promise<{ ok: true } | { erreur: string }> {
   const r = await projetGere(a, projetId);
@@ -47,13 +53,23 @@ export async function cloturerProjet(a: Acces, projetId: string, d: DonneesClotu
   if (!le) return { erreur: "La date de clôture : au plus tard aujourd'hui, pas avant l'entrée du projet." };
   const bilan = texte(d.bilan, 4000);
   if (bilan.length < 10) return { erreur: "Écrivez le bilan du projet en quelques phrases : ce qui a été livré, ce qui ne l'a pas été." };
-  const obj = objectifs(d.objectifs);
+  let obj = objectifs(d.objectifs);
+  let evaluations: Map<string, Objectifs> | null = null;
+  if (d.evaluations) {
+    const ev = await lireEvaluations(projetId, d.evaluations);
+    if (ev && "erreur" in ev) return ev;
+    if (ev) {
+      evaluations = ev.evaluations;
+      obj = bilanDesObjectifs([...evaluations.values()]);
+    }
+  }
   if (!obj) return { erreur: "Dites si les objectifs du projet sont atteints." };
   await db
     .update(schema.projets)
     .set({ statut: "finalise", clotureLe: le, clotureParId: a.moi.id, bilanCloture: bilan, objectifsAtteints: obj, leconsApprises: texte(d.lecons, 4000), majLe: new Date() })
     .where(eq(schema.projets.id, projetId));
-  await noter(a.moi.id, "projet_cloture", projetId, { le, objectifs: obj });
+  if (evaluations) await enregistrerEvaluations(evaluations);
+  await noter(a.moi.id, "projet_cloture", projetId, { le, objectifs: obj, ...(evaluations ? { parObjectif: Object.fromEntries(evaluations) } : {}) });
   // L'équipe et le sponsor sont prévenus (sauf qui clôture, et les personnes hors division sans accès).
   const membres = await db.select({ id: schema.membresProjet.personneId }).from(schema.membresProjet).where(eq(schema.membresProjet.projetId, projetId));
   const ids = [...new Set([p.chefProjetId, p.referentId, p.sponsorId, ...membres.map((m) => m.id)].filter((x): x is string => !!x && x !== a.moi.id))];

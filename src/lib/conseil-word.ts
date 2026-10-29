@@ -45,6 +45,8 @@ export type LigneWord = {
   dateFinDernierRapport: string | null;
   nouvelleDateFin: string | null;
   dateLancement: string | null;
+  /** Les objectifs écrits du projet (29 octobre 2026), rappelés sous sa description. */
+  objectifs?: string[];
 };
 
 const MARINE = "213E7D";
@@ -79,7 +81,7 @@ export async function rapportConseilWord(lignes: LigneWord[], options: { logoPng
         new TableRow({
           children: [
             cellule([texte(String(i + 1))], largeurs[0]),
-            cellule([texte(l.titre, { gras: true }), texte(l.description)], largeurs[1]),
+            cellule([texte(l.titre, { gras: true }), texte(l.description), ...(l.objectifs?.length ? [new Paragraph({ spacing: { before: 60 }, children: [new TextRun({ text: "Objectifs : ", bold: true, size: 16, font: "Calibri", color: "555555" }), new TextRun({ text: l.objectifs.join(" ; "), size: 16, font: "Calibri", color: "555555" })] })] : [])], largeurs[1]),
             cellule([texte(l.programme)], largeurs[2]),
             cellule(l.etatAvancement.split(/\n+/).map((p) => texte(p)), largeurs[3]),
             cellule([texte(dateLongue(l.dateEntree))], largeurs[4]),

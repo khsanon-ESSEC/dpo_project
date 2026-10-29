@@ -43,18 +43,19 @@ export const ONGLETS_ORGANISATION: SousOnglet[] = [
   { href: "/organisation", libelle: "Personnes et équipes", icone: "personnes" },
   { href: "/organisation/modeles", libelle: "Modèles de rapport", icone: "modeles" },
   { href: "/organisation/listes", libelle: "Listes", icone: "liste" },
+  { href: "/organisation/raci", libelle: "RACI", icone: "colonnes" },
   { href: "/organisation/importer", libelle: "Importer", icone: "importer" },
   { href: "/pilote", libelle: "Suivi du pilote", icone: "bilan" },
 ];
 
 /**
  * Les onglets d'Organisation que la personne peut ouvrir : tout pour un administrateur ; pour un exécutif qui
- * n'administre pas, les personnes et équipes (en lecture), les listes des projets, l'import des projets et des tâches,
+ * n'administre pas, les personnes et équipes (en lecture), les listes des projets, le RACI type, l'import des projets et des tâches,
  * et le suivi du pilote.
  */
 export function ongletsOrganisation(u: { administrateur: boolean; executif: boolean; externe?: boolean }, toutVoir: boolean): SousOnglet[] {
   if (u.administrateur && !u.externe) return ONGLETS_ORGANISATION;
-  return ONGLETS_ORGANISATION.filter((o) => (toutVoir && (o.href === "/organisation" || o.href === "/organisation/listes" || o.href === "/organisation/importer")) || (o.href === "/pilote" && u.executif));
+  return ONGLETS_ORGANISATION.filter((o) => (toutVoir && (o.href === "/organisation" || o.href === "/organisation/listes" || o.href === "/organisation/raci" || o.href === "/organisation/importer")) || (o.href === "/pilote" && u.executif));
 }
 
 /** Section Conseil : le rapport mensuel, et les rapports ponctuels faits à tout moment. */

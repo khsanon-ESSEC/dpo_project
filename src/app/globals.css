@@ -8025,154 +8025,254 @@ a.pastille-rapport:hover {
 }
 
 /* ---------------------------------------------------------------------------
-   Comparer deux rapports au conseil (29 octobre 2026) : les projets alignés, A à gauche, B à droite ; ce qui diffère
-   de A est marqué dans B (fond ambre pâle et filet), jamais par la couleur seule (« Fin repoussée +3 sem. »).
+   Comparer deux rapports au conseil (29 octobre 2026, revu le même jour : « délimite les mois »). Trois colonnes :
+   le projet, le rapport le plus ancien (bande beige), le plus récent (bande bleue). Chaque cellule rappelle son mois
+   (sur téléphone, les colonnes s'empilent). Ce qui a bougé est dit en mots (« Fin repoussée de 4 sem. ») ; un état
+   d'avancement resté le même est dit « Inchangé » et s'efface. Préfixe « comparatif » : « comparaison » est déjà le
+   tableau des périodes du bilan.
    --------------------------------------------------------------------------- */
-.comparaison__choix {
+.comparatif__choix {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 12px 16px;
 }
-.comparaison__choix .champ {
+.comparatif__choix .champ {
   flex: 1 1 280px;
   min-width: 0;
 }
-.comparaison__fleche {
+.comparatif__fleche {
   color: var(--discret);
   padding-bottom: 12px;
 }
 @media (max-width: 699px) {
-  .comparaison__fleche {
+  .comparatif__fleche {
     display: none;
   }
 }
-.comparaison {
+.comparatif {
+  --cmp-a: var(--choisi);
+  --cmp-a-trait: var(--controle);
+  --cmp-b: var(--relief);
+  --cmp-b-trait: var(--actif);
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
-.comparaison__entete,
-.comparaison__ligne {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px 24px;
-}
-.comparaison__entete {
+.comparatif__tete {
   display: none;
 }
-.comparaison__ligne {
-  padding: 18px 20px;
+.comparatif__ligne {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   background: var(--surface);
   border: 1px solid var(--surface-filet);
+  border-radius: 14px;
+  overflow: hidden;
 }
-.comparaison__projet {
+.comparatif__projet {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 8px 12px;
+  padding: 16px 18px;
   min-width: 0;
 }
-.comparaison__projet .rangee__texte {
-  flex: 1 1 220px;
+.comparatif__projet .rangee__texte {
+  flex: 1 1 200px;
+  min-width: 0;
 }
-.comparaison__marques {
+.comparatif__ecarts {
+  flex: 1 1 100%;
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
 }
-.comparaison__rapport {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
-}
-.comparaison__lettre {
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+.comparatif__ecart {
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 16px;
   background: var(--choisi);
-  color: var(--encre);
-  font-size: 13px;
-  font-weight: 600;
+  color: var(--encre-2);
 }
-.comparaison__lettre--petite {
-  width: 22px;
-  height: 22px;
-  font-size: 11px;
+.comparatif__ecart--veille {
+  background: var(--tag);
+  color: var(--tag-encre);
+  font-weight: 500;
 }
-.comparaison__cote {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
-  gap: 8px 10px;
-  align-content: start;
+.comparatif__ecart--relief {
+  background: var(--relief);
+  color: var(--relief-encre);
+  font-weight: 500;
+}
+.comparatif__cellule {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 18px 16px;
   min-width: 0;
+  border-top: 1px solid var(--surface-filet);
 }
-.comparaison__cote > :not(.comparaison__lettre) {
-  grid-column: 2;
+.comparatif__cellule--a {
+  background: var(--cmp-a);
+  box-shadow: inset 4px 0 0 var(--cmp-a-trait);
 }
-.comparaison__cote > .comparaison__lettre {
-  grid-row: 1 / span 2;
+.comparatif__cellule--b {
+  background: var(--cmp-b);
+  box-shadow: inset 4px 0 0 var(--cmp-b-trait);
 }
-.comparaison__cote--vide {
-  display: block;
+.comparatif__cellule-mois {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--discret);
-  font-size: 14px;
-  font-style: italic;
 }
-.comparaison__dates {
+.comparatif__cellule--b .comparatif__cellule-mois {
+  color: var(--relief-encre);
+}
+.comparatif__cellule--vide p {
+  margin: 0;
+  color: var(--discret);
+  font-style: italic;
+  font-size: 14px;
+}
+.comparatif__dates {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 24px;
+  gap: 6px 28px;
   margin: 0;
 }
-.comparaison__dates > div {
-  padding: 2px 6px;
-  margin: -2px -6px;
-}
-.comparaison__dates dt {
+.comparatif__dates dt {
   font-size: 12px;
+  line-height: 16px;
   color: var(--discret);
 }
-.comparaison__dates dd {
+.comparatif__dates dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--encre);
 }
-.comparaison__etat {
-  margin: 0;
-  font-size: 14px;
-  line-height: 21px;
-  white-space: pre-line;
-  max-width: 100ch;
+.comparatif__delta {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  background: var(--surface);
+  color: var(--encre-2);
 }
-.comparaison [data-change="1"] {
+.comparatif__delta--veille {
   background: var(--tag);
-  box-shadow: inset 3px 0 0 var(--veille-point);
+  color: var(--tag-encre);
 }
-.comparaison__etat[data-change="1"] {
-  padding: 6px 10px;
+.comparatif__delta--relief {
+  background: var(--surface);
+  color: var(--relief-encre);
+}
+.comparatif__etat {
+  margin: 0;
+  font-size: 14px;
+  line-height: 22px;
+  white-space: pre-line;
+  color: var(--encre);
+  max-width: 78ch;
+}
+.comparatif__etat--meme {
+  color: var(--discret);
+}
+.comparatif__inchange {
+  font-weight: 600;
+  color: var(--encre-2);
+}
+.comparatif__vide {
+  margin: 0;
 }
 @media (min-width: 1100px) {
-  .comparaison__entete {
+  .comparatif {
+    gap: 0;
+    border: 1px solid var(--surface-filet);
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .comparatif__tete,
+  .comparatif__ligne {
     display: grid;
-    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1fr);
-    padding: 0 21px;
+    grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 1fr);
   }
-  .comparaison__ligne {
-    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1fr);
-    align-items: start;
+  .comparatif__ligne {
+    border: 0;
+    border-radius: 0;
+    border-top: 1px solid var(--surface-filet);
   }
-  .comparaison__cote > .comparaison__lettre {
-    display: none;
+  .comparatif__tete-projet {
+    align-self: end;
+    padding: 0 18px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--discret);
   }
-  .comparaison__cote {
-    grid-template-columns: minmax(0, 1fr);
+  .comparatif__mois {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 16px 18px 14px;
   }
-  .comparaison__cote > :not(.comparaison__lettre) {
-    grid-column: 1;
+  .comparatif__mois--a {
+    background: var(--cmp-a);
+    box-shadow: inset 4px 0 0 var(--cmp-a-trait), inset 0 4px 0 var(--cmp-a-trait);
+  }
+  .comparatif__mois--b {
+    background: var(--cmp-b);
+    box-shadow: inset 4px 0 0 var(--cmp-b-trait), inset 0 4px 0 var(--cmp-b-trait);
+  }
+  .comparatif__mois-nom {
+    font-size: 20px;
+    line-height: 26px;
+    font-weight: 500;
+    color: var(--encre);
+  }
+  .comparatif__mois--b .comparatif__mois-nom {
+    color: var(--relief-encre);
+  }
+  .comparatif__mois-etat {
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--discret);
+  }
+  .comparatif__cellule {
+    border-top: 0;
+    padding: 18px 20px 20px;
+  }
+  /* Sur grand écran, l'en-tête dit le mois : la cellule ne le répète que pour les lecteurs d'écran. */
+  .comparatif__cellule-mois {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .comparatif__projet {
+    padding: 18px 20px;
+  }
+  .comparatif__vide {
+    padding: 18px 20px;
+    border-top: 1px solid var(--surface-filet);
   }
 }
 
@@ -8338,4 +8438,574 @@ a.livrable__lien:focus-visible {
 .membre-role__champ {
   flex: 1 1 220px;
   min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Objectifs et bénéfices attendus (29 octobre 2026) : sur la fiche du projet, la liste des objectifs (et leur
+   évaluation à la clôture), les bénéfices avec indicateur, départ, cible et valeur constatée.
+   --------------------------------------------------------------------------- */
+.objectifs-projet__titre {
+  margin: 14px 0 6px;
+}
+.objectifs-projet__liste {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding-left: 22px;
+  font-size: 15px;
+  line-height: 22px;
+}
+.objectifs-projet__liste li::marker {
+  color: var(--discret);
+}
+.objectifs-projet__eval {
+  margin: 0 0 0 8px;
+  vertical-align: 1px;
+  font-size: 12px;
+  padding: 0 8px;
+}
+.objectifs-projet__benefices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.benefice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--surface-filet);
+  border-radius: 12px;
+}
+.benefice__libelle {
+  font-size: 15px;
+  line-height: 21px;
+  font-weight: 500;
+}
+.benefice__mesure {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+.benefice__mesure dt {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--discret);
+}
+.benefice__mesure dd {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+@media (max-width: 520px) {
+  .benefice__mesure {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .benefice__mesure > div:first-child {
+    grid-column: 1 / -1;
+  }
+}
+.benefice__constate dd {
+  font-weight: 600;
+  color: var(--ok);
+}
+.objectif-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.objectif-form .livrables-gestion__pied {
+  grid-column: auto;
+}
+@media (max-width: 760px) {
+  .objectif-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.benefice-form {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+.benefice-form .livrables-gestion__nom {
+  grid-column: 1 / -1;
+}
+.benefice-form .livrables-gestion__critere {
+  grid-column: auto;
+}
+@media (max-width: 760px) {
+  .benefice-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .benefice-form .livrables-gestion__critere {
+    grid-column: 1 / -1;
+  }
+}
+/* Clôture : chaque objectif dit atteint, en partie ou non. */
+.cloture__par-objectif {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cloture__objectif {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--surface-filet);
+  border-radius: 10px;
+  min-width: 0;
+}
+.cloture__objectif legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 4px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* ---------------------------------------------------------------------------
+   RACI (29 octobre 2026) : les rôles en colonnes, les activités en lignes, une lettre par case (R réalise en bleu,
+   A approuve en ambre ; jamais par la couleur seule : la lettre est écrite).
+   --------------------------------------------------------------------------- */
+.raci-cadre {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.raci {
+  width: 100%;
+  min-width: 480px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 14px;
+  line-height: 20px;
+}
+.raci th,
+.raci td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--filet);
+  vertical-align: top;
+}
+.raci thead th {
+  text-align: center;
+  vertical-align: bottom;
+  border-bottom: 1px solid var(--filet-fort);
+}
+.raci thead th.raci__activite {
+  width: 34%;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--discret);
+}
+.raci tbody th.raci__activite {
+  text-align: left;
+  font-weight: 400;
+}
+.raci__role {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+.raci__noms {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  color: var(--discret);
+}
+.raci__case {
+  text-align: center;
+}
+.raci__case abbr {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: help;
+  background: var(--choisi);
+  color: var(--encre);
+}
+.raci__case--R abbr {
+  background: var(--relief);
+  color: var(--relief-encre);
+}
+.raci__case--A abbr {
+  background: var(--tag);
+  color: var(--tag-encre);
+  box-shadow: inset 0 0 0 1px var(--veille-point);
+}
+.raci__case--I abbr {
+  background: transparent;
+  color: var(--discret);
+  box-shadow: inset 0 0 0 1px var(--filet-fort);
+}
+.raci__legende {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--discret);
+}
+.raci-carte > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.raci-carte > summary::-webkit-details-marker {
+  display: none;
+}
+/* Modifier un RACI */
+.raci-edition {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.raci--edition {
+  min-width: 760px;
+}
+.raci--edition thead th.raci__activite {
+  width: 30%;
+}
+.raci--edition thead th.raci-edition__outils {
+  width: 124px;
+}
+.raci--edition input,
+.raci--edition select,
+.raci--edition textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--champ-bord);
+  border-radius: var(--champ-rayon);
+  background: var(--champ);
+  color: var(--encre);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+}
+.raci--edition textarea {
+  min-height: 56px;
+  padding: 7px 10px;
+  line-height: 19px;
+  font-weight: 600;
+  resize: none;
+}
+.raci--edition .raci__case select {
+  min-width: 96px;
+  text-align: center;
+}
+.raci-edition__role {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  text-align: left;
+}
+.raci-edition__role select {
+  font-size: 12px;
+  color: var(--discret);
+}
+.raci-edition__role .bouton-mini {
+  align-self: flex-start;
+}
+.raci-edition__outils {
+  white-space: nowrap;
+  width: 1%;
+}
+.raci-edition__outils .bouton-icone {
+  display: inline-grid;
+}
+.raci-edition__ligne--erreur th,
+.raci-edition__ligne--erreur td {
+  background: var(--tag);
+}
+.raci-edition__pied {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+/* ---------------------------------------------------------------------------
+   Fiche de projet exportable (29 octobre 2026) : une feuille blanche à l'écran ; à l'impression (ou en PDF), la
+   feuille seule, au format A4, sans la navigation de l'application.
+   --------------------------------------------------------------------------- */
+.fiche-outils {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
+}
+.fiche-outils .retour {
+  color: var(--relief-encre);
+}
+.fiche-outils__boutons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.fiche-doc {
+  max-width: 960px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 44px 52px 36px;
+  background: #ffffff;
+  color: #1f1f1f;
+  border: 1px solid var(--surface-filet);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(11, 49, 86, 0.06), 0 8px 28px rgba(11, 49, 86, 0.08);
+  font-size: 14px;
+  line-height: 21px;
+  /* La feuille reste claire, même en mode sombre : c'est un document. */
+  --encre: #0b3156;
+  --encre-2: #3a3936;
+  --discret: #6b6862;
+  --filet: #efece5;
+  --filet-fort: #d9d4c8;
+  --choisi: #f3f1eb;
+  --relief: #edf4fa;
+  --relief-encre: #0c5ca8;
+  --tag: #fff4dc;
+  --tag-encre: #3c2a08;
+  --veille-point: #d08a1c;
+  --surface-filet: #e6e2d8;
+}
+.fiche-doc__entete {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px 24px;
+  padding-bottom: 18px;
+  border-bottom: 2px solid #213e7d;
+}
+.fiche-doc__division {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.fiche-doc__genre {
+  margin: 2px 0 12px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+.fiche-doc__titre {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 500;
+  color: #0b3156;
+}
+.fiche-doc__sous {
+  margin: 6px 0 0;
+  color: var(--discret);
+}
+.fiche-doc__logo {
+  flex: none;
+  width: 130px;
+  height: auto;
+}
+.fiche-doc__faits {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px 24px;
+  margin: 18px 0 0;
+  padding: 16px 18px;
+  background: #f7f6f2;
+  border-radius: 8px;
+}
+.fiche-doc__faits dt {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--discret);
+}
+.fiche-doc__faits dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: #1f1f1f;
+}
+.fiche-doc__note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--discret);
+}
+.fiche-doc__section {
+  margin-top: 26px;
+}
+.fiche-doc__section h2 {
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--filet-fort);
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+  color: #213e7d;
+  break-after: avoid;
+}
+.fiche-doc__section h3 {
+  margin: 14px 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f1f1f;
+  break-after: avoid;
+}
+.fiche-doc__texte {
+  margin: 0 0 8px;
+  white-space: pre-line;
+}
+.fiche-doc__liste {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fiche-doc__liste--colonnes {
+  display: block;
+  columns: 2 260px;
+  column-gap: 28px;
+}
+.fiche-doc__liste--colonnes li {
+  break-inside: avoid;
+  margin-bottom: 4px;
+}
+.fiche-doc__eval {
+  font-weight: 600;
+}
+.fiche-doc__vide {
+  margin: 0;
+  color: var(--discret);
+  font-style: italic;
+}
+.fiche-doc__discret {
+  color: var(--discret);
+  font-size: 13px;
+}
+.fiche-doc__table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 19px;
+}
+.fiche-doc__table th,
+.fiche-doc__table td {
+  padding: 6px 8px;
+  border: 1px solid #d9d4c8;
+  text-align: left;
+  vertical-align: top;
+}
+.fiche-doc__table thead th {
+  background: #213e7d;
+  color: #ffffff;
+  font-weight: 600;
+  border-color: #213e7d;
+}
+.fiche-doc__table tbody th {
+  font-weight: 500;
+}
+.fiche-doc__table tr {
+  break-inside: avoid;
+}
+.fiche-doc .raci {
+  min-width: 520px;
+}
+.fiche-doc__valeur {
+  white-space: nowrap;
+}
+.fiche-doc__pied {
+  break-before: avoid;
+  break-inside: avoid;
+  margin-top: 30px;
+  padding-top: 10px;
+  border-top: 1px solid var(--filet-fort);
+  font-size: 12px;
+  color: var(--discret);
+}
+@media (max-width: 699px) {
+  .fiche-doc__faits {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding: 14px;
+  }
+  .fiche-doc {
+    padding: 22px 18px;
+    border-radius: 0;
+  }
+  .fiche-doc__entete {
+    flex-direction: column-reverse;
+  }
+  .fiche-doc__logo {
+    width: 104px;
+  }
+}
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+  .fiche-outils,
+  .barre-globale,
+  .rail,
+  .navigation,
+  .barre-mobile,
+  .fab {
+    display: none !important;
+  }
+  .fiche-page {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .fiche-doc {
+    max-width: none;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    font-size: 11pt;
+    line-height: 1.4;
+  }
+  .fiche-doc .defile-x {
+    overflow: visible;
+  }
+  .fiche-doc__table,
+  .fiche-doc .raci {
+    min-width: 0;
+  }
+  .fiche-doc__faits,
+  .fiche-doc__table thead th,
+  .raci__case abbr {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+/* Rapport au conseil : les objectifs du projet sous sa description (29 octobre 2026). */
+.objectifs-conseil {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 16px;
+  color: #555555;
 }

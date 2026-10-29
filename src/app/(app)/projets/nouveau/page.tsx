@@ -62,6 +62,13 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
             <label htmlFor="pp-description">Description (facultatif)</label>
             <textarea id="pp-description" name="description" rows={3} maxLength={2000} />
           </div>
+          <div className="champ">
+            <label htmlFor="pp-objectifs">Objectifs (facultatif, un par ligne)</label>
+            <textarea id="pp-objectifs" name="objectifs" rows={3} maxLength={3000} aria-describedby="pp-objectifs-aide" placeholder={"Optimiser les processus du Centre de contact\nMettre en place des indicateurs de performance"} />
+            <span className="aide" id="pp-objectifs-aide">
+              Ce que le projet doit atteindre. Le chef de projet les précise ensuite et y ajoute les bénéfices attendus, mesurables.
+            </span>
+          </div>
           </div>
           <div className="formulaire-volets__groupe" style={{ gap: 20 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>

@@ -42,6 +42,11 @@ import { Courbes } from "@/components/Courbes";
 import { FriseReports } from "@/components/Graphiques";
 import { ChoixListe } from "@/components/ChoixListe";
 import { choixListes } from "@/lib/donnees/listes";
+import { objectifsDuProjet } from "@/lib/donnees/objectifs";
+import { nomsPourRaci, raciDuProjet } from "@/lib/donnees/raci";
+import { peutNoterConstat } from "@/lib/objectifs";
+import { TableauRaci } from "@/components/Raci";
+import { CarteObjectifs } from "./CarteObjectifs";
 
 export const metadata: Metadata = { title: "Projet" };
 
@@ -51,9 +56,9 @@ const SANTE = {
   dans_les_temps: { texte: "Dans les temps", classe: "ton-ok" },
 } as const;
 
-export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string; decision?: string; risque?: string; cloture?: string; budget?: string }> }) {
+export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string; decision?: string; risque?: string; cloture?: string; budget?: string; fait?: string }> }) {
   const { id } = await params;
-  const { propose, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut, decision: decisionBrut, risque: risqueBrut, cloture: clotureFait, budget: budgetFait } = await searchParams;
+  const { propose, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut, decision: decisionBrut, risque: risqueBrut, cloture: clotureFait, budget: budgetFait, fait } = await searchParams;
   const livrableFait = livrableBrut === "pret" || livrableBrut === "valider" || livrableBrut === "renvoyer" || livrableBrut === "rouvrir" ? livrableBrut : null;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
@@ -95,7 +100,9 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const decisions = await decisionsDuProjet(id);
   const noteDecisions = actif && peutNoterDecision(u.id, peutModifier, { chefProjetId: p.chefProjetId, referentId: p.referentId, membres: new Set(membres.map((m) => m.personneId)) });
   const instances = noteDecisions ? await instancesConnues() : [];
-  const [phases, risques, temps] = await Promise.all([phasesDuProjet(id), risquesDuProjet(id), tempsDuProjet(id)]);
+  const [phases, risques, temps, objs, rc] = await Promise.all([phasesDuProjet(id), risquesDuProjet(id), tempsDuProjet(id), objectifsDuProjet(id), raciDuProjet(id)]);
+  const nomsRaci = await nomsPourRaci(p, rc.raci);
+  const objectifsOuverts = !p.archiveLe && p.statut !== "refuse" && p.statut !== "finalise";
   const phaseCourante = phaseEnCours(phases, jour);
   const nomPhase = new Map(phases.map((ph) => [ph.id, ph.nom]));
   const risquesOuverts = risques.filter((r) => r.statut === "ouvert");
@@ -609,6 +616,9 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 <Icone nom="ajouter" taille={16} /> Nouvelle tâche
               </a>
             ) : null}
+            <a href={`/projets/${p.id}/fiche`} className="bouton-contour">
+              <Icone nom="document" taille={16} /> Fiche de projet
+            </a>
           </div>
         </div>
         <div className="colonnes colonnes--tablette">
@@ -629,6 +639,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                   {p.objectifsAtteints ? (
                     <p className={`cloture__objectifs cloture__objectifs--${p.objectifsAtteints}`}>
                       Objectifs : {LIBELLE_OBJECTIFS[p.objectifsAtteints as Objectifs] ?? p.objectifsAtteints}
+                      {objs.objectifs.some((o) => o.evaluation) ? ` (${objs.objectifs.filter((o) => o.evaluation === "oui").length} sur ${objs.objectifs.length} atteints)` : ""}
                     </p>
                   ) : null}
                   {p.bilanCloture ? (
@@ -660,6 +671,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                   Le projet est rouvert : il repart « en cours ».
                 </p>
               ) : null}
+              <CarteObjectifs projetId={p.id} objectifs={objs.objectifs} benefices={objs.benefices} gere={peutModifier} modifiable={objectifsOuverts} constatPossible={peutNoterConstat(p)} message={fait === "constat" ? "Valeur constatée enregistrée." : null} />
               {phases.length ? (
                 <section className="carte phases-projet" id="phases" aria-labelledby="p-phases" style={{ scrollMarginTop: 80 }}>
                   <div className="carte__entete">
@@ -961,6 +973,27 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 ) : null}
               </section>
 
+              {!demande && !refuse ? (
+                <section className="carte" id="raci" aria-labelledby="p-raci" style={{ scrollMarginTop: 80 }}>
+                  <details className="cloture__details raci-carte">
+                    <summary className="cloture__resume">
+                      <h2 id="p-raci" className="carte__titre" style={{ margin: 0 }}>
+                        Qui fait quoi (RACI)
+                      </h2>
+                      <span className="note" style={{ margin: 0 }}>
+                        {rc.propre ? "Adapté pour ce projet" : "RACI type de la DPO"} · {rc.raci.lignes.length} activité{rc.raci.lignes.length > 1 ? "s" : ""}
+                      </span>
+                    </summary>
+                    <TableauRaci raci={rc.raci} noms={nomsRaci} />
+                    {peutModifier && objectifsOuverts ? (
+                      <a href={`/projets/${p.id}/modifier#raci`} className="bouton-mini" style={{ marginTop: 10 }}>
+                        <Icone nom="modifier" taille={14} /> {rc.propre ? "Modifier le RACI du projet" : "Adapter pour ce projet"}
+                      </a>
+                    ) : null}
+                  </details>
+                </section>
+              ) : null}
+
               {pointsAv.some((x) => !x.avant) ? (
                 <section className="carte" aria-labelledby="p-avancement" id="avancement" style={{ scrollMarginTop: 80 }}>
                   <h2 id="p-avancement" className="carte__titre" style={{ marginBottom: 4 }}>
@@ -1079,16 +1112,37 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                           <label htmlFor="cl-le">Date de clôture</label>
                           <input id="cl-le" name="clotureLe" type="date" defaultValue={jour} max={jour} min={p.dateEntree ?? undefined} required />
                         </div>
-                        <fieldset className="segmente" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-                          <legend style={{ padding: 0, marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Objectifs du projet</legend>
-                          {OBJECTIFS.map((o) => (
-                            <label key={o} className="segmente__choix">
-                              <input type="radio" name="objectifs" value={o} required defaultChecked={p.objectifsAtteints === o} />
-                              <span>{LIBELLE_OBJECTIFS[o]}</span>
-                            </label>
-                          ))}
-                        </fieldset>
+                        {objs.objectifs.length ? null : (
+                          <fieldset className="segmente" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+                            <legend style={{ padding: 0, marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Objectifs du projet</legend>
+                            {OBJECTIFS.map((o) => (
+                              <label key={o} className="segmente__choix">
+                                <input type="radio" name="objectifs" value={o} required defaultChecked={p.objectifsAtteints === o} />
+                                <span>{LIBELLE_OBJECTIFS[o]}</span>
+                              </label>
+                            ))}
+                          </fieldset>
+                        )}
                       </div>
+                      {objs.objectifs.length ? (
+                        <div className="cloture__par-objectif">
+                          <input type="hidden" name="parObjectif" value="1" />
+                          <p style={{ margin: 0, fontSize: 13, fontWeight: 500 }}>Chaque objectif est-il atteint ?</p>
+                          {objs.objectifs.map((o) => (
+                            <fieldset key={o.id} className="cloture__objectif">
+                              <legend>{o.libelle}</legend>
+                              <div className="segmente">
+                                {OBJECTIFS.map((x) => (
+                                  <label key={x} className="segmente__choix">
+                                    <input type="radio" name={`obj-${o.id}`} value={x} required defaultChecked={o.evaluation === x} />
+                                    <span>{x === "oui" ? "Atteint" : x === "en_partie" ? "En partie" : "Pas atteint"}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </fieldset>
+                          ))}
+                        </div>
+                      ) : null}
                       <div className="champ">
                         <label htmlFor="cl-bilan">Bilan</label>
                         <textarea id="cl-bilan" name="bilan" rows={4} required minLength={10} maxLength={4000} defaultValue={p.bilanCloture} placeholder="Ce qui a été livré, ce qui ne l'a pas été, l'écart avec ce qui était prévu (dates, périmètre)." />

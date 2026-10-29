@@ -375,6 +375,20 @@ await sql.begin(async (tx) => {
   await risque("UC", "ml", "ml", -20, "Départ d'un développeur clé du prestataire", 1, 2, "Documentation exigée à chaque livraison");
   await risque("UN", "lp", "lp", -15, "La DTI tarde à ouvrir l'accès de test au TMS", 2, 3, "Relance chaque semaine ; escalade à la direction de la DTI");
 
+  // ---------- Objectifs et bénéfices attendus (29 octobre 2026) ----------
+  const objectif = (pj, ordre, libelle, evaluation = "") =>
+    tx`insert into objectifs_projet (projet_id, genre, ordre, libelle, evaluation) values (${PJ[pj]}, 'objectif', ${ordre}, ${libelle}, ${evaluation})`;
+  const benefice = (pj, ordre, libelle, indicateur, depart, cible) =>
+    tx`insert into objectifs_projet (projet_id, genre, ordre, libelle, indicateur, depart, cible) values (${PJ[pj]}, 'benefice', ${ordre}, ${libelle}, ${indicateur}, ${depart}, ${cible})`;
+  await objectif("UR", 1, "Permettre aux clients particuliers de faire leurs virements et paiements en ligne, sans passer en agence");
+  await objectif("UR", 2, "Remplacer l'ancienne version avant la fin de son contrat de maintenance");
+  await objectif("UR", 3, "Passer l'audit de sécurité avant d'ouvrir la nouvelle version à tous les clients");
+  await benefice("UR", 1, "Moins de déplacements en agence pour les opérations courantes", "Part des virements faits en ligne", "18 %", "40 %");
+  await benefice("UR", 2, "Moins d'appels au centre de contact sur l'accès en ligne", "Appels par mois sur l'accès en ligne", "1 200", "600");
+  await benefice("UR", 3, "Des clients plus satisfaits du service en ligne", "NPS des clients en ligne", "+12", "+25");
+  await objectif("UC", 1, "Offrir aux entreprises les virements de masse et le paiement des salaires en ligne");
+  await benefice("UC", 1, "Moins de remises de fichiers de paie en agence", "Fichiers de paie reçus en agence par mois", "", "");
+
   // ---------- Temps passé noté sur quelques tâches ----------
   const temps = async (pj, titre, entrees) => {
     const [t] = await tx`select id, assigne_id from taches where projet_id = ${PJ[pj]} and titre = ${titre}`;
@@ -499,6 +513,12 @@ await sql.begin(async (tx) => {
     values (${ancien}, ${"MS"}, ${"Migration de la messagerie"}, ${"Passage de toute la banque à la nouvelle messagerie."}, ${""}, ${false}, ${"finalise"}, ${"dans_les_temps"}, ${P.ml},
             ${"2025-09-01"}, ${"2026-03-31"}, ${"2026-04-30"}, ${moment(-60, 10)}, ${P.ml})`;
   await tx`insert into indicateurs (projet_id, ordre, libelle, etat, atteint_le) values (${ancien}, 1, ${"Boîtes migrées"}, ${"atteint"}, ${"2026-04-24"}), (${ancien}, 2, ${"Utilisateurs formés"}, ${"atteint"}, ${"2026-04-30"})`;
+  await tx`insert into objectifs_projet (projet_id, genre, ordre, libelle, evaluation) values
+    (${ancien}, 'objectif', 1, ${"Migrer toutes les boîtes vers la nouvelle messagerie"}, 'oui'),
+    (${ancien}, 'objectif', 2, ${"Former tous les utilisateurs avant l'arrêt de l'ancienne messagerie"}, 'en_partie')`;
+  await tx`insert into objectifs_projet (projet_id, genre, ordre, libelle, indicateur, depart, cible, constate, constate_le) values
+    (${ancien}, 'benefice', 1, ${"Moins d'incidents de messagerie"}, ${"Incidents par mois"}, ${"14"}, ${"4"}, ${"3"}, ${"2026-07-31"})`;
+  await tx`update projets set objectifs_atteints = 'en_partie', cloture_le = ${"2026-04-30"}, bilan_cloture = ${"Toutes les boîtes sont migrées ; un quart des utilisateurs n'a pas suivi la formation."} where id = ${ancien} and objectifs_atteints = ''`;
 
   // ---------- Modèles de rapport (configurés par les administrateurs) ----------
   // Mêmes formes que src/lib/modeles.ts. Le modèle par défaut reprend les quatre parties d'origine.

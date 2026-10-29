@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { objectifsDesProjets } from "@/lib/donnees/objectifs";
 import { notFound } from "next/navigation";
 import { acces, exigerAccesConseil, idsProjetsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
@@ -154,6 +155,7 @@ export default async function PagePonctuel({ params }: { params: Promise<{ id: s
 
         <TableauConseil
           lignes={lignes}
+          objectifs={await objectifsDesProjets(lignes.map((l) => l.projet.id))}
           visibles={visibles}
           brouillon={modifiable}
           ia={iaDisponible()}

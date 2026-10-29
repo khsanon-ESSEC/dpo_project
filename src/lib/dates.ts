@@ -78,6 +78,12 @@ export function dateCourte(iso: string | null | undefined): string {
   return premier(fmt({ day: "numeric", month: "short" }).format(versDate(iso)));
 }
 
+/** « 26 nov. 2026 » : une date courte qui garde l'année (fiche de projet, documents). */
+export function dateCourteAnnee(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  return premier(fmt({ day: "numeric", month: "short", year: "numeric" }).format(versDate(iso)));
+}
+
 /** « 26 novembre 2026 », « 1er octobre 2026 » */
 export function dateLongue(iso: string | null | undefined): string {
   if (!iso) return "—";

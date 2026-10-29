@@ -1,4 +1,5 @@
 import { peutGererProjet } from "@/lib/projets";
+import { objectifsDesProjets } from "@/lib/donnees/objectifs";
 import type { Metadata } from "next";
 import { acces, exigerAccesConseil, idsProjetsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
@@ -114,6 +115,7 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
         )}
         <TableauConseil
           lignes={lignes}
+          objectifs={await objectifsDesProjets(lignes.map((l) => l.projet.id))}
           visibles={visibles}
           redigeables={redigeables}
           brouillon={brouillon}

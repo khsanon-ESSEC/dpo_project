@@ -232,7 +232,9 @@ export async function deplacerUnePhase(projetId: string, phaseId: string, sens: 
 
 export async function cloturerLeProjet(projetId: string, form: FormData) {
   const a = await exigerVisible(projetId);
-  const r = await cloturerProjet(a, projetId, { clotureLe: date(form.get("clotureLe")), bilan: String(form.get("bilan") ?? ""), objectifs: String(form.get("objectifs") ?? ""), lecons: String(form.get("lecons") ?? "") });
+  // Un objectif écrit se dit atteint ou non un par un (« obj-<identifiant> ») ; le bilan d'ensemble en est tiré.
+  const parObjectif = form.get("parObjectif") === "1" ? Object.fromEntries([...form.entries()].filter(([k]) => k.startsWith("obj-")).map(([k, v]) => [k.slice(4), String(v)])) : undefined;
+  const r = await cloturerProjet(a, projetId, { clotureLe: date(form.get("clotureLe")), bilan: String(form.get("bilan") ?? ""), objectifs: String(form.get("objectifs") ?? ""), lecons: String(form.get("lecons") ?? ""), evaluations: parObjectif });
   revalidatePath("/", "layout");
   if ("erreur" in r) redirect(`/projets/${projetId}?erreur=${encodeURIComponent(r.erreur)}#cloture`);
   redirect(`/projets/${projetId}?cloture=faite#cloture`);

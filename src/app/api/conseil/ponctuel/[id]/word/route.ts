@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { objectifsDesProjets } from "@/lib/donnees/objectifs";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { utilisateurActif } from "@/lib/auth/session";
 import { dateLongue } from "@/lib/dates";
@@ -18,6 +19,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
   const visibles = await idsProjetsVisibles(a);
   const lignes = (await lignesConseil(r.id, r.statut)).filter((l) => visibles === "tous" || visibles.has(l.projet.id));
   if (!lignes.length && r.creeParId !== u.id) return new NextResponse("Rapport introuvable", { status: 404 });
+  const objectifs = await objectifsDesProjets(lignes.map((l) => l.projet.id));
   const fichier = await rapportConseilWord(
     lignes.map(({ ligne, projet }) => ({
       titre: projet.titre,
@@ -29,6 +31,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       dateFinDernierRapport: ligne.dateFinDernierRapport,
       nouvelleDateFin: ligne.nouvelleDateFin,
       dateLancement: ligne.dateLancement,
+      objectifs: objectifs.get(projet.id),
     })),
     {
       ponctuel: {

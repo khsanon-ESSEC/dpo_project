@@ -78,7 +78,7 @@ export default async function PageComparer({ searchParams }: { searchParams: Pro
         {rapports.length < 2 ? (
           <p className="vide">Il faut au moins deux rapports au conseil pour les comparer.</p>
         ) : (
-          <form method="get" action="/conseil/comparer" className="carte comparaison__choix">
+          <form method="get" action="/conseil/comparer" className="carte comparatif__choix">
             <div className="champ">
               <label htmlFor="cmp-a">Rapport de référence</label>
               <select id="cmp-a" name="a" defaultValue={ra?.id}>
@@ -89,7 +89,7 @@ export default async function PageComparer({ searchParams }: { searchParams: Pro
                 ))}
               </select>
             </div>
-            <span className="comparaison__fleche" aria-hidden="true">
+            <span className="comparatif__fleche" aria-hidden="true">
               <Icone nom="fleche-droite" taille={20} />
             </span>
             <div className="champ">
@@ -120,40 +120,29 @@ export default async function PageComparer({ searchParams }: { searchParams: Pro
                 </a>
               </nav>
             </div>
-            <section className="comparaison" aria-label={`${nomRapport(ra)} comparé à ${nomRapport(rb)}`}>
-              <div className="comparaison__entete" aria-hidden="true">
-                <span />
-                <EnteteRapport r={ra} lettre="A" />
-                <EnteteRapport r={rb} lettre="B" />
+            <section className="comparatif" aria-label={`${nomRapport(ra)} comparé à ${nomRapport(rb)}`}>
+              <div className="comparatif__tete" aria-hidden="true">
+                <span className="comparatif__tete-projet">Projet</span>
+                <EnteteRapport r={ra} cote="a" />
+                <EnteteRapport r={rb} cote="b" />
               </div>
-              {lignes.length === 0 ? <p className="vide">Rien n&apos;a changé entre ces deux rapports pour les projets que vous voyez.</p> : null}
+              {lignes.length === 0 ? <p className="vide comparatif__vide">Rien n&apos;a changé entre ces deux rapports pour les projets que vous voyez.</p> : null}
               {lignes.map((l) => (
-                <article key={l.projetId} className="comparaison__ligne">
-                  <header className="comparaison__projet">
+                <article key={l.projetId} className="comparatif__ligne" aria-labelledby={`cmp-${l.projetId}`}>
+                  <header className="comparatif__projet">
                     <span className="etiquette-projet">{l.code}</span>
                     <span className="rangee__texte">
-                      <span className="rangee__titre">
+                      <span className="rangee__titre" id={`cmp-${l.projetId}`}>
                         <LienProjet id={l.projetId} visible>
                           {l.titre}
                         </LienProjet>
                       </span>
                       {l.programme ? <span className="rangee__sous">{l.programme}</span> : null}
                     </span>
-                    <span className="comparaison__marques">
-                      {!l.a ? <span className="marque-modele marque-modele--relief">Ajouté</span> : null}
-                      {!l.b ? <span className="marque-modele marque-modele--ambre">Retiré</span> : null}
-                      {l.ecartFinJours ? (
-                        <span className={`marque-modele ${l.ecartFinJours > 0 ? "marque-modele--ambre" : "marque-modele--relief"}`}>
-                          Fin {l.ecartFinJours > 0 ? "repoussée" : "avancée"} {ecartTexte(l.ecartFinJours)}
-                        </span>
-                      ) : l.finChangee ? (
-                        <span className="marque-modele marque-modele--ambre">Fin changée</span>
-                      ) : null}
-                      {l.lancementChange ? <span className="marque-modele">Lancement changé</span> : null}
-                    </span>
+                    <Ecarts l={l} b={rb} />
                   </header>
-                  <Cote ligne={l.a} lettre="A" />
-                  <Cote ligne={l.b} lettre="B" autre={l.a} />
+                  <Cote ligne={l.a} rapport={ra} cote="a" />
+                  <Cote ligne={l.b} rapport={rb} cote="b" autre={l.a} />
                 </article>
               ))}
             </section>
@@ -167,45 +156,87 @@ export default async function PageComparer({ searchParams }: { searchParams: Pro
   );
 }
 
-function EnteteRapport({ r, lettre }: { r: Rapport; lettre: string }) {
+/** Le nom court d'un rapport, pour l'en-tête de sa colonne : « Septembre 2026 », ou le titre d'un rapport ponctuel. */
+const nomCourt = (r: Rapport) => (r.genre === "mensuel" ? majuscule(moisAnnee(r.mois!)) : r.titre);
+const etatRapport = (r: Rapport) =>
+  [r.genre === "mensuel" ? "Rapport mensuel" : `Rapport ponctuel · ${dateCourte(r.date)}`, r.approuveLe ? `approuvé le ${dateCourte(dateLocale(r.approuveLe))}${r.approuvePar ? ` par ${r.approuvePar}` : ""}` : STATUT[r.statut] ?? r.statut].join(" · ");
+
+/** L'en-tête d'une colonne : le mois (ou le rapport ponctuel), son état ; la colonne la plus récente en bleu. */
+function EnteteRapport({ r, cote }: { r: Rapport; cote: "a" | "b" }) {
   return (
-    <span className="comparaison__rapport">
-      <span className="comparaison__lettre">{lettre}</span>
-      <span className="rangee__texte">
-        <a href={lienRapport(r)} className="rangee__titre lien-discret">
-          {nomRapport(r)}
-        </a>
-        <span className="rangee__sous">
-          {r.approuveLe ? `Approuvé le ${dateCourte(dateLocale(r.approuveLe))}` : majuscule(STATUT[r.statut] ?? r.statut)}
-          {r.approuvePar ? ` par ${r.approuvePar}` : ""}
-        </span>
-      </span>
+    <span className={`comparatif__mois comparatif__mois--${cote}`}>
+      <a href={lienRapport(r)} className="comparatif__mois-nom lien-discret">
+        {nomCourt(r)}
+      </a>
+      <span className="comparatif__mois-etat">{etatRapport(r)}</span>
     </span>
   );
 }
 
-/** Un côté de la comparaison : fin prévue, lancement et état d'avancement ; ce qui diffère de A est marqué. */
-function Cote({ ligne, lettre, autre }: { ligne: LigneComparable | null; lettre: string; autre?: LigneComparable | null }) {
-  if (!ligne) return <div className="comparaison__cote comparaison__cote--vide">Pas dans le rapport {lettre}.</div>;
-  const diff = (k: "fin" | "lancement" | "etat") => !!autre && (autre[k] ?? "").trim() !== (ligne[k] ?? "").trim();
+/** Ce qui a bougé pour le projet, en clair (jamais par la couleur seule). */
+function Ecarts({ l, b }: { l: LigneComparee; b: Rapport }) {
+  const marques: { texte: string; ton: "veille" | "relief" | "neutre" }[] = [];
+  if (!l.a) marques.push({ texte: `Ajouté en ${nomCourt(b).toLowerCase()}`, ton: "relief" });
+  if (!l.b) marques.push({ texte: `Retiré en ${nomCourt(b).toLowerCase()}`, ton: "veille" });
+  if (l.ecartFinJours) marques.push({ texte: `Fin ${l.ecartFinJours > 0 ? "repoussée" : "avancée"} de ${ecartTexte(l.ecartFinJours).replace(/^[+−]/, "")}`, ton: l.ecartFinJours > 0 ? "veille" : "relief" });
+  else if (l.finChangee) marques.push({ texte: "Fin prévue changée", ton: "veille" });
+  if (l.lancementChange) marques.push({ texte: "Lancement changé", ton: "neutre" });
+  if (l.a && l.b && !l.finChangee && !l.lancementChange) marques.push({ texte: "Dates inchangées", ton: "neutre" });
   return (
-    <div className="comparaison__cote">
-      <span className="comparaison__lettre comparaison__lettre--petite" aria-hidden="true">
-        {lettre}
-      </span>
-      <dl className="comparaison__dates">
-        <div data-change={diff("fin") ? "1" : undefined}>
+    <ul className="comparatif__ecarts" aria-label="Ce qui a changé">
+      {marques.map((m) => (
+        <li key={m.texte} className={`comparatif__ecart comparatif__ecart--${m.ton}`}>
+          {m.texte}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Une colonne de la comparaison pour un projet : le mois rappelé en tête (utile sur téléphone, où les colonnes
+ * s'empilent), la fin prévue et le lancement, l'état d'avancement. Dans la colonne la plus récente, une date qui a
+ * changé dit de combien ; un état d'avancement resté le même est dit « inchangé ».
+ */
+function Cote({ ligne, rapport, cote, autre }: { ligne: LigneComparable | null; rapport: Rapport; cote: "a" | "b"; autre?: LigneComparable | null }) {
+  const mois = <span className="comparatif__cellule-mois">{nomCourt(rapport)}</span>;
+  if (!ligne)
+    return (
+      <div className={`comparatif__cellule comparatif__cellule--${cote} comparatif__cellule--vide`}>
+        {mois}
+        <p>Pas dans ce rapport.</p>
+      </div>
+    );
+  const ecartFin = autre?.fin && ligne.fin && autre.fin !== ligne.fin ? Math.round((Date.parse(`${ligne.fin}T12:00:00Z`) - Date.parse(`${autre.fin}T12:00:00Z`)) / 86400000) : null;
+  const lancementChange = !!autre && (autre.lancement ?? "") !== (ligne.lancement ?? "");
+  const memeEtat = !!autre && autre.etat.replace(/\s+/g, " ").trim() === ligne.etat.replace(/\s+/g, " ").trim();
+  return (
+    <div className={`comparatif__cellule comparatif__cellule--${cote}`}>
+      {mois}
+      <dl className="comparatif__dates">
+        <div>
           <dt>Fin prévue</dt>
-          <dd>{dateLongue(ligne.fin)}</dd>
+          <dd>
+            {dateLongue(ligne.fin)}
+            {ecartFin ? <span className={`comparatif__delta comparatif__delta--${ecartFin > 0 ? "veille" : "relief"}`}>{ecartTexte(ecartFin)}</span> : null}
+          </dd>
         </div>
-        <div data-change={diff("lancement") ? "1" : undefined}>
+        <div>
           <dt>Lancement</dt>
-          <dd>{dateLongue(ligne.lancement)}</dd>
+          <dd>
+            {dateLongue(ligne.lancement)}
+            {lancementChange ? <span className="comparatif__delta">changé</span> : null}
+          </dd>
         </div>
       </dl>
-      <p className="comparaison__etat" data-change={diff("etat") ? "1" : undefined}>
-        {ligne.etat || <span className="ton-discret">État d&apos;avancement non rédigé.</span>}
-      </p>
+      {ligne.etat ? (
+        <p className={`comparatif__etat${memeEtat ? " comparatif__etat--meme" : ""}`}>
+          {memeEtat ? <span className="comparatif__inchange">Inchangé · </span> : null}
+          {ligne.etat}
+        </p>
+      ) : (
+        <p className="comparatif__etat comparatif__etat--meme">État d&apos;avancement non rédigé.</p>
+      )}
     </div>
   );
 }

@@ -20,13 +20,27 @@ import { ChoixPersonne } from "@/components/ChoixPersonne";
 import { ChoixListe } from "@/components/ChoixListe";
 import { choixListes, peutGererListes } from "@/lib/donnees/listes";
 import { archiver, deplacerInd, enregistrerLivrable, enregistrerProjet, nouveauLivrable, retirerInd, supprimer } from "../../gestion-actions";
+import { objectifsDuProjet } from "@/lib/donnees/objectifs";
+import { nomsPourRaci, raciDuProjet } from "@/lib/donnees/raci";
+import { SectionObjectifs } from "./SectionObjectifs";
+import { SectionRaci } from "./SectionRaci";
+
+const FAIT: Record<string, string> = {
+  objectif: "Objectif ajouté.",
+  benefice: "Bénéfice ajouté.",
+  "objectif-modifie": "Enregistré.",
+  "objectif-retire": "Retiré.",
+  raci: "RACI du projet enregistré.",
+  "raci-adapte": "Le projet a maintenant son propre RACI, copié du RACI type : modifiez-le ci-dessous.",
+  "raci-type": "Le projet suit de nouveau le RACI type.",
+};
 
 export const metadata: Metadata = { title: "Modifier le projet" };
 
 
-export default async function PageModifierProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ erreur?: string; enregistre?: string; livrable?: string }> }) {
+export default async function PageModifierProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ erreur?: string; enregistre?: string; livrable?: string; fait?: string; attention?: string }> }) {
   const { id } = await params;
-  const { erreur, enregistre, livrable } = await searchParams;
+  const { erreur, enregistre, livrable, fait, attention } = await searchParams;
   const livrableOk = livrable === "ajoute" || livrable === "enregistre" ? livrable : null;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
@@ -60,6 +74,11 @@ export default async function PageModifierProjet({ params, searchParams }: { par
   const demande = p.statut === "requete" || p.statut === "refuse";
   const listes = await choixListes();
   const gereListes = peutGererListes(u, a);
+  // Objectifs, bénéfices et RACI : modifiables tant que le projet n'est ni finalisé, ni archivé, ni refusé.
+  const [objs, rc] = await Promise.all([objectifsDuProjet(id), raciDuProjet(id)]);
+  const nomsRaci = await nomsPourRaci(p, rc.raci);
+  const ouvertObjectifs = !p.archiveLe && p.statut !== "refuse" && p.statut !== "finalise";
+  const message = fait ? (FAIT[fait] ?? null) : null;
 
   return (
     <>
@@ -77,9 +96,9 @@ export default async function PageModifierProjet({ params, searchParams }: { par
           <p className="erreur" role="alert">
             {erreur}
           </p>
-        ) : enregistre ? (
+        ) : enregistre || (message && !(fait === "raci" && attention)) ? (
           <p className="succes" role="status">
-            Projet enregistré.
+            {message ?? "Projet enregistré."}
           </p>
         ) : null}
         <div className="volets">
@@ -205,6 +224,8 @@ export default async function PageModifierProjet({ params, searchParams }: { par
             </button>
           </div>
         </form>
+        <SectionObjectifs projetId={p.id} objectifs={objs.objectifs} benefices={objs.benefices} modifiable={ouvertObjectifs} />
+        <SectionRaci projetId={p.id} raci={rc.raci} propre={rc.propre} noms={nomsRaci} modifiable={ouvertObjectifs} attention={fait === "raci" && attention ? attention.slice(0, 600) : undefined} />
         </div>
         <div className="volets__partie">
 

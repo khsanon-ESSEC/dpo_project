@@ -17,6 +17,7 @@ export function TableauConseil({
   rapportRetirable,
   visibles,
   redigeables,
+  objectifs,
 }: {
   lignes: Lignes;
   brouillon: boolean;
@@ -29,6 +30,8 @@ export function TableauConseil({
   visibles?: "tous" | Set<string>;
   /** Rapport mensuel : projets dont le lecteur rédige la ligne (ceux qu'il gère) ; les autres se lisent. */
   redigeables?: Set<string>;
+  /** Les objectifs écrits de chaque projet (29 octobre 2026), rappelés sous sa description. */
+  objectifs?: Map<string, string[]>;
 }) {
   return (
     <div className="papier">
@@ -66,6 +69,12 @@ export function TableauConseil({
                     </strong>
                     <br />
                     {projet.description}
+                    {objectifs?.get(projet.id)?.length ? (
+                      <span className="objectifs-conseil">
+                        <strong>Objectifs : </strong>
+                        {objectifs.get(projet.id)!.join(" ; ")}
+                      </span>
+                    ) : null}
                     {rapportRetirable ? (
                       <form action={retirerLigne.bind(null, rapportRetirable, ligne.id)} style={{ marginTop: 8 }}>
                         <button type="submit" style={petitBouton} aria-label={`Retirer ${projet.titre} de ce rapport`}>

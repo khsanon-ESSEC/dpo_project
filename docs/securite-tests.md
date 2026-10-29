@@ -303,6 +303,16 @@ Restent à décider **[à confirmer]** : un projet clôturé (« finalisé ») a
 - **Page d'un livrable** : mêmes droits que la fiche du projet ; les actions passent par les mêmes contrôles (l'adresse de retour est fixe). **[déduction]**
 - **Fiche d'une personne, par projet** : montrée seulement pour soi et pour qui suit la personne ; un projet que le lecteur ne voit pas est compté dans « Autres projets », sans son nom. **[déduction]**
 
+## Fiche de projet, objectifs, RACI (29 octobre 2026, après-midi)
+
+**[vérifié par tests]** sauf mention (`tests/objectifs-raci.test.ts`, `tests/objectifs-raci-base.test.ts`, parcours `fiche-projet` et `persistance`) :
+
+- **Fiche de projet exportée** (page imprimable, PDF par l'impression du navigateur, fichier Word) : à qui voit le projet ; elle ne montre que ce que la fiche du projet montre déjà à cette personne. Le budget seulement à qui gère le projet ; la liste des documents seulement à qui peut les lire. Un projet que la personne ne voit pas : page introuvable, fichier refusé (404) et refus au journal (`fiche_refusee`). Chaque export Word est noté (`fiche_word`).
+- **Objectifs et bénéfices** : écrits par qui gère le projet (chef, référent DPO, sa direction, les exécutifs), figés sur un projet finalisé, archivé ou refusé ; la valeur constatée d'un bénéfice se note aussi après la clôture, pas sur un projet archivé. Un identifiant d'un autre projet est refusé. Journal : `objectif_*`, `benefice_*`.
+- **Clôture objectif par objectif** : quand le projet a ses objectifs écrits, chacun doit être évalué ; le bilan d'ensemble est calculé par le serveur, pas pris du formulaire.
+- **RACI type** : modifié par les administrateurs et les exécutifs seulement (`raci_type_modifie`). **RACI d'un projet** : par qui gère le projet, figé hors projet en cours ; le tableau envoyé est relu et contrôlé par le serveur (rôles, lettres, un seul « A » par activité, tailles). Les noms affichés viennent de la base, jamais du formulaire.
+- **Comparatif du conseil** : présentation seulement (aucune règle d'accès changée). Une collision de nom de style faisait passer le tableau des périodes du bilan en mise en page flexible ; corrigée (préfixe `comparatif`).
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.
