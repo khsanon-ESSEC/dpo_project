@@ -4560,7 +4560,9 @@ a.lien-projet:focus-visible {
 }
 /* Sur le fond marine : les lignes sous la barre (aperçu, message, erreur) prennent les couleurs claires. */
 .barre-globale .saisie-rapide__apercu,
+.barre-globale .saisie-rapide__exemple,
 .barre-globale .saisie-rapide__erreur {
+  --veille: #f3c77a;
   --encre: #ffffff;
   --encre-2: #e1ebf4;
   --discret: #c0d7ed;
@@ -7875,4 +7877,15 @@ a.pastille-rapport:hover {
 .cloture__points ul {
   margin: 0;
   padding-left: 18px;
+}
+
+/* Barre : l'exemple de l'action choisie avec « > », sous l'aperçu (29 octobre 2026). */
+.saisie-rapide__exemple {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+}
+.saisie-rapide__exemple span {
+  font-style: italic;
 }

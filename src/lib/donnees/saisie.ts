@@ -14,6 +14,7 @@ import type { Utilisateur } from "@/lib/auth/session";
 import { aujourdhui } from "@/lib/dates";
 import { assignables } from "@/lib/donnees/gestion";
 import { tousLesProjetsActifs } from "@/lib/donnees/projets";
+import { donneesCommandes } from "@/lib/donnees/commandes";
 import type { ProjetSaisie } from "@/lib/saisie-rapide";
 import type { TacheBarre } from "@/components/BarreCommande";
 import { nomComplet } from "@/lib/regles";
@@ -70,8 +71,8 @@ export async function participantsPourBarre(a: Acces) {
 export async function donneesBarre(u: Utilisateur) {
   const a = await acces(u);
   const jour = aujourdhui();
-  const [projets, pour, taches, participants, reunions] = await Promise.all([projetsPourSaisie(u), assignables(a), tachesPourBarre(a), participantsPourBarre(a), reunionsDe(u.id, jour, jour)]);
+  const [projets, pour, taches, participants, reunions, commandes] = await Promise.all([projetsPourSaisie(u), assignables(a), tachesPourBarre(a), participantsPourBarre(a), reunionsDe(u.id, jour, jour), donneesCommandes(u, a)]);
   // Suggestions de la barre vide : les réunions du jour (pour les compléter).
   const reunionsDuJour = reunions.map((r) => ({ id: r.id, titre: r.titre, heure: r.heure, semaine: lundiDe(r.jour), mienne: r.noteeParId === u.id }));
-  return { projets, personnes: pour.personnes, base: pour.base, parProjet: pour.parProjet, taches, participants, reunionsDuJour, moiId: u.id, aujourdhui: jour };
+  return { projets, personnes: pour.personnes, base: pour.base, parProjet: pour.parProjet, taches, participants, reunionsDuJour, moiId: u.id, aujourdhui: jour, ...commandes };
 }

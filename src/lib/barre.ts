@@ -165,7 +165,10 @@ export function analyserQuestion(saisie: string, aujourdhui: string): AnalyseQue
   const code = /(?:^|\s)([A-Z0-9]{2,4})(?=$|[\s,.;:!?])/.exec(q.replace(/\bJE\b/g, ""))?.[1] ?? null;
   // « … de Fabienne », « … pour Myriam » : le nom est retrouvé par la page ou le serveur dans les personnes visibles.
   const pers = /\b(?:de|d'|d’|pour|chez)\s*([A-ZÀ-Ý][\p{L}'’-]+(?:\s+[A-ZÀ-Ý][\p{L}'’-]+)?)/u.exec(q);
-  return { sujet, miennes, periode: periodeDe(q, aujourdhui, sujet === "reunions" ? "semaine" : "semaine"), projetCode: code && /[A-Z]/.test(code) ? code : null, motsPersonne: pers?.[1] ?? null };
+  // « charge de myriam » écrit en minuscules : les mots après « charge de ».
+  const charge = !pers && sujet === "charge" ? /(?:charge|disponibilit[ée]s?)(?:\s+de\s+travail)?\s+(?:de|d['’]|du)\s*([\p{L}'’-]+(?:\s+[\p{L}'’-]+)?)/iu.exec(q) : null;
+  const motsCharge = charge ? charge[1].replace(/\s+(?:cette|la|ce|semaine|prochaine|mois)$/iu, "") : null;
+  return { sujet, miennes, periode: periodeDe(q, aujourdhui, sujet === "reunions" ? "semaine" : "semaine"), projetCode: code && /[A-Z]/.test(code) ? code : null, motsPersonne: pers?.[1] ?? motsCharge };
 }
 
 // ---------------------------------------------------------------------------

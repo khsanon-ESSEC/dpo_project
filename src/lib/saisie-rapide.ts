@@ -6,10 +6,12 @@
  * serveur, qui ne fait jamais confiance à l'aperçu. Testé dans tests/saisie-rapide.test.ts.
  */
 import { ajouterJours, jourComplet, lundiDe, premierDuMois } from "@/lib/dates";
+import { lireDuree } from "@/lib/risques";
+import { LIBELLE_PRIORITE, type Priorite } from "@/lib/suivi";
 
 export type ProjetSaisie = { id: string; code: string; titre: string };
-export type Morceau = { type: "projet" | "echeance" | "heures"; texte: string };
-export type Analyse = { titre: string; projet: ProjetSaisie | null; echeance: string | null; heures: number | null; morceaux: Morceau[] };
+export type Morceau = { type: "projet" | "echeance" | "heures" | "priorite"; texte: string };
+export type Analyse = { titre: string; projet: ProjetSaisie | null; echeance: string | null; heures: number | null; priorite: Priorite | null; morceaux: Morceau[] };
 
 // Limites de mot qui tiennent compte des lettres accentuées (\b ne les connaît pas).
 const D = "(?<=^|[\\s(])";
@@ -130,6 +132,17 @@ export function extraireCodeProjet(texte: string, projets: ProjetSaisie[]): { pr
   return { projet: null, reste: texte };
 }
 
+const PRIORITE = /(?:^|[\s,;])priorit[ée]\s*[:：]?\s*(haute|normale|basse|urgente?|forte|faible)(?=$|[\s,;.!])/i;
+
+/** « priorité haute » (ou basse, normale ; « urgente » vaut haute) et le texte sans elle. */
+export function extrairePriorite(texte: string): { priorite: Priorite | null; reste: string } {
+  const m = PRIORITE.exec(texte);
+  if (!m) return { priorite: null, reste: texte };
+  const v = m[1].toLowerCase();
+  const priorite: Priorite = /haute|urgent|forte/.test(v) ? "haute" : /basse|faible/.test(v) ? "basse" : "normale";
+  return { priorite, reste: `${texte.slice(0, m.index)} ${texte.slice(m.index + m[0].length)}` };
+}
+
 export function analyserSaisie(saisie: string, aujourdhui: string, projets: ProjetSaisie[]): Analyse {
   let texte = ` ${String(saisie ?? "").replace(/\s+/g, " ").trim().slice(0, 300)} `;
   const morceaux: Morceau[] = [];
@@ -148,7 +161,11 @@ export function analyserSaisie(saisie: string, aujourdhui: string, projets: Proj
   texte = h.reste;
   if (h.heures) morceaux.push({ type: "heures", texte: `${h.heures} h de travail` });
 
-  return { titre: nettoyer(texte, 200), projet, echeance: e.echeance, heures: h.heures, morceaux };
+  const pr = extrairePriorite(texte);
+  texte = pr.reste;
+  if (pr.priorite) morceaux.push({ type: "priorite", texte: `Priorité ${LIBELLE_PRIORITE[pr.priorite].toLowerCase()}` });
+
+  return { titre: nettoyer(texte, 200), projet, echeance: e.echeance, heures: h.heures, priorite: pr.priorite, morceaux };
 }
 
 // ---------------------------------------------------------------------------
@@ -156,8 +173,52 @@ export function analyserSaisie(saisie: string, aujourdhui: string, projets: Proj
 // ---------------------------------------------------------------------------
 
 export type StatutTache = "a_faire" | "en_cours" | "bloquee" | "faite";
-export type MorceauMaj = { type: "statut" | "echeance" | "heures" | "note" | "relance"; texte: string };
-export type MiseAJour = { statut: StatutTache | null; blocage: string | null; echeance: string | null; heures: number | null; note: string; relance: string | null; morceaux: MorceauMaj[] };
+export type MorceauMaj = { type: "statut" | "echeance" | "heures" | "note" | "relance" | "priorite" | "temps" | "repetition" | "annulation"; texte: string };
+export type MiseAJour = {
+  statut: StatutTache | null;
+  blocage: string | null;
+  echeance: string | null;
+  heures: number | null;
+  note: string;
+  relance: string | null;
+  /** Lot « tout faire depuis la barre » : priorité, temps passé, répétition, annulation. */
+  priorite: Priorite | null;
+  minutesPassees: number | null;
+  rythme: string | null;
+  arreterRepetition: boolean;
+  annulation: string | null;
+  morceaux: MorceauMaj[];
+};
+
+const JOURS_REP = ["lundi", "mardi", "mercredi", "jeudi", "vendredi"];
+
+/** « répéter chaque lundi », « répéter tous les vendredis », « répéter chaque mois le 15 » (ou « le dernier jour »). */
+function extraireRepetition(texte: string, aujourdhui: string): { rythme: string | null; libelle: string; reste: string } {
+  const sem = /(?:^|[\s,;])r[ée]p[ée]ter\s+(?:chaque|tous\s+les)\s+(lundi|mardi|mercredi|jeudi|vendredi)s?(?=$|[\s,;.])/i.exec(texte);
+  if (sem) {
+    const j = JOURS_REP.indexOf(sem[1].toLowerCase()) + 1;
+    return { rythme: `semaine:${j}`, libelle: `Répéter chaque ${JOURS_REP[j - 1]}`, reste: `${texte.slice(0, sem.index)} ${texte.slice(sem.index + sem[0].length)}` };
+  }
+  const mois = /(?:^|[\s,;])r[ée]p[ée]ter\s+(?:chaque|tous\s+les)\s+mois(?:\s+le\s+(1er|\d{1,2}|dernier(?:\s+jour)?))?(?=$|[\s,;.])/i.exec(texte);
+  if (mois) {
+    const v = (mois[1] ?? "").toLowerCase();
+    const j = v.startsWith("dernier") ? 31 : v === "1er" ? 1 : v ? Number(v) : Math.min(28, Number(aujourdhui.slice(8, 10)));
+    const valide = j === 31 || (j >= 1 && j <= 28) ? j : null;
+    return {
+      rythme: valide ? `mois:${valide}` : null,
+      libelle: valide ? `Répéter chaque mois, ${valide === 31 ? "le dernier jour" : `le ${valide === 1 ? "1er" : valide}`}` : "Jour du mois : du 1er au 28, ou « le dernier jour »",
+      reste: `${texte.slice(0, mois.index)} ${texte.slice(mois.index + mois[0].length)}`,
+    };
+  }
+  return { rythme: null, libelle: "", reste: texte };
+}
+
+/** « passé 1h30 », « temps passé 45 min », « j'ai passé 2h » : des minutes, et le texte sans elles. */
+function extraireTempsPasse(texte: string): { minutes: number | null; reste: string } {
+  const m = /(?:^|[\s,;])(?:j['’]ai\s+)?(?:temps\s+)?pass[ée]e?\s*[:：]?\s*(\d{1,2}\s?h\s?\d{1,2}|\d{1,2}(?:[.,]\d{1,2})?\s?h(?:eures?)?|\d{1,4}\s?min)(?=$|[\s,;.])/i.exec(texte);
+  if (!m) return { minutes: null, reste: texte };
+  return { minutes: lireDuree(m[1]), reste: `${texte.slice(0, m.index)} ${texte.slice(m.index + m[0].length)}` };
+}
 
 export const LIBELLES_STATUT: Record<StatutTache, string> = { a_faire: "À faire", en_cours: "En cours", bloquee: "Bloquée", faite: "Faite" };
 
@@ -174,13 +235,38 @@ const ETATS: { motif: RegExp; statut: StatutTache; garder?: boolean }[] = [
 export function analyserMiseAJour(saisie: string, aujourdhui: string): MiseAJour {
   let texte = String(saisie ?? "").replace(/\s+/g, " ").trim().slice(0, 600);
   const morceaux: MorceauMaj[] = [];
+  const rien = { statut: null, blocage: null, echeance: null, heures: null, note: "", relance: null, priorite: null, minutesPassees: null, rythme: null, arreterRepetition: false, annulation: null };
   // « relancer » (et un message facultatif) : la personne à qui la tâche est confiée est relancée ; rien d'autre ne change.
   const relance = /^relance[rz]?(?=$|[\s:,.;!–—-])[\s:,.;!–—-]*(.*)$/i.exec(texte);
   if (relance) {
     const message = nettoyer(relance[1], 300);
     morceaux.push({ type: "relance", texte: message ? `Relancer : « ${message} »` : "Relancer" });
-    return { statut: null, blocage: null, echeance: null, heures: null, note: "", relance: message, morceaux };
+    return { ...rien, relance: message, morceaux };
   }
+  // « annuler : motif » : la tâche est annulée (comme depuis sa fiche) ; rien d'autre ne change.
+  const annuler = /^annul(?:er|[ée]e?)(?=$|[\s:,.;!–—-])[\s:,.;!–—-]*(.*)$/i.exec(texte);
+  if (annuler) {
+    const motif = nettoyer(annuler[1], 500);
+    morceaux.push({ type: "annulation", texte: motif ? `Annuler : « ${motif} »` : "Annuler : dites pourquoi après « annuler : »" });
+    return { ...rien, annulation: motif, morceaux };
+  }
+  if (/^(?:arr[êe]ter|stopper)\s+(?:la\s+)?r[ée]p[ée]tition$|^ne\s+plus\s+r[ée]p[ée]ter$/i.test(texte)) {
+    morceaux.push({ type: "repetition", texte: "Arrêter la répétition" });
+    return { ...rien, arreterRepetition: true, morceaux };
+  }
+  // Priorité, temps passé, répétition : se combinent avec le reste (« faite, passé 1h30 »).
+  const pr = extrairePriorite(` ${texte} `);
+  texte = pr.reste;
+  const tp = extraireTempsPasse(texte);
+  texte = tp.reste;
+  const rep = extraireRepetition(texte, aujourdhui);
+  texte = rep.reste.replace(/\s+/g, " ").replace(/^[\s,;]+|[\s,;]+$/g, "").trim();
+  const extras: MorceauMaj[] = [
+    ...(pr.priorite ? [{ type: "priorite" as const, texte: `Priorité ${LIBELLE_PRIORITE[pr.priorite].toLowerCase()}` }] : []),
+    ...(tp.minutes ? [{ type: "temps" as const, texte: `Temps passé : ${tp.minutes >= 60 ? `${Math.floor(tp.minutes / 60)} h${tp.minutes % 60 ? ` ${String(tp.minutes % 60).padStart(2, "0")}` : ""}` : `${tp.minutes} min`}` }] : []),
+    ...(rep.libelle ? [{ type: "repetition" as const, texte: rep.libelle }] : []),
+  ];
+  const plus = { priorite: pr.priorite, minutesPassees: tp.minutes, rythme: rep.rythme, arreterRepetition: false, annulation: null };
   let statut: StatutTache | null = null;
   let garder = false;
   for (const e of ETATS) {
@@ -196,8 +282,8 @@ export function analyserMiseAJour(saisie: string, aujourdhui: string): MiseAJour
   if (statut === "bloquee") {
     const blocage = nettoyer(garder ? texte : texte.replace(/^[\s:,.;–—-]*(?:(?:par|car|parce\s+que|à\s+cause\s+de|:)\s+)?/i, ""), 1000) || null;
     const b = blocage ? blocage.charAt(0).toUpperCase() + blocage.slice(1) : null;
-    morceaux.push({ type: "statut", texte: b ? `Bloquée : ${b}` : "Bloquée" });
-    return { statut, blocage: b, echeance: null, heures: null, note: "", relance: null, morceaux };
+    morceaux.push({ type: "statut", texte: b ? `Bloquée : ${b}` : "Bloquée" }, ...extras);
+    return { statut, blocage: b, echeance: null, heures: null, note: "", relance: null, ...plus, morceaux };
   }
   if (statut) morceaux.push({ type: "statut", texte: LIBELLES_STATUT[statut] });
   texte = ` ${texte} `;
@@ -208,8 +294,9 @@ export function analyserMiseAJour(saisie: string, aujourdhui: string): MiseAJour
   texte = h.reste;
   if (h.heures) morceaux.push({ type: "heures", texte: `${h.heures} h de travail` });
   const note = nettoyer(texte, 500);
+  morceaux.push(...extras);
   if (note) morceaux.push({ type: "note", texte: `Note : ${note}` });
-  return { statut, blocage: null, echeance: e.echeance, heures: h.heures, note, relance: null, morceaux };
+  return { statut, blocage: null, echeance: e.echeance, heures: h.heures, note, relance: null, ...plus, morceaux };
 }
 
 // ---------------------------------------------------------------------------

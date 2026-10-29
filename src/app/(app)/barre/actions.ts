@@ -9,6 +9,7 @@ import { acces } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { annulerAction } from "@/lib/donnees/annulations";
 import { ajouterNoteAuRapport, mettreAJourProjetDepuisBarre } from "@/lib/donnees/barre";
+import { executerCommande } from "@/lib/donnees/commandes";
 import { ajouterTacheRapide, mettreAJourTacheRapide } from "@/app/(app)/taches/actions";
 import { noterReunionRapide } from "@/app/(app)/reunions/actions";
 
@@ -36,8 +37,17 @@ export async function majProjetRapide(etat: EtatBarre, form: FormData): Promise<
  * Point d'entrée unique de la barre : la page dit de quoi parle la ligne (« genre »), chaque action relit la
  * saisie et applique ses propres règles. Tous rendent le même état (message, lien, annulation).
  */
+/** Une action reconnue par la barre (src/lib/commandes.ts) : la phrase est relue et les droits vérifiés côté serveur. */
+export async function commandeRapide(etat: EtatBarre, form: FormData): Promise<EtatBarre> {
+  const u = await exigerUtilisateur();
+  const r = await executerCommande(u, await acces(u), { saisie: String(form.get("saisie") ?? ""), projetId: String(form.get("projetId") ?? "") });
+  if (r.ok) revalidatePath("/", "layout");
+  return { message: r.message, ok: r.ok, annulation: r.annulation, lien: r.lien, n: r.ok ? (etat.n ?? 0) + 1 : etat.n };
+}
+
 export async function executerBarre(etat: EtatBarre, form: FormData): Promise<EtatBarre> {
   const genre = String(form.get("genre") ?? "tache");
+  if (genre === "commande") return commandeRapide(etat, form);
   if (genre === "note") return noterPourRapport(etat, form);
   if (genre === "projet") return majProjetRapide(etat, form);
   if (genre === "reunion") {

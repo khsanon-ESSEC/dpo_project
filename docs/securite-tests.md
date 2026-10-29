@@ -267,6 +267,13 @@ Nouvelles lectures de données, vérifiées à la lecture du code et par des tes
 - **Sponsor métier** : il voit le projet qu'il porte (ajouté aux projets visibles), sans droit de gestion ; une personne hors division sans accès n'est pas prévenue. **[vérifié par tests]**
 - **Tâches récurrentes** : créer ou arrêter une répétition demande de pouvoir modifier la tâche (ou d'avoir créé la règle, pour l'arrêter) ; les occurrences sont créées par le serveur pour la même personne et le même projet que la tâche d'origine, et une seule fois même si plusieurs copies de l'application tournent (réservation en base). **[vérifié par tests]**
 
+## Tout faire depuis la barre (29 octobre 2026)
+
+- **Mêmes règles que les écrans** : chaque action de la barre (src/lib/donnees/commandes.ts) relit la phrase au serveur, avec les seules données que la personne voit (projets visibles, personnes, livrables, phases et risques de ces projets), puis passe par la fonction de l'écran correspondant, avec ses contrôles (gérer le projet, être dans l'équipe, être responsable du livrable, rédiger un rapport, préparer le conseil). Le choix d'un projet par `/` est vérifié contre les projets visibles. **[vérifié par tests]**
+- **Créer un projet** : réservé à la division ; l'acceptation directe (avec un chef) seulement pour une directrice ou un exécutif, sinon la demande suit le circuit habituel. **[vérifié par tests]**
+- **« Annuler »** : nouveaux jetons pour les actions sur un projet (livrable, équipe, décision, risque, phase, sponsor, chef, priorité, budget, clôture, projet créé) ; même garde qu'avant (trois minutes, une fois, la seule personne qui a agi, refusé si l'élément a changé). **[vérifié par tests]**
+- **Envoyer son rapport** depuis la barre : mêmes contrôles que le bouton (champs obligatoires remplis, brouillon de la personne). **[déduction]** : vérifié dans le navigateur, pas dans les tests de base (il changerait les rapports dont d'autres tests ont besoin).
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.

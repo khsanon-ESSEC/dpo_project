@@ -8,7 +8,10 @@ import { and, eq, gte, inArray, isNull, like, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Acces } from "@/lib/acces";
 import { peutModifierTache } from "@/lib/acces";
-import { histoireDeTache, retirerIndicateur, supprimerTache } from "@/lib/donnees/gestion";
+import { acteur, histoireDeTache, retablirTache, retirerIndicateur, retirerMembre, supprimerProjet, supprimerTache } from "@/lib/donnees/gestion";
+import { retirerDecision } from "./decisions";
+import { changerStatutRisque, retirerPhase, retirerRisque, terminerPhase } from "./risques";
+import { rouvrirProjet } from "./cloture";
 import { supprimerReunion } from "@/lib/donnees/reunions";
 import { noter } from "@/lib/journal";
 import { peutGererProjet } from "@/lib/projets";
@@ -26,14 +29,27 @@ export type Annulable =
       tacheId: string;
       depuis: string;
       apresMajLe: string;
-      avant: { statut: StatutTache; blocage: string | null; termineeLe: string | null; echeance: string | null; estimationHeures: number | null; assigneId: string; projetId: string | null };
+      avant: { statut: StatutTache; blocage: string | null; termineeLe: string | null; echeance: string | null; estimationHeures: number | null; assigneId: string; projetId: string | null; priorite?: string; recurrenceId?: string | null };
     }
+  | { genre: "tache_annulee"; tacheId: string }
   | { genre: "relance"; tacheId: string; evenementId: string; notificationId: string }
   | { genre: "reunion"; reunionId: string; titre: string; participants: string[]; depuis: string; etat?: string }
   | { genre: "note_ligne"; ligneId: string }
   | { genre: "note_reponse"; rapportId: string; champId: string; avant: string | null; apres?: string }
   | { genre: "projet"; projetId: string; apresMajLe: string; avant: { risqueMotif: string; risqueLe: string | null; risqueParId: string | null; dateFinPrevue: string | null; dateLancementPrevue: string | null } }
-  | { genre: "jalon"; projetId: string; indicateurId: string };
+  | { genre: "jalon"; projetId: string; indicateurId: string }
+  // Actions de la barre sur un projet (src/lib/donnees/commandes.ts).
+  | { genre: "projet_cree"; projetId: string }
+  | { genre: "livrable"; projetId: string; livrableId: string; avant: { prevuLe: string | null; responsableId: string | null }; apres: { prevuLe: string | null; responsableId: string | null } }
+  | { genre: "membre"; projetId: string; membreId: string }
+  | { genre: "decision"; projetId: string; decisionId: string }
+  | { genre: "risque"; projetId: string; risqueId: string }
+  | { genre: "risque_statut"; projetId: string; risqueId: string; avant: string }
+  | { genre: "phase"; projetId: string; phaseId: string }
+  | { genre: "phase_ajoutee"; projetId: string; phaseId: string }
+  | { genre: "phases_types"; projetId: string }
+  | { genre: "projet_champs"; projetId: string; apresMajLe: string; avant: Record<string, unknown> }
+  | { genre: "cloture"; projetId: string; depuis: string };
 
 export async function enregistrerAnnulation(personneId: string, a: Annulable): Promise<string> {
   const { genre, ...donnees } = a;
@@ -44,6 +60,12 @@ export async function enregistrerAnnulation(personneId: string, a: Annulable): P
 }
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
+
+/** Le projet, si la personne le gère (pour défaire une action de gestion). */
+async function projetGere(a: Acces, projetId: string) {
+  const [p] = await db.select().from(schema.projets).where(eq(schema.projets.id, projetId));
+  return p && peutGererProjet(acteur(a), p) ? p : null;
+}
 
 /** Ce qu'on compare pour savoir si une réunion a changé depuis qu'elle a été notée. */
 export const etatReunion = (r: { titre: string; jour: string; heure: string | null; dureeMinutes: number; projetId: string | null; notes: string }) =>
@@ -132,10 +154,19 @@ async function defaire(a: Acces, d: Annulable): Promise<{ ok: true; message: str
           estimationHeures: v.estimationHeures,
           assigneId: v.assigneId,
           projetId: v.projetId,
+          ...(v.priorite !== undefined ? { priorite: v.priorite } : {}),
+          ...(v.recurrenceId !== undefined ? { recurrenceId: v.recurrenceId } : {}),
           majLe: new Date(),
         })
         .where(eq(schema.taches.id, t.id));
       const depuis = new Date(d.depuis);
+      // Le temps passé noté et la répétition créée par cette action s'en vont aussi (avec une occurrence déjà créée).
+      await db.delete(schema.tempsPasse).where(and(eq(schema.tempsPasse.tacheId, t.id), eq(schema.tempsPasse.noteParId, a.moi.id), gte(schema.tempsPasse.creeLe, depuis)));
+      if (v.recurrenceId !== undefined && t.recurrenceId && t.recurrenceId !== v.recurrenceId) {
+        const occ = await db.select({ id: schema.taches.id }).from(schema.taches).where(and(eq(schema.taches.recurrenceId, t.recurrenceId), gte(schema.taches.creeLe, depuis)));
+        for (const o of occ) if (o.id !== t.id) await db.delete(schema.taches).where(eq(schema.taches.id, o.id));
+        await db.delete(schema.tachesRecurrentes).where(and(eq(schema.tachesRecurrentes.id, t.recurrenceId), eq(schema.tachesRecurrentes.creeParId, a.moi.id), gte(schema.tachesRecurrentes.creeLe, depuis)));
+      }
       await db.delete(schema.evenementsTache).where(and(eq(schema.evenementsTache.tacheId, t.id), eq(schema.evenementsTache.auteurId, a.moi.id), gte(schema.evenementsTache.creeLe, depuis)));
       await db.delete(schema.notifications).where(alertesDeLAction(a, t.id, depuis));
       // L'ancienne personne avait été prévenue que la tâche partait (alerte sans lien).
@@ -143,6 +174,13 @@ async function defaire(a: Acces, d: Annulable): Promise<{ ok: true; message: str
         await db.delete(schema.notifications).where(and(eq(schema.notifications.personneId, v.assigneId), like(schema.notifications.texte, `« ${t.titre.replace(/[%_\\]/g, "\\$&")} » est maintenant confiée%`), gte(schema.notifications.creeLe, depuis)));
       if (v.assigneId !== t.assigneId || v.projetId !== t.projetId) await sortirDeLEquipeSiAjoutee(t.projetId, t.assigneId, a.moi.id, depuis);
       return { ok: true, message: `« ${t.titre} » est revenue comme avant.` };
+    }
+    case "tache_annulee": {
+      const [t] = await db.select().from(schema.taches).where(eq(schema.taches.id, d.tacheId));
+      if (!t || !peutModifierTache(a, t)) return { erreur: "Tâche introuvable." };
+      if (!t.annuleeLe) return { ok: true, message: "Déjà rétablie." };
+      await retablirTache(a, t);
+      return { ok: true, message: `« ${t.titre} » est rétablie.` };
     }
     case "relance": {
       // La trace reste (« relance annulée ») : elle compte encore dans la limite d'une relance par heure.
@@ -209,6 +247,76 @@ async function defaire(a: Acces, d: Annulable): Promise<{ ok: true; message: str
       if (p.dateFinPrevue !== v.dateFinPrevue) await oublierReportFin(p.id, v.dateFinPrevue, p.dateFinPrevue);
       await recalculerSante([p.id]);
       return { ok: true, message: `« ${p.titre} » est revenu comme avant.` };
+    }
+    case "projet_cree": {
+      const [p] = await db.select().from(schema.projets).where(eq(schema.projets.id, d.projetId));
+      if (!p) return { ok: true, message: "Déjà retiré." };
+      if (p.demandeParId !== a.moi.id) return { erreur: "Projet introuvable." };
+      const r = await supprimerProjet(p.id, a.moi.id);
+      if ("erreur" in r) return { erreur: "Le projet a déjà une histoire : archivez-le depuis sa fiche." };
+      await db.delete(schema.notifications).where(eq(schema.notifications.lien, `/projets/${p.id}`));
+      return { ok: true, message: `Projet « ${p.titre} » retiré.` };
+    }
+    case "livrable": {
+      const p = await projetGere(a, d.projetId);
+      if (!p) return { erreur: "Projet introuvable." };
+      const [l] = await db.select().from(schema.indicateurs).where(and(eq(schema.indicateurs.id, d.livrableId), eq(schema.indicateurs.projetId, p.id)));
+      if (!l) return { ok: true, message: "Livrable introuvable." };
+      if (l.prevuLe !== d.apres.prevuLe || l.responsableId !== d.apres.responsableId) return { erreur: "Le livrable a changé depuis : corrigez-le depuis « Modifier le projet »." };
+      await db.update(schema.indicateurs).set({ prevuLe: d.avant.prevuLe, responsableId: d.avant.responsableId }).where(eq(schema.indicateurs.id, l.id));
+      await recalculerSante([p.id]);
+      return { ok: true, message: `Livrable « ${l.libelle} » revenu comme avant.` };
+    }
+    case "membre": {
+      const p = await projetGere(a, d.projetId);
+      if (!p) return { erreur: "Projet introuvable." };
+      await retirerMembre(p.id, d.membreId, a.moi.id);
+      return { ok: true, message: "Retiré(e) de l'équipe." };
+    }
+    case "decision": {
+      const r = await retirerDecision(a, d.projetId, d.decisionId);
+      return "erreur" in r ? r : { ok: true, message: "Décision retirée du registre." };
+    }
+    case "risque": {
+      const r = await retirerRisque(a, d.projetId, d.risqueId);
+      return "erreur" in r ? r : { ok: true, message: "Risque retiré du registre." };
+    }
+    case "risque_statut": {
+      const r = await changerStatutRisque(a, d.projetId, d.risqueId, d.avant);
+      return "erreur" in r ? r : { ok: true, message: "Le risque est revenu comme avant." };
+    }
+    case "phase": {
+      const r = await terminerPhase(a, d.projetId, d.phaseId, false);
+      return "erreur" in r ? r : { ok: true, message: "La phase est rouverte." };
+    }
+    case "phase_ajoutee": {
+      const r = await retirerPhase(a, d.projetId, d.phaseId);
+      return "erreur" in r ? r : { ok: true, message: "Phase retirée." };
+    }
+    case "phases_types": {
+      const p = await projetGere(a, d.projetId);
+      if (!p) return { erreur: "Projet introuvable." };
+      const phases = await db.select().from(schema.phasesProjet).where(eq(schema.phasesProjet.projetId, p.id));
+      if (phases.some((x) => x.termineeLe)) return { erreur: "Une phase a déjà été terminée : retirez-les depuis « Modifier le projet »." };
+      await db.update(schema.indicateurs).set({ phaseId: null }).where(eq(schema.indicateurs.projetId, p.id));
+      await db.delete(schema.phasesProjet).where(eq(schema.phasesProjet.projetId, p.id));
+      await recalculerSante([p.id]);
+      return { ok: true, message: "Phases retirées." };
+    }
+    case "projet_champs": {
+      const p = await projetGere(a, d.projetId);
+      if (!p) return { erreur: "Projet introuvable." };
+      if (iso(p.majLe) !== d.apresMajLe) return { erreur: "Le projet a changé depuis : corrigez-le depuis sa fiche." };
+      const permis = ["sponsorId", "chefProjetId", "priorite", "budgetPrevu", "budgetEngage", "budgetDevise", "budgetNote", "budgetMajLe"];
+      const valeurs = Object.fromEntries(Object.entries(d.avant).filter(([k]) => permis.includes(k)));
+      await db.update(schema.projets).set({ ...valeurs, majLe: new Date() }).where(eq(schema.projets.id, p.id));
+      return { ok: true, message: `« ${p.titre} » est revenu comme avant.` };
+    }
+    case "cloture": {
+      const r = await rouvrirProjet(a, d.projetId);
+      if ("erreur" in r) return r;
+      await db.delete(schema.notifications).where(and(eq(schema.notifications.lien, `/projets/${d.projetId}#cloture`), gte(schema.notifications.creeLe, new Date(d.depuis))));
+      return { ok: true, message: "Clôture annulée : le projet est de nouveau en cours." };
     }
     case "jalon": {
       const [p] = await db.select().from(schema.projets).where(eq(schema.projets.id, d.projetId));

@@ -162,7 +162,7 @@ export async function ajouterTacheRapide(etat: EtatSaisieRapide, form: FormData)
   const pour = String(form.get("assigneId") ?? "");
   const assigneId = /^[0-9a-f-]{36}$/.test(pour) ? pour : u.id;
   const depuis = new Date();
-  const c = await creerTacheGeree(a, { titre: r.titre, description: "", projetId: projet?.id ?? null, assigneId, echeance: r.echeance, debut: null, estimationHeures: r.heures });
+  const c = await creerTacheGeree(a, { titre: r.titre, description: "", projetId: projet?.id ?? null, assigneId, echeance: r.echeance, debut: null, estimationHeures: r.heures, priorite: r.priorite });
   if ("erreur" in c) return { message: c.erreur, n: etat.n };
   revalidatePath("/", "layout");
   const annulation = await enregistrerAnnulation(u.id, { genre: "tache_creee", tacheId: c.id, depuis: depuis.toISOString() });
@@ -206,12 +206,29 @@ export async function mettreAJourTacheRapide(etat: EtatSaisieRapide, form: FormD
     const annulation = await enregistrerAnnulation(u.id, { genre: "relance", tacheId: t.id, evenementId: ev.id, notificationId: no.id });
     return { message: `« ${t.titre} » : ${cible.prenom} est relancé(e).`, ok: true, n: (etat.n ?? 0) + 1, id: t.id, annulation };
   }
+  // « annuler : motif » : comme depuis la fiche ; « Annuler » juste après la rétablit.
+  if (r.annulation !== null) {
+    if (!r.annulation) return { message: "Dites pourquoi la tâche est annulée : « annuler : plus nécessaire après la décision du comité ».", n: etat.n };
+    const an = await annulerTache(a, t, r.annulation);
+    if ("erreur" in an) return { message: an.erreur, n: etat.n };
+    revalidatePath("/", "layout");
+    const annulation = await enregistrerAnnulation(u.id, { genre: "tache_annulee", tacheId: t.id });
+    return { message: `« ${t.titre} » est annulée.`, ok: true, n: (etat.n ?? 0) + 1, id: t.id, annulation };
+  }
+  if (r.arreterRepetition) {
+    const ar = await arreterRepetition(a, t);
+    if ("erreur" in ar) return { message: ar.erreur, n: etat.n };
+    revalidatePath("/", "layout");
+    return { message: `« ${t.titre} » ne se répète plus (les tâches déjà créées restent).`, ok: true, n: (etat.n ?? 0) + 1, id: t.id };
+  }
   const pour = String(form.get("assigneId") ?? "");
   const assigneId = /^[0-9a-f-]{36}$/.test(pour) ? pour : t.assigneId;
   const versProjet = String(form.get("projetId") ?? "");
   const projetId = /^[0-9a-f-]{36}$/.test(versProjet) ? versProjet : t.projetId;
   const confier = assigneId !== t.assigneId || projetId !== t.projetId;
-  if (!r.statut && !r.echeance && !r.heures && !r.note && !confier) return { message: "Rien à changer : écrivez « faite », « bloquée … », une date, une durée, une note, ou @ une personne.", n: etat.n };
+  const autres = !!r.priorite || !!r.minutesPassees || !!r.rythme;
+  if (!r.statut && !r.echeance && !r.heures && !r.note && !confier && !autres)
+    return { message: "Rien à changer : écrivez « faite », « bloquée … », une date, une durée, « priorité haute », « passé 1h30 », « répéter chaque lundi », une note, ou @ une personne.", n: etat.n };
   if (r.statut === "bloquee" && !r.blocage && !t.blocage) return { message: "Dites ce qui bloque : « bloquée attente de la DTI ».", n: etat.n };
   if (r.echeance && t.debut && r.echeance < t.debut) return { message: `L'échéance (${dateCourte(r.echeance)}) précède le début de la tâche (${dateCourte(t.debut)}) : changez le début sur sa fiche.`, n: etat.n };
 
@@ -227,6 +244,22 @@ export async function mettreAJourTacheRapide(etat: EtatSaisieRapide, form: FormD
   }
   if (r.heures && r.heures !== t.estimationHeures) await db.update(schema.taches).set({ estimationHeures: r.heures, majLe: new Date() }).where(eq(schema.taches.id, t.id));
   if (r.note) await db.insert(schema.evenementsTache).values({ tacheId: t.id, auteurId: u.id, type: "note", note: r.note });
+  // Priorité, temps passé, répétition (même contrôles que sur la fiche de la tâche).
+  if (r.priorite && r.priorite !== t.priorite) {
+    await db.update(schema.taches).set({ priorite: r.priorite, majLe: new Date() }).where(eq(schema.taches.id, t.id));
+    await db.insert(schema.evenementsTache).values({ tacheId: t.id, auteurId: u.id, type: "priorite", avant: t.priorite, apres: r.priorite });
+  }
+  const refus: string[] = [];
+  if (r.minutesPassees) {
+    const [maintenant] = await db.select().from(schema.taches).where(eq(schema.taches.id, t.id));
+    const tp = await noterTemps(a, maintenant, { jour: aujourdhui(), minutes: r.minutesPassees, note: "" });
+    if ("erreur" in tp) refus.push(tp.erreur);
+  }
+  if (r.rythme) {
+    const [maintenant] = await db.select().from(schema.taches).where(eq(schema.taches.id, t.id));
+    const rp = await repeterTache(a, maintenant, r.rythme);
+    if ("erreur" in rp) refus.push(rp.erreur);
+  }
   // Bloquée : le chef du projet est prévenu (comme la case cochée par défaut sur la fiche).
   if (r.statut === "bloquee" && t.statut !== "bloquee" && projetId) {
     // Le chef du projet où se trouve la tâche maintenant (elle a pu changer de projet dans la même saisie).
@@ -240,11 +273,21 @@ export async function mettreAJourTacheRapide(etat: EtatSaisieRapide, form: FormD
     tacheId: t.id,
     depuis: depuis.toISOString(),
     apresMajLe: apres.majLe.toISOString(),
-    avant: { statut: t.statut, blocage: t.blocage, termineeLe: t.termineeLe ? t.termineeLe.toISOString() : null, echeance: t.echeance, estimationHeures: t.estimationHeures, assigneId: t.assigneId, projetId: t.projetId },
+    avant: { statut: t.statut, blocage: t.blocage, termineeLe: t.termineeLe ? t.termineeLe.toISOString() : null, echeance: t.echeance, estimationHeures: t.estimationHeures, assigneId: t.assigneId, projetId: t.projetId, priorite: t.priorite, recurrenceId: t.recurrenceId },
   });
   revalidatePath("/", "layout");
-  const fait = [r.statut ? LIBELLES_STATUT[r.statut].toLowerCase() : null, confier && assigneId !== t.assigneId ? "confiée, la personne est prévenue" : null, confier && projetId !== t.projetId ? "changée de projet" : null, r.echeance ? "échéance changée" : null, r.heures ? "estimation changée" : null, r.note ? "note ajoutée" : null].filter(Boolean);
-  return { message: `« ${t.titre} » : ${fait.join(", ")}.`, ok: true, n: (etat.n ?? 0) + 1, id: t.id, annulation };
+  const fait = [
+    r.statut ? LIBELLES_STATUT[r.statut].toLowerCase() : null,
+    confier && assigneId !== t.assigneId ? "confiée, la personne est prévenue" : null,
+    confier && projetId !== t.projetId ? "changée de projet" : null,
+    r.echeance ? "échéance changée" : null,
+    r.heures ? "estimation changée" : null,
+    r.priorite && r.priorite !== t.priorite ? `priorité ${r.priorite}` : null,
+    r.minutesPassees && !refus.some((x) => /temps/i.test(x)) ? "temps passé noté" : null,
+    r.rythme && !refus.some((x) => /répète|rythme|projet|annulée|modifier/i.test(x)) ? "elle se répète" : null,
+    r.note ? "note ajoutée" : null,
+  ].filter(Boolean);
+  return { message: `« ${t.titre} » : ${fait.join(", ") || "rien de changé"}.${refus.length ? ` ${refus.join(" ")}` : ""}`, ok: true, n: (etat.n ?? 0) + 1, id: t.id, annulation };
 }
 
 /** Titre, description, projet et personne d'une tâche. */

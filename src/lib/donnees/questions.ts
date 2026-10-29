@@ -6,7 +6,7 @@
 import "server-only";
 import { and, eq, isNull, ne } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { acces, contactsVisibles, idsProjetsVisibles, peutVoirTache, type Acces } from "@/lib/acces";
+import { acces, contactsVisibles, idsProjetsVisibles, peutVoirTache, suitPersonne, type Acces } from "@/lib/acces";
 import type { Utilisateur } from "@/lib/auth/session";
 import { analyserQuestion, personneNommee, type AnalyseQuestion } from "@/lib/barre";
 import { LIBELLE_NIVEAU } from "@/lib/charge";
@@ -94,6 +94,20 @@ export async function repondre(u: Utilisateur, saisie: string): Promise<Reponse>
     }
     case "charge": {
       if (u.externe) return { titre: "Charge", lignes: [], total: 0, vide: "La charge de travail n'est mesurée que pour la division." };
+      // « charge de Myriam » : la charge d'une personne qu'on suit, semaine par semaine.
+      if (personne && !q.miennes) {
+        if (personne.id !== u.id && !suitPersonne(a, personne.id)) return { titre: `Charge de ${personne.nom}`, lignes: [], total: 0, vide: `Vous ne suivez pas la charge de ${personne.nom}.` };
+        const c = await chargeDesPersonnes([personne.id], 3);
+        const l = c.lignes[0];
+        if (!l) return { titre: `Charge de ${personne.nom}`, lignes: [], total: 0, vide: "La charge n'est mesurée que pour les personnes de la division." };
+        const libelles = ["cette semaine", "la semaine prochaine", "dans deux semaines"];
+        const lignes = l.charge.semaines.map((s, i) => ({
+          texte: `${libelles[i] ?? `semaine du ${dateCourte(s.semaine)}`} : ${Math.round(s.heures)} h sur ${String(Math.round(s.capacite * 10) / 10).replace(".", ",")} h${i === 0 ? " restantes" : ""}`,
+          sous: `${LIBELLE_NIVEAU[s.niveau]}${s.reunions ? ` · dont ${Math.round(s.reunions)} h de réunion` : ""}`,
+          lien: personne.id === u.id ? "/semaine" : `/personnes/${personne.id}#charge`,
+        }));
+        return { titre: `Charge de ${personne.id === u.id ? "vous" : personne.nom}`, lignes, total: lignes.length, vide: "Aucune charge prévue." };
+      }
       const ids = a.suivis === "toutes" ? [...org.personnes.values()].filter((p) => p.actif && !p.externe).map((p) => p.id) : [...a.suivis];
       const c = await chargeDesPersonnes(ids, 2);
       const semaine = q.periode.libelle === "la semaine prochaine" ? 1 : 0;

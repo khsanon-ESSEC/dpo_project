@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useEffect, useId, useRef, useState } from "react";
+import { useActionState, useEffect, useId, useMemo, useRef, useState } from "react";
 import { annulerDepuisBarre, executerBarre, type EtatBarre } from "@/app/(app)/barre/actions";
-import { analyserMajProjet, analyserNote, genreDe, LIBELLES_NOTE, projetEnTete, reconnaitreMots, texteMajProjet, type Genre } from "@/lib/barre";
+import { analyserMajProjet, analyserNote, genreDe, LIBELLES_NOTE, projetEnTete, reconnaitreMots, texteMajProjet, type Genre, type Nomme } from "@/lib/barre";
+import { analyserCommande, chercherCatalogue, estQuestionCharge, type ContexteCommande, type ElementProjet, type EntreeCatalogue, type Permission } from "@/lib/commandes";
 import { phraseOccupe, type Disponibilite } from "@/lib/creneaux";
 import { analyserMiseAJour, analyserReunion, analyserSaisie, LIBELLES_STATUT, type ProjetSaisie, type StatutTache } from "@/lib/saisie-rapide";
 import { dateCourte } from "@/lib/dates";
@@ -37,6 +38,8 @@ const aller = (lien: string) => (window.location.href = lien);
  * - « /UR à surveiller : … », « /UR livrable validation métier 15/11 » mettent le projet à jour (chef de projet) ;
  * - une question (« en retard sur UR ? ») répond tout de suite ;
  * - en mode recherche : projets, tâches, personnes et écrans (« Gantt UR », « charge de Myriam ») ;
+ * - les actions (src/lib/commandes.ts) : « Nouveau projet : … », « UR assigner le livrable audit à Daphnée »,
+ *   « UR budget 12,5 M », « charge de Myriam », « générer un rapport »… ; « > » en donne la liste ;
  * - la barre vide propose ce qui compte aujourd'hui ; « Annuler » suit chaque action.
  */
 export function BarreCommande({
@@ -54,6 +57,13 @@ export function BarreCommande({
   initial = "",
   focus = mode === "recherche",
   idChamp,
+  livrables = [],
+  phases = [],
+  risques = [],
+  personnesCommandes = [],
+  projetsCommandes,
+  geres = [],
+  droits = { interne: true, redige: true, conseil: false, chef: false },
 }: {
   mode: "tache" | "recherche";
   projets: ProjetSaisie[];
@@ -72,6 +82,17 @@ export function BarreCommande({
   focus?: boolean;
   /** Identifiant stable du champ (la touche « / » y met le curseur depuis n'importe quelle page). */
   idChamp?: string;
+  /** Les actions de la barre (src/lib/commandes.ts) : livrables, phases et risques des projets visibles. */
+  livrables?: ElementProjet[];
+  phases?: ElementProjet[];
+  risques?: ElementProjet[];
+  /** Les personnes qu'on peut nommer dans une action (responsable, sponsor, équipe, chef). */
+  personnesCommandes?: Nomme[];
+  /** Les projets qu'une action peut viser (y compris clôturés, pour les rouvrir). */
+  projetsCommandes?: ProjetSaisie[];
+  /** Les projets que la personne gère (les actions de gestion y sont permises). */
+  geres?: string[];
+  droits?: { interne: boolean; redige: boolean; conseil: boolean; chef: boolean };
 }) {
   const [etat, action, enCours] = useActionState<EtatBarre, FormData>(executerBarre, { message: null, n: 0 });
   const [texte, setTexte] = useState(initial);
@@ -92,6 +113,9 @@ export function BarreCommande({
   const [erreur, setErreur] = useState<string | null>(null);
   const [annule, setAnnule] = useState<{ pour: string; ok: boolean; message: string } | null>(null);
   const [annulable, setAnnulable] = useState(false);
+  // « > » : une action choisie dans la liste, dont on montre l'exemple pendant qu'on la complète.
+  const [exemple, setExemple] = useState<string | null>(null);
+  const [suite, setSuite] = useState<string | null>(null);
   const champ = useRef<HTMLInputElement>(null);
   const formulaire = useRef<HTMLFormElement>(null);
   const idListe = useId();
@@ -113,6 +137,7 @@ export function BarreCommande({
     setReponse(null);
     setOccupes([]);
     setAnnule(null);
+    setExemple(null);
     setAnnulable(!!etat.annulation);
   }
   useEffect(() => {
@@ -122,9 +147,23 @@ export function BarreCommande({
   }, [annulable, etat.n]);
 
   // ---------- De quoi parle la ligne ----------
-  let genre: Genre | "maj" = tache ? "maj" : texte.trim() ? genreDe(texte, { projetChoisi: !!projet, projets, aujourdhui }) : "tache";
+  const palette = !tache && /^\s*>/.test(texte);
+  let genre: Genre | "maj" | "commande" = tache ? "maj" : texte.trim() && !palette ? genreDe(texte, { projetChoisi: !!projet, projets, aujourdhui }) : "tache";
   const motsProjet = !tache && genre === "tache" && !projet ? reconnaitreMots(texte, { personnes: [], projets }) : null;
   if (motsProjet?.projet && analyserMajProjet(motsProjet.texte, aujourdhui)) genre = "projet";
+  // Une action de la barre (« UR assigner le livrable audit à Daphnée », « Nouveau projet : … », « envoyer mon rapport »).
+  const ctxCommande = useMemo<ContexteCommande>(
+    () => ({ projets: projetsCommandes ?? projets, personnes: personnesCommandes, livrables, phases, risques, aujourdhui, moiId }),
+    [projetsCommandes, projets, personnesCommandes, livrables, phases, risques, aujourdhui, moiId],
+  );
+  const commande = !tache && !palette && texte.trim() && (genre === "tache" || genre === "projet") ? analyserCommande(texte, ctxCommande, projet) : null;
+  if (commande) genre = "commande";
+  // « charge de Myriam » (sans « ? ») : une question.
+  if (!tache && genre === "tache" && estQuestionCharge(texte, personnesCommandes, moiId)) genre = "question";
+  const GESTION = ["livrable_creer", "livrable_modifier", "membre_ajouter", "membre_retirer", "phase_terminer", "phases_types", "phase_ajouter", "sponsor", "chef", "priorite", "budget", "cloturer", "rouvrir"];
+  const c = commande?.commande ?? null;
+  const reserveGestion =
+    !!c && !!commande?.projet && !geres.includes(commande.projet.id) && (GESTION.includes(c.type) || (c.type === "livrable_etat" && c.action !== "pret"));
   const reunion = genre === "reunion";
   // Des mots à la place des touches : « pour Fabienne », « projet Unibank », « avec Fabienne et Daphnée ».
   const mots =
@@ -161,7 +200,9 @@ export function BarreCommande({
   const pret =
     genre === "maj"
       ? true
-      : genre === "reunion"
+      : genre === "commande"
+        ? !!c && !commande?.manque && !reserveGestion
+        : genre === "reunion"
         ? !!analyseReunion?.titre
         : genre === "note"
           ? !!note?.texte
@@ -186,7 +227,7 @@ export function BarreCommande({
           .slice(0, 8)
           .map((t) => ({ id: t.id, libelle: t.titre, sous: [t.pour ? `Pour ${t.pour}` : null, LIBELLES_STATUT[t.statut], t.echeance ? dateCourte(t.echeance) : null].filter(Boolean).join(" · "), code: t.code }))
       : liste.type === "projet"
-        ? projets
+        ? (suite !== null ? (projetsCommandes ?? projets) : projets)
             .filter((p) => !liste.requete || cleNom(`${p.code} ${p.titre}`).includes(cleNom(liste.requete)))
             .slice(0, 8)
             .map((p) => ({ id: p.id, libelle: p.titre, sous: p.code }))
@@ -282,14 +323,21 @@ export function BarreCommande({
       setProjet(null);
       setPersonne(null);
       nouveau = nouveau.trim() ? `${nouveau.trim()} ` : "";
-    } else if (liste.type === "projet") setProjet(projets.find((p) => p.id === c.id) ?? null);
+    } else if (liste.type === "projet") {
+      setProjet((projetsCommandes ?? projets).find((p) => p.id === c.id) ?? null);
+      // Une action choisie avec « > » attendait son projet : sa suite s'écrit maintenant.
+      if (suite !== null) {
+        nouveau = suite;
+        setSuite(null);
+      }
+    }
     else if (reunion) {
       const p = participants.find((x) => x.id === c.id);
       if (p) setInvites([...invites, p]);
     } else setPersonne(personnes.find((p) => p.id === c.id) ?? null);
     setTexte(nouveau);
     setListe(null);
-    const position = liste.type === "tache" ? nouveau.length : liste.debut;
+    const position = liste.type === "tache" || liste.type === "projet" ? nouveau.length : liste.debut;
     requestAnimationFrame(() => {
       champ.current?.focus();
       champ.current?.setSelectionRange(position, position);
@@ -307,7 +355,28 @@ export function BarreCommande({
 
   const envoyer = () => {
     if (tache && rienAChanger) return aller(`/taches/${tache.id}?retour=${encodeURIComponent(retour)}`);
+    // Ouvrir un écran ou télécharger un document : pas besoin du serveur.
+    if (genre === "commande" && c?.type === "aller" && pret) return aller(c.lien);
     if (pret) formulaire.current?.requestSubmit();
+  };
+  const droitAction = (p: Permission) => (p === "tous" ? true : p === "gere" ? geres.length > 0 : droits[p]);
+  /** « > » puis une action : son début s'écrit dans la barre (avec, d'abord, le choix du projet si elle en vise un). */
+  const choisirEntree = (e: EntreeCatalogue) => {
+    setExemple(e.exemple);
+    setSurligne(-1);
+    if (e.cle === "tache-maj") {
+      setTexte("#");
+      setListe({ type: "tache", debut: 0, requete: "" });
+    } else if (e.projet && !projet) {
+      setTexte("/");
+      setSuite(e.debut);
+      setListe({ type: "projet", debut: 0, requete: "" });
+    } else setTexte(e.debut);
+    requestAnimationFrame(() => {
+      champ.current?.focus();
+      const n = champ.current?.value.length ?? 0;
+      champ.current?.setSelectionRange(n, n);
+    });
   };
   const chercher = () => {
     if (texte.trim()) aller(`/recherche?q=${encodeURIComponent(texte.trim())}`);
@@ -351,16 +420,36 @@ export function BarreCommande({
           ];
           return [
             ...(l.length ? l : [{ cle: "rien", libelle: "Rien d'urgent aujourd'hui", titre: true }]),
-            { cle: "aide", libelle: "Écrivez une tâche, « Réunion … », « Décision : … » ou une question ?", sous: "/ un projet · @ une personne · # une tâche à mettre à jour · sinon, Entrée cherche", titre: true },
+            { cle: "aide", libelle: "Écrivez une tâche, « Réunion … », « Décision : … », une action ou une question ?", sous: "/ un projet · @ une personne · # une tâche à mettre à jour · > toutes les actions · sinon, Entrée cherche", titre: true },
+            { cle: "actions", libelle: "Toutes les actions de la barre", sous: "Créer un projet, assigner un livrable, charge d'une personne, générer un rapport…", code: ">", action: () => setTexte(">") },
             { cle: "formulaire", libelle: "Nouvelle tâche (formulaire complet)", code: "+", action: () => aller(`/taches/nouvelle?retour=${encodeURIComponent(retour)}`) },
           ];
         })()
       : [];
 
   // ---------- Lignes de la liste déroulante (hors « / », « @ », « # ») ----------
+  const entrees = palette ? chercherCatalogue(texte.replace(/^\s*>\s*/, ""), droitAction) : [];
   const lignes: Ligne[] = suggestions.length
     ? suggestions
-    : question && reponse
+    : palette
+      ? [
+          { cle: "titre-actions", libelle: entrees.length ? "Ce que la barre sait faire" : "Aucune action ne correspond", sous: entrees.length ? "Choisissez : la phrase se commence pour vous, l'exemple reste affiché." : "Essayez « livrable », « projet », « rapport », « charge »…", titre: true },
+          ...entrees.map((e) => ({ cle: `a-${e.cle}`, libelle: e.libelle, sous: `${e.groupe} · ${e.exemple}`, code: ">", action: () => choisirEntree(e) })),
+        ]
+      : commande?.choix
+        ? [
+            { cle: "titre-choix", libelle: commande.resume, titre: true },
+            ...commande.choix.map((x, i) => ({
+              cle: `c-${i}`,
+              libelle: x.libelle,
+              code: ">",
+              action: () => {
+                setTexte(x.texte);
+                requestAnimationFrame(() => champ.current?.focus());
+              },
+            })),
+          ]
+        : question && reponse
       ? [
           { cle: "titre", libelle: `${reponse.titre}${reponse.total ? ` · ${reponse.total}` : ""}`, titre: true },
           ...(reponse.lignes.length ? reponse.lignes.slice(0, 12).map((x, i) => ({ cle: `q-${i}`, libelle: x.texte, sous: x.sous, code: x.code, action: () => aller(x.lien) })) : [{ cle: "vide", libelle: reponse.vide ?? "Rien.", titre: true }]),
@@ -372,8 +461,22 @@ export function BarreCommande({
               ? [
                   {
                     cle: "ajouter",
-                    libelle: genre === "reunion" ? `Noter la réunion « ${analyseReunion!.titre} »` : genre === "note" ? `Ajouter au rapport : « ${note!.texte} »` : `${projetMaj!.code} · ${texteMajProjet(majProjet!)}`,
-                    sous: genre === "reunion" ? analyseReunion!.morceaux.filter((m) => m.type !== "projet").map((m) => m.texte).join(" · ") : genre === "note" ? LIBELLES_NOTE[note!.rubrique] : "Mettre le projet à jour",
+                    libelle:
+                      genre === "commande"
+                        ? `${commande!.projet ? `${commande!.projet.code} · ` : ""}${commande!.resume}`
+                        : genre === "reunion"
+                          ? `Noter la réunion « ${analyseReunion!.titre} »`
+                          : genre === "note"
+                            ? `Ajouter au rapport : « ${note!.texte} »`
+                            : `${projetMaj!.code} · ${texteMajProjet(majProjet!)}`,
+                    sous:
+                      genre === "commande"
+                        ? "Action · Entrée pour la faire"
+                        : genre === "reunion"
+                          ? analyseReunion!.morceaux.filter((m) => m.type !== "projet").map((m) => m.texte).join(" · ")
+                          : genre === "note"
+                            ? LIBELLES_NOTE[note!.rubrique]
+                            : "Mettre le projet à jour",
                     code: "+",
                     action: envoyer,
                   },
@@ -424,6 +527,8 @@ export function BarreCommande({
     if (e.key === "Enter") {
       e.preventDefault();
       if (surligne >= 0 && lignes[surligne]?.action) return lignes[surligne].action!();
+      if (palette) return entrees[0] ? choisirEntree(entrees[0]) : undefined;
+      if (commande?.choix) return;
       if (question) return;
       if (agir) return envoyer();
       return chercher();
@@ -451,7 +556,15 @@ export function BarreCommande({
         : "Mettre à jour"
       : question
         ? "Demander"
-        : genre === "reunion"
+        : genre === "commande"
+          ? c?.type === "aller"
+            ? "Ouvrir"
+            : c?.type === "envoyer_rapport"
+              ? "Envoyer"
+              : c?.type === "nouveau_projet" || c?.type === "livrable_creer" || c?.type === "risque_creer" || c?.type === "phase_ajouter" || c?.type === "rapport_ponctuel"
+                ? "Créer"
+                : "Appliquer"
+          : genre === "reunion"
           ? "Noter"
           : genre === "note"
             ? "Ajouter au rapport"
@@ -461,7 +574,7 @@ export function BarreCommande({
                 ? "Ajouter"
                 : "Chercher";
   const annuleIci = annule && etat.annulation && annule.pour === etat.annulation ? annule : null;
-  const icone = question ? "loupe" : reunion ? "reunion" : genre === "note" ? "document" : mode === "recherche" ? "loupe" : "ajouter";
+  const icone = question ? "loupe" : reunion ? "reunion" : genre === "note" ? "document" : genre === "commande" || palette ? "eclair" : mode === "recherche" ? "loupe" : "ajouter";
 
   return (
     <form ref={formulaire} action={action} className="saisie-rapide" role={mode === "recherche" ? "search" : undefined} onSubmit={(e) => !(tache ? !rienAChanger : pret) && e.preventDefault()}>
@@ -489,6 +602,7 @@ export function BarreCommande({
               setAnnulable(false);
               setSurligne(-1);
               setVide(!e.target.value);
+              if (!e.target.value) setExemple(null);
               setActif(true);
               reperer(e.target.value, e.target.selectionStart ?? e.target.value.length);
             }}
@@ -512,7 +626,7 @@ export function BarreCommande({
               tache
                 ? "faite · en cours · bloquée … · une date · relancer · @ confier"
                 : mode === "recherche"
-                  ? "Chercher ou ajouter : une tâche, « Réunion … », « Décision : … », une question ?"
+                  ? "Chercher, ajouter ou agir : une tâche, « Réunion … », « > » pour toutes les actions"
                   : "Une tâche, « Réunion … », « Décision : … » ou une question ?"
             }
             role="combobox"
@@ -524,7 +638,7 @@ export function BarreCommande({
           <button
             type="button"
             className="bouton-ambre"
-            disabled={enCours || (tache ? false : question ? !texte.trim() : genre !== "tache" ? !pret : mode === "tache" ? !analyse?.titre : !texte.trim())}
+            disabled={enCours || (tache ? false : palette ? true : question ? !texte.trim() : genre !== "tache" ? !pret : mode === "tache" ? !analyse?.titre : !texte.trim())}
             onClick={() => (question ? champ.current?.focus() : agir ? envoyer() : chercher())}
           >
             {bouton}
@@ -631,6 +745,16 @@ export function BarreCommande({
             {puceProjet(projetEff, !!projet)}
             {note.texte ? puce(`« ${note.texte} »`, null, "saisie-rapide__morceau--discret") : null}
           </>
+        ) : genre === "commande" && commande ? (
+          <>
+            <span className="saisie-rapide__titre">{commande.resume}</span>
+            {commande.projet ? puce(`${commande.projet.code} · ${commande.projet.titre}`, projet ? () => setProjet(null) : null, "saisie-rapide__morceau--projet") : null}
+            {commande.manque ? <span className="ton-veille">{commande.manque}</span> : null}
+            {reserveGestion ? <span className="ton-veille">Réservé au chef de ce projet (ou à son référent DPO), à sa direction et aux exécutifs.</span> : null}
+            {!commande.manque && !reserveGestion && !commande.choix ? <span className="ton-discret">Entrée pour {c?.type === "aller" ? "ouvrir" : "le faire"}.</span> : null}
+          </>
+        ) : palette ? (
+          <span className="ton-discret">Tapez un mot (« livrable », « projet », « rapport », « charge ») ou choisissez une action.</span>
         ) : genre === "projet" ? (
           <>
             <span className="saisie-rapide__titre">{projetMaj ? `Mettre à jour ${projetMaj.code} · ${projetMaj.titre}` : "Quel projet ?"}</span>
@@ -677,6 +801,11 @@ export function BarreCommande({
           </span>
         ) : null}
       </p>
+      {exemple && texte.trim() ? (
+        <p className="saisie-rapide__exemple ton-discret">
+          Exemple : <span>{exemple}</span>
+        </p>
+      ) : null}
       {reunion && occupes.length ? (
         <div className="avertissement-creneau" role="status">
           {occupes.map((o) => (
@@ -689,12 +818,20 @@ export function BarreCommande({
       {erreur && genre !== "question" ? (
         <p className="saisie-rapide__erreur ton-retard" role="alert">
           {erreur}
+          {etat.lien && !etat.ok && erreur === etat.message ? (
+            <>
+              {" "}
+              <a href={etat.lien} className="lien-discret">
+                Ouvrir
+              </a>
+            </>
+          ) : null}
         </p>
       ) : null}
       <input type="hidden" name="genre" value={genre} />
-      <input type="hidden" name="saisie" value={genre === "projet" ? texte : net} />
+      <input type="hidden" name="saisie" value={genre === "projet" || genre === "commande" ? texte : net} />
       <input type="hidden" name="tacheId" value={tache?.id ?? ""} />
-      <input type="hidden" name="projetId" value={genre === "projet" ? (projet?.id ?? "") : (projet?.id ?? mots?.projet?.id ?? "")} />
+      <input type="hidden" name="projetId" value={genre === "projet" || genre === "commande" ? (projet?.id ?? "") : (projet?.id ?? mots?.projet?.id ?? "")} />
       <input type="hidden" name="assigneId" value={personneEff?.id ?? ""} />
       {reunion ? invitesEff.map((p) => <input key={p.id} type="hidden" name="participants" value={p.id} />) : null}
     </form>
