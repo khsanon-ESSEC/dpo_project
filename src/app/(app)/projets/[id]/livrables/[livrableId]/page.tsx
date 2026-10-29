@@ -104,7 +104,7 @@ export default async function PageLivrable({ params, searchParams }: { params: P
             ) : null}
           </span>
           {gere ? (
-            <a href={`/projets/${id}/modifier#livrable-${l.id}`} className="bouton-contour">
+            <a href={`/projets/${id}/livrables?ouvrir=${l.id}#livrable-${l.id}`} className="bouton-contour">
               <Icone nom="modifier" taille={16} /> Modifier le livrable
             </a>
           ) : null}

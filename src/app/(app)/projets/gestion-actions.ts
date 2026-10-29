@@ -23,6 +23,7 @@ import {
 } from "@/lib/donnees/gestion";
 import { peutDeciderDemande, peutGererProjet } from "@/lib/projets";
 import { externeDuFormulaire } from "@/lib/donnees/externes";
+import { retourLivrable } from "./[id]/livrables/commun";
 
 const UUID = /^[0-9a-f-]{36}$/;
 
@@ -155,20 +156,26 @@ const donneesLivrable = (form: FormData) => ({
   phaseId: form.has("phaseId") ? (UUID.test(String(form.get("phaseId") ?? "")) ? String(form.get("phaseId")) : null) : undefined,
 });
 
+/**
+ * « Nouveau livrable » (sa propre page, 29 octobre 2026) : on revient à la fiche du projet, ou à la liste des
+ * livrables ; « Ajouter et en saisir un autre » rouvre la page vide.
+ */
 export async function nouveauLivrable(projetId: string, form: FormData) {
   const { u } = await exigerGestionModifiable(projetId);
+  const retour = retourLivrable(form.get("retour"));
   const r = await ajouterLivrable(projetId, donneesLivrable(form), u.id);
   revalider(projetId);
-  if ("erreur" in r) redirect(`/projets/${projetId}/modifier?erreur=${encodeURIComponent(r.erreur)}#livrables`);
-  redirect(`/projets/${projetId}/modifier?livrable=ajoute#livrables`);
+  if ("erreur" in r) redirect(`/projets/${projetId}/livrables/nouveau?retour=${retour}&erreur=${encodeURIComponent(r.erreur)}`);
+  if (form.get("encore") === "1") redirect(`/projets/${projetId}/livrables/nouveau?retour=${retour}&ajoute=1`);
+  redirect(retour === "liste" ? `/projets/${projetId}/livrables?livrable=ajoute#livrable-${r.id}` : `/projets/${projetId}?livrable=ajoute#livrable-${r.id}`);
 }
 
 export async function enregistrerLivrable(projetId: string, livrableId: string, form: FormData) {
   const { u } = await exigerGestionModifiable(projetId);
   const r = await modifierLivrable(projetId, livrableId, donneesLivrable(form), u.id);
   revalider(projetId);
-  if ("erreur" in r) redirect(`/projets/${projetId}/modifier?erreur=${encodeURIComponent(r.erreur)}#livrable-${livrableId}`);
-  redirect(`/projets/${projetId}/modifier?livrable=enregistre#livrable-${livrableId}`);
+  if ("erreur" in r) redirect(`/projets/${projetId}/livrables?ouvrir=${livrableId}&erreur=${encodeURIComponent(r.erreur)}#livrable-${livrableId}`);
+  redirect(`/projets/${projetId}/livrables?livrable=enregistre#livrable-${livrableId}`);
 }
 
 export async function nouvelIndicateur(projetId: string, form: FormData) {

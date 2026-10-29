@@ -59,7 +59,7 @@ const SANTE = {
 export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; cree?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string; decision?: string; risque?: string; cloture?: string; budget?: string; fait?: string }> }) {
   const { id } = await params;
   const { propose, cree, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut, decision: decisionBrut, risque: risqueBrut, cloture: clotureFait, budget: budgetFait, fait } = await searchParams;
-  const livrableFait = livrableBrut === "pret" || livrableBrut === "valider" || livrableBrut === "renvoyer" || livrableBrut === "rouvrir" ? livrableBrut : null;
+  const livrableFait = livrableBrut === "pret" || livrableBrut === "valider" || livrableBrut === "renvoyer" || livrableBrut === "rouvrir" || livrableBrut === "ajoute" ? livrableBrut : null;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
   const a = await acces(u);
@@ -117,7 +117,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const risqueFait = risqueBrut ? ({ note: "Risque noté au registre.", modifie: "Risque mis à jour.", ouvert: "Risque rouvert.", maitrise: "Risque marqué maîtrisé.", clos: "Risque clos.", retire: "Risque retiré du registre." } as Record<string, string>)[risqueBrut] ?? null : null;
   const decisionFaite = decisionBrut === "notee" ? "Décision notée au registre." : decisionBrut === "corrigee" ? "Décision corrigée." : decisionBrut === "retiree" ? "Décision retirée du registre." : null;
   const valides = lv.livrables.filter((l) => l.etat === "atteint").length;
-  const lvMessage = livrableFait ? { pret: "Livrable déclaré prêt à valider : le chef de projet est prévenu.", valider: "Livrable validé : son responsable est prévenu.", renvoyer: "Livrable renvoyé à reprendre : son responsable est prévenu.", rouvrir: "Livrable rouvert." }[livrableFait] : null;
+  const lvMessage = livrableFait ? { pret: "Livrable déclaré prêt à valider : le chef de projet est prévenu.", valider: "Livrable validé : son responsable est prévenu.", renvoyer: "Livrable renvoyé à reprendre : son responsable est prévenu.", rouvrir: "Livrable rouvert.", ajoute: "Livrable ajouté : son responsable est prévenu." }[livrableFait] : null;
   // Avancement sur la période choisie (le même sélecteur que le bilan), comparé à la période d'avant.
   const debutExercice = moisDebutExercice(process.env.EXERCICE_DEBUT_MOIS);
   const planAv = planBilan(vueAvancement ?? (await periodePreferee("semaine")), pAvancement, jour, debutExercice);
@@ -611,7 +611,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
               </a>
             ) : null}
             {peutModifier && actif ? (
-              <a href={`/projets/${p.id}/modifier#nouveau-livrable`} className="bouton-contour">
+              <a href={`/projets/${p.id}/livrables/nouveau`} className="bouton-contour">
                 <Icone nom="drapeau" taille={16} /> Nouveau livrable
               </a>
             ) : null}
@@ -729,10 +729,10 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                   </h2>
                   {peutModifier && actif ? (
                     <span style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                      <a href={`/projets/${p.id}/modifier#nouveau-livrable`} className="lien-discret">
+                      <a href={`/projets/${p.id}/livrables/nouveau`} className="lien-discret">
                         + Ajouter un livrable
                       </a>
-                      <a href={`/projets/${p.id}/modifier#livrables`} className="lien-discret">
+                      <a href={`/projets/${p.id}/livrables`} className="lien-discret">
                         Gérer les livrables →
                       </a>
                     </span>
@@ -774,7 +774,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                       Aucun livrable.{peutModifier && actif ? (
                         <>
                           {" "}
-                          <a href={`/projets/${p.id}/modifier#livrables`} className="lien-discret">
+                          <a href={`/projets/${p.id}/livrables/nouveau`} className="lien-discret">
                             Ajouter les livrables du projet
                           </a>
                           .
