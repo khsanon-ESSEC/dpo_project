@@ -11,6 +11,8 @@ import { agirSurLivrable, livrableEtProjet, type ActionLivrable } from "@/lib/do
 import { modifierDecision, noterDecision, retirerDecision } from "@/lib/donnees/decisions";
 import { ajouterPhase, changerStatutRisque, deplacerPhase, enregistrerRisque, modifierPhase, retirerPhase, retirerRisque, terminerPhase, utiliserPhasesTypes } from "@/lib/donnees/risques";
 import { noterReportFin } from "@/lib/donnees/reports-fin";
+import { cloturerProjet, enregistrerBudget, rouvrirProjet } from "@/lib/donnees/cloture";
+import { lireMontant } from "@/lib/suivi";
 import { recalculerSante, signalerRisque } from "@/lib/donnees/sante";
 import { noter } from "@/lib/journal";
 import { deposerDocuments, peutDeposerDocument, retirerDocument } from "@/lib/donnees/documents";
@@ -211,4 +213,37 @@ export async function retirerUnePhase(projetId: string, phaseId: string) {
 export async function deplacerUnePhase(projetId: string, phaseId: string, sens: -1 | 1) {
   const a = await exigerVisible(projetId);
   apresPhase(projetId, await deplacerPhase(a, projetId, phaseId, sens), "modifier");
+}
+
+// ---------- Clôture et budget (lot 4) ----------
+
+export async function cloturerLeProjet(projetId: string, form: FormData) {
+  const a = await exigerVisible(projetId);
+  const r = await cloturerProjet(a, projetId, { clotureLe: date(form.get("clotureLe")), bilan: String(form.get("bilan") ?? ""), objectifs: String(form.get("objectifs") ?? ""), lecons: String(form.get("lecons") ?? "") });
+  revalidatePath("/", "layout");
+  if ("erreur" in r) redirect(`/projets/${projetId}?erreur=${encodeURIComponent(r.erreur)}#cloture`);
+  redirect(`/projets/${projetId}?cloture=faite#cloture`);
+}
+
+export async function rouvrirLeProjet(projetId: string) {
+  const a = await exigerVisible(projetId);
+  const r = await rouvrirProjet(a, projetId);
+  revalidatePath("/", "layout");
+  if ("erreur" in r) redirect(`/projets/${projetId}?erreur=${encodeURIComponent(r.erreur)}#cloture`);
+  redirect(`/projets/${projetId}?cloture=rouvert`);
+}
+
+export async function enregistrerLeBudget(projetId: string, form: FormData) {
+  const a = await exigerVisible(projetId);
+  const lire = (nom: string) => {
+    const v = String(form.get(nom) ?? "").trim();
+    return v ? lireMontant(v) : null;
+  };
+  const prevu = lire("prevu");
+  const engage = lire("engage");
+  const illisible = (String(form.get("prevu") ?? "").trim() && prevu === null) || (String(form.get("engage") ?? "").trim() && engage === null);
+  const r = illisible ? { erreur: "Montant illisible : écrivez par exemple « 2 500 000 » ou « 2,5 M »." } : await enregistrerBudget(a, projetId, { prevu, engage, devise: String(form.get("devise") ?? ""), note: String(form.get("note") ?? "") });
+  revalidatePath(`/projets/${projetId}`, "layout");
+  if ("erreur" in r) redirect(`/projets/${projetId}?erreur=${encodeURIComponent(r.erreur)}#budget`);
+  redirect(`/projets/${projetId}?budget=enregistre#budget`);
 }

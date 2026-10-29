@@ -8,6 +8,7 @@ import { acces, exigerTacheVisible, idsProjetsVisibles, peutModifierTache } from
 import { annulerTache, creerTacheGeree, modifierDefinitionTache, retablirTache, supprimerTache } from "@/lib/donnees/gestion";
 import { ajouterDependance, prevenirSuivantes, retirerDependance } from "@/lib/donnees/dependances";
 import { noterTemps, retirerTemps } from "@/lib/donnees/temps";
+import { arreterRepetition, repeterTache } from "@/lib/donnees/recurrence";
 import { lireDuree } from "@/lib/risques";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { noter } from "@/lib/journal";
@@ -133,6 +134,7 @@ export async function creerTache(_: EtatNouvelleTache, form: FormData): Promise<
     debut: lireDate(form.get("debut")),
     estimationHeures: lireHeures(form.get("estimationHeures")),
     livrableId: String(form.get("livrableId") ?? "") || null,
+    priorite: String(form.get("priorite") ?? "") || null,
   });
   if ("erreur" in r) return { message: r.erreur };
   revalidatePath("/", "layout");
@@ -258,6 +260,7 @@ export async function definirTache(_: EtatTache, form: FormData): Promise<EtatTa
     assigneId: String(form.get("assigneId") ?? "") || t.assigneId,
     nouvelExterne: nouvelExterne(form),
     livrableId: form.has("livrableId") ? String(form.get("livrableId") ?? "") || null : undefined,
+    priorite: form.has("priorite") ? String(form.get("priorite") ?? "") : undefined,
   });
   if ("erreur" in r) return { message: r.erreur };
   revalidatePath("/", "layout");
@@ -347,4 +350,25 @@ export async function retirerTempsPasse(tacheId: string, entreeId: string) {
   revalidatePath("/", "layout");
   if ("erreur" in r) redirect(`/taches/${t.id}?erreur=${encodeURIComponent(r.erreur)}#temps`);
   redirect(`/taches/${t.id}?temps=retire#temps`);
+}
+
+/** Tâche récurrente (lot 4) : faire se répéter la tâche, ou arrêter. */
+export async function repeterLaTache(tacheId: string, form: FormData) {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const t = await exigerTacheVisible(a, tacheId);
+  const r = await repeterTache(a, t, String(form.get("rythme") ?? ""));
+  revalidatePath("/", "layout");
+  if ("erreur" in r) redirect(`/taches/${t.id}?erreur=${encodeURIComponent(r.erreur)}#repetition`);
+  redirect(`/taches/${t.id}?repetition=active#repetition`);
+}
+
+export async function arreterLaRepetition(tacheId: string) {
+  const u = await exigerUtilisateur();
+  const a = await acces(u);
+  const t = await exigerTacheVisible(a, tacheId);
+  const r = await arreterRepetition(a, t);
+  revalidatePath("/", "layout");
+  if ("erreur" in r) redirect(`/taches/${t.id}?erreur=${encodeURIComponent(r.erreur)}#repetition`);
+  redirect(`/taches/${t.id}?repetition=arretee#repetition`);
 }

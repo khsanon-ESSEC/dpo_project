@@ -35,6 +35,7 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
   const phasesParProjet = await phasesDe(projets.map((p) => p.id));
   const jourPhase = aujourdhui();
   const phaseDe = (id: string) => {
+    if (projets.find((x) => x.id === id)?.statut === "finalise") return null;
     const l = phasesParProjet.get(id);
     return l?.length ? phaseEnCours(l, jourPhase) : null;
   };
@@ -189,8 +190,10 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
                   {/* Le titre garde toute la largeur ; les étiquettes passent dessous (un titre long ne passe plus sous elles). */}
                   <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
                     <span style={{ fontSize: 16, lineHeight: "22px", fontWeight: 500, overflowWrap: "anywhere" }}>{p.titre}</span>
-                    {p.strategique || p.division || phaseDe(p.id) ? (
+                    {p.strategique || p.division || phaseDe(p.id) || p.priorite === "haute" || p.statut === "finalise" ? (
                       <span style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                        {p.statut === "finalise" ? <span className="etiquette-repetee" style={{ marginLeft: 0 }}>Clôturé{p.clotureLe ? ` le ${dateCourte(p.clotureLe)}` : ""}</span> : null}
+                        {p.priorite === "haute" && p.statut !== "finalise" ? <span className="etiquette-priorite etiquette-priorite--haute" style={{ marginLeft: 0 }}>Priorité haute</span> : null}
                         {phaseDe(p.id) ? <span className={`etiquette-phase${phaseDepassee(phaseDe(p.id)!, jourPhase) ? " etiquette-phase--depassee" : ""}`} title={phaseDepassee(phaseDe(p.id)!, jourPhase) ? "Phase en cours, fin prévue dépassée" : "Phase en cours"}>{phaseDe(p.id)!.nom}</span> : null}
                         {p.strategique ? <span className="etiquette-strategique">Stratégique</span> : null}
                         {p.division ? (

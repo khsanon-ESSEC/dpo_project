@@ -5,6 +5,7 @@ import { ajouterJours, aujourdhui, dateLocale } from "@/lib/dates";
 import { chargerOrganisation } from "@/lib/organisation";
 import { nomComplet, resoudreSuperieur } from "@/lib/regles";
 import { semaineCourante, statutsRapports } from "./rapport";
+import { rangPriorite } from "@/lib/suivi";
 
 const TZ = process.env.APP_TZ || "America/Port-au-Prince";
 
@@ -17,6 +18,8 @@ export type TacheListe = {
   projetCode: string | null;
   projetTitre: string | null;
   assigneId: string;
+  priorite?: string;
+  recurrenceId?: string | null;
 };
 
 export async function tachesDe(personneIds: string[], options: { semaine?: string } = {}) {
@@ -33,6 +36,8 @@ export async function tachesDe(personneIds: string[], options: { semaine?: strin
       projetId: schema.taches.projetId,
       projetCode: schema.projets.code,
       projetTitre: schema.projets.titre,
+      priorite: schema.taches.priorite,
+      recurrenceId: schema.taches.recurrenceId,
     })
     .from(schema.taches)
     .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
@@ -60,7 +65,8 @@ export function compter(taches: TacheListe[], jour = aujourdhui()) {
 /** Ordre d'affichage : en retard, bloquées, puis par échéance. */
 export function trier(taches: TacheListe[], jour = aujourdhui()) {
   const rang = (t: TacheListe) => (t.statut === "faite" ? 3 : t.statut === "bloquee" ? 1 : t.echeance && t.echeance < jour ? 0 : 2);
-  return [...taches].sort((a, b) => rang(a) - rang(b) || (a.echeance ?? "9999").localeCompare(b.echeance ?? "9999"));
+  // À égalité d'état, la priorité haute passe devant ; puis l'échéance la plus proche.
+  return [...taches].sort((a, b) => rang(a) - rang(b) || rangPriorite(a.priorite) - rangPriorite(b.priorite) || (a.echeance ?? "9999").localeCompare(b.echeance ?? "9999"));
 }
 
 /** Nombre de mises à jour de tâches faites par la personne, chaque jour ouvré de la semaine (quatre points au plus). */

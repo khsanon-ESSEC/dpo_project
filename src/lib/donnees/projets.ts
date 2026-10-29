@@ -133,6 +133,8 @@ export async function tachesDuProjet(projetId: string) {
       blocage: schema.taches.blocage,
       termineeLe: schema.taches.termineeLe,
       livrableId: schema.taches.livrableId,
+      priorite: schema.taches.priorite,
+      recurrenceId: schema.taches.recurrenceId,
     })
     .from(schema.taches)
     .where(and(eq(schema.taches.projetId, projetId), isNull(schema.taches.annuleeLe)))

@@ -75,7 +75,8 @@ export async function exigerTacheVisible(a: Acces, tacheId: string) {
 /**
  * Projets visibles : exécutif = tous ; sinon ceux que je dirige, ceux dont je suis membre, ceux
  * où travaille (ou est membre) une personne que je suis, ceux que j'ai proposés ou qu'une personne
- * que je suis a proposés, et (directeur) ceux que dirige un membre de ma direction.
+ * que je suis a proposés, ceux dont je suis le sponsor métier, et (directeur) ceux que dirige un membre de ma
+ * direction.
  */
 export async function idsProjetsVisibles(a: Acces): Promise<Set<string> | "tous"> {
   if (a.toutVoir) return "tous";
@@ -85,9 +86,11 @@ export async function idsProjetsVisibles(a: Acces): Promise<Set<string> | "tous"
   for (const l of lignes) if (l.projetId && suitPersonne(a, l.assigneId)) ids.add(l.projetId);
   const membres = await db.select({ projetId: schema.membresProjet.projetId, personneId: schema.membresProjet.personneId }).from(schema.membresProjet);
   for (const m of membres) if (suitPersonne(a, m.personneId)) ids.add(m.projetId);
-  const projets = await db.select({ id: schema.projets.id, chef: sql<string | null>`coalesce(${schema.projets.referentId}, ${schema.projets.chefProjetId})`, demandeur: schema.projets.demandeParId }).from(schema.projets);
+  const projets = await db.select({ id: schema.projets.id, chef: sql<string | null>`coalesce(${schema.projets.referentId}, ${schema.projets.chefProjetId})`, demandeur: schema.projets.demandeParId, sponsor: schema.projets.sponsorId }).from(schema.projets);
   for (const p of projets) {
     if (p.demandeur && (p.demandeur === a.moi.id || suitPersonne(a, p.demandeur))) ids.add(p.id);
+    // Le sponsor métier voit le projet qu'il porte (sans le gérer).
+    if (p.sponsor === a.moi.id) ids.add(p.id);
     if (a.directeur && p.chef && suitPersonne(a, p.chef)) ids.add(p.id);
   }
   return ids;

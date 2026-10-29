@@ -16,6 +16,7 @@ import type { Champ, Genre, Horaires } from "../lib/modeles";
 import {
   type AnyPgColumn,
   bigserial,
+  bigint,
   boolean,
   customType,
   date,
@@ -127,6 +128,25 @@ export const projets = pgTable("projets", {
   /** Archivé : retiré du portefeuille, toujours lisible (un projet qui a une histoire ne se supprime pas). */
   archiveLe: timestamp("archive_le", { withTimezone: true }),
   archiveParId: uuid("archive_par_id").references((): AnyPgColumn => personnes.id, { onDelete: "set null" }),
+  /** Sponsor métier (décision du 28 octobre 2026) : qui porte le besoin côté métier ; il voit le projet. */
+  sponsorId: uuid("sponsor_id").references((): AnyPgColumn => personnes.id, { onDelete: "set null" }),
+  /** Priorité : « haute », « normale » ou « basse ». */
+  priorite: text().notNull().default("normale"),
+  /**
+   * Budget, minimal (décision du 28 octobre 2026, [à vérifier] : ce que la DPO suit aujourd'hui) : montant prévu,
+   * montant engagé à date, devise, une note, et la date de mise à jour. Vu seulement par qui gère le projet.
+   */
+  budgetPrevu: bigint("budget_prevu", { mode: "number" }),
+  budgetEngage: bigint("budget_engage", { mode: "number" }),
+  budgetDevise: text("budget_devise").notNull().default("HTG"),
+  budgetNote: text("budget_note").notNull().default(""),
+  budgetMajLe: date("budget_maj_le"),
+  /** Clôture : le jour, qui, le bilan, les objectifs (« oui », « en_partie », « non ») et les leçons apprises. */
+  clotureLe: date("cloture_le"),
+  clotureParId: uuid("cloture_par_id").references((): AnyPgColumn => personnes.id, { onDelete: "set null" }),
+  bilanCloture: text("bilan_cloture").notNull().default(""),
+  objectifsAtteints: text("objectifs_atteints").notNull().default(""),
+  leconsApprises: text("lecons_apprises").notNull().default(""),
   creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
   majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -209,8 +229,40 @@ export const taches = pgTable(
     reunionId: uuid("reunion_id").references((): AnyPgColumn => reunions.id, { onDelete: "set null" }),
     /** Le livrable du projet auquel la tâche mène (facultatif : une tâche peut rester hors livrable). */
     livrableId: uuid("livrable_id").references(() => indicateurs.id, { onDelete: "set null" }),
+    /** Priorité : « haute », « normale » ou « basse ». */
+    priorite: text().notNull().default("normale"),
+    /** Occurrence d'une tâche récurrente : la règle qui l'a créée. */
+    recurrenceId: uuid("recurrence_id").references((): AnyPgColumn => tachesRecurrentes.id, { onDelete: "set null" }),
   },
-  (t) => [index("taches_assigne_idx").on(t.assigneId), index("taches_projet_idx").on(t.projetId), index("taches_reunion_idx").on(t.reunionId), index("taches_livrable_idx").on(t.livrableId)],
+  (t) => [index("taches_assigne_idx").on(t.assigneId), index("taches_projet_idx").on(t.projetId), index("taches_reunion_idx").on(t.reunionId), index("taches_livrable_idx").on(t.livrableId), index("taches_recurrence_idx").on(t.recurrenceId)],
+);
+
+/**
+ * Tâches récurrentes (décision du 28 octobre 2026) : une règle (chaque semaine tel jour, chaque mois tel jour)
+ * qui crée la prochaine occurrence quelques jours avant son échéance. Créée depuis une tâche, qui sert de modèle.
+ */
+export const tachesRecurrentes = pgTable(
+  "taches_recurrentes",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    projetId: uuid("projet_id").references(() => projets.id, { onDelete: "cascade" }),
+    livrableId: uuid("livrable_id").references(() => indicateurs.id, { onDelete: "set null" }),
+    titre: text().notNull(),
+    description: text().notNull().default(""),
+    assigneId: uuid("assigne_id").notNull().references(() => personnes.id, { onDelete: "cascade" }),
+    estimationHeures: integer("estimation_heures"),
+    priorite: text().notNull().default("normale"),
+    /** « semaine » (jour : 1 lundi … 5 vendredi) ou « mois » (jour : 1 à 28, ou 31 pour le dernier jour du mois). */
+    frequence: text().notNull(),
+    jour: integer().notNull(),
+    /** L'échéance de la prochaine occurrence à créer. */
+    prochaineLe: date("prochaine_le").notNull(),
+    /** Arrêtée : plus d'occurrence. */
+    arreteeLe: timestamp("arretee_le", { withTimezone: true }),
+    creeParId: uuid("cree_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("taches_recurrentes_prochaine_idx").on(t.prochaineLe)],
 );
 
 /**

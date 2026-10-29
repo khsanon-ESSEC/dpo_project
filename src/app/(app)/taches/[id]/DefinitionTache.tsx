@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { definirTache, type EtatTache } from "../actions";
 import { Icone } from "@/components/Icone";
 import { ChoixPour, externesPermisPour, NOUVELLE_PERSONNE, type PersonneChoix } from "@/components/ChoixPour";
+import { LIBELLE_PRIORITE, PRIORITES } from "@/lib/suivi";
 
 /** Titre, précisions, projet et personne d'une tâche (la réassignation suit la règle d'assignation). */
 export function DefinitionTache({
@@ -12,6 +13,7 @@ export function DefinitionTache({
   description,
   projetId,
   livrableId = "",
+  priorite = "normale",
   livrables = {},
   parLivrable = {},
   assigneId,
@@ -27,6 +29,7 @@ export function DefinitionTache({
   description: string;
   projetId: string;
   livrableId?: string;
+  priorite?: string;
   livrables?: Record<string, { id: string; libelle: string; prevuLe: string | null }[]>;
   parLivrable?: Record<string, string[]>;
   assigneId: string;
@@ -99,6 +102,16 @@ export function DefinitionTache({
       ) : (
         <input type="hidden" name="livrableId" value="" />
       )}
+      <div className="champ" style={{ maxWidth: 220 }}>
+        <label htmlFor="dt-priorite">Priorité</label>
+        <select id="dt-priorite" name="priorite" defaultValue={priorite}>
+          {PRIORITES.map((x) => (
+            <option key={x} value={x}>
+              {LIBELLE_PRIORITE[x]}
+            </option>
+          ))}
+        </select>
+      </div>
       <ChoixPour id="dt-pour" libelle="Confiée à" personnes={personnes} permis={permis} externesPermis={externesPermis} valeur={pourValide} onChange={setPour} />
       <p className="note" style={{ margin: 0 }}>
         Vous pouvez confier une tâche à vous-même, aux personnes que vous suivez, et, sur un projet que vous dirigez (ou pour un livrable dont vous êtes responsable), aux membres de son équipe ; à une personne hors division (autre département, consultant), hors projet ou sur un projet que vous dirigez. Vous suivez alors la tâche pour elle.

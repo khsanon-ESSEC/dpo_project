@@ -10,6 +10,7 @@ import { nomComplet } from "@/lib/regles";
 import { aujourdhui, dateCourte } from "@/lib/dates";
 import { phasesDuProjet } from "@/lib/donnees/risques";
 import { PHASES_TYPES, phaseDepassee, phaseEnCours } from "@/lib/risques";
+import { LIBELLE_PRIORITE, PRIORITES } from "@/lib/suivi";
 import { ajouterUnePhase, deplacerUnePhase, modifierUnePhase, phasesTypes, retirerUnePhase, terminerUnePhase } from "../actions";
 import { LIBELLE_ETAT_LIVRABLE, LIBELLE_STATUT_PROJET, peutGererProjet, projetSupprimable, STATUTS_ACCEPTES } from "@/lib/projets";
 import { ListeFiltrable } from "@/components/ListeFiltrable";
@@ -125,24 +126,42 @@ export default async function PageModifierProjet({ params, searchParams }: { par
                 aide="Obligatoire quand le chef de projet est hors division : il a ici les droits de chef de projet."
               />
             </div>
+            <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+              <ChoixPersonne id="mp-sponsor" name="sponsorId" prefixe="sponsor" libelle="Sponsor métier" personnes={personnes} defaut={p.sponsorId} vide="Aucun" aide="Qui porte le besoin côté métier. Il voit le projet et est prévenu de sa clôture." />
+            </div>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
             <div className="champ" style={{ flex: "1 1 180px" }}>
               <label htmlFor="mp-statut">Statut</label>
-              {demande ? (
+              {demande || p.statut === "finalise" ? (
                 <>
                   <input type="hidden" name="statut" value={p.statut} />
-                  <input id="mp-statut" value={LIBELLE_STATUT_PROJET[p.statut]} disabled />
+                  <input id="mp-statut" value={LIBELLE_STATUT_PROJET[p.statut]} disabled aria-describedby="mp-statut-aide" />
                 </>
               ) : (
-                <select id="mp-statut" name="statut" defaultValue={p.statut}>
-                  {STATUTS_ACCEPTES.map((x) => (
+                <select id="mp-statut" name="statut" defaultValue={p.statut} aria-describedby="mp-statut-aide">
+                  {STATUTS_ACCEPTES.filter((x) => x !== "finalise").map((x) => (
                     <option key={x} value={x}>
                       {LIBELLE_STATUT_PROJET[x]}
                     </option>
                   ))}
                 </select>
               )}
+              {!demande ? (
+                <span className="aide" id="mp-statut-aide">
+                  {p.statut === "finalise" ? "Clôturé : il se rouvre depuis sa fiche." : "Pour finir le projet : « Clôturer le projet », sur sa fiche."}
+                </span>
+              ) : null}
+            </div>
+            <div className="champ" style={{ flex: "1 1 150px" }}>
+              <label htmlFor="mp-priorite">Priorité</label>
+              <select id="mp-priorite" name="priorite" defaultValue={p.priorite}>
+                {PRIORITES.map((x) => (
+                  <option key={x} value={x}>
+                    {LIBELLE_PRIORITE[x]}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>

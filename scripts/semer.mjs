@@ -388,6 +388,28 @@ await sql.begin(async (tx) => {
   await temps("UC", "Maquettes graphiques des écrans de paie", [[-21, 360], [-17, 480, "Écrans de paie"], [-14, 420], [-11, 300, "Retouches après revue"]]);
   await temps("CR", "Jeux de données de test", [[-3, 210, "Dossiers de crédit anonymisés"], [-2, 120]]);
 
+  // ---------- Lot 4 : sponsor métier, priorité, budget, tâche récurrente ----------
+  await tx`update projets set sponsor_id = ${P.ex} where id = ${PJ.UR}`;
+  await tx`update projets set sponsor_id = ${P.ms} where id = ${PJ.CE}`;
+  await tx`update projets set priorite = 'haute' where id in ${tx([PJ.UR, PJ.CE])}`;
+  await tx`update projets set priorite = 'basse' where id = ${PJ.AE}`;
+  for (const [pj, titre, prio] of [
+    ["UR", "Correctifs de sécurité (points 4 à 6)", "haute"],
+    ["UR", "Contre-audit de sécurité (points 4 à 6)", "haute"],
+    ["CR", "Rédaction des procédures Credos", "basse"],
+  ])
+    await tx`update taches set priorite = ${prio} where projet_id = ${PJ[pj]} and titre = ${titre}`;
+  // Budgets : montants fictifs de démonstration [à vérifier : ce que la DPO suit aujourd'hui].
+  await tx`update projets set budget_prevu = 12500000, budget_engage = 11800000, budget_devise = 'HTG', budget_note = 'Prestataire et contre-audit de sécurité', budget_maj_le = ${jour(-7)} where id = ${PJ.UR}`;
+  await tx`update projets set budget_prevu = 18000000, budget_engage = 7200000, budget_devise = 'HTG', budget_maj_le = ${jour(-14)} where id = ${PJ.UC}`;
+  // Le point hebdomadaire avec la DTI revient chaque mercredi (la tâche de la semaine prochaine est la première).
+  {
+    const [t] = await tx`select id, titre, assigne_id, echeance, livrable_id from taches where projet_id = ${PJ.UN} and titre = 'Point hebdomadaire avec la DTI'`;
+    const [r] = await tx`insert into taches_recurrentes (projet_id, livrable_id, titre, assigne_id, estimation_heures, frequence, jour, prochaine_le, cree_par_id, cree_le)
+      values (${PJ.UN}, ${t.livrable_id}, ${t.titre}, ${t.assigne_id}, 1, 'semaine', 3, ${jour(16)}, ${P.lp}, ${moment(-1, 9)}) returning id`;
+    await tx`update taches set recurrence_id = ${r.id} where id = ${t.id}`;
+  }
+
   // ---------- Tâches terminées des semaines passées (pour le bilan semaine sur semaine) ----------
   // Tirage déterministe : mêmes données à chaque semis.
   let graine = 7;

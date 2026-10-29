@@ -260,6 +260,13 @@ Nouvelles lectures de données, vérifiées à la lecture du code et par des tes
 - **Phases** : ajoutées, modifiées, déplacées, terminées ou retirées seulement par ceux qui gèrent le projet ; dates cohérentes exigées (la fin suit le début). **[vérifié par tests]**
 - **Temps passé** : noté seulement par qui peut modifier la tâche (mêmes règles que la tâche), compté pour la personne de la tâche ; pas de date future ni de plus de 60 jours ; durée de 5 minutes à 24 heures ; retiré par son auteur ou qui peut modifier la tâche. **[vérifié par tests]**
 
+## Clôture, sponsor, budget, priorité, tâches récurrentes (28 octobre 2026, nuit)
+
+- **Clôture et réouverture** : réservées à ceux qui gèrent le projet, sur un projet que la personne voit ; date de clôture contrôlée (pas future, pas avant l'entrée du projet, au plus un an en arrière) ; un projet clôturé ne reçoit plus de tâches. Le statut « finalisé » ne s'obtient plus par le formulaire de modification. **[vérifié par tests]**
+- **Budget** : lu et modifié seulement par ceux qui gèrent le projet (la carte n'est pas envoyée aux autres) ; montants bornés (0 à 10¹³), devise limitée à HTG et USD, note raccourcie et affichée comme texte. **[vérifié par tests]**
+- **Sponsor métier** : il voit le projet qu'il porte (ajouté aux projets visibles), sans droit de gestion ; une personne hors division sans accès n'est pas prévenue. **[vérifié par tests]**
+- **Tâches récurrentes** : créer ou arrêter une répétition demande de pouvoir modifier la tâche (ou d'avoir créé la règle, pour l'arrêter) ; les occurrences sont créées par le serveur pour la même personne et le même projet que la tâche d'origine, et une seule fois même si plusieurs copies de l'application tournent (réservation en base). **[vérifié par tests]**
+
 ## Recommandations restantes
 
 - **[déduction] Revue externe** : faire réaliser la revue de sécurité selon la politique de la banque (Mandiant) avant la mise en service — c'est elle qui fait foi.

@@ -107,6 +107,8 @@ export async function enregistrerProjet(projetId: string, form: FormData) {
       dateFinPrevue: champ("dateFinPrevue"),
       dateLancementPrevue: champ("dateLancementPrevue"),
       motifReport: champ("motifReport"),
+      sponsorId: form.has("sponsorId") ? ((await externeDuFormulaire(form, "sponsor", u.id)) ?? champ("sponsorId")) : undefined,
+      priorite: form.has("priorite") ? champ("priorite") : undefined,
     },
     u.id,
   );

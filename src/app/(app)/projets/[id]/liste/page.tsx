@@ -4,12 +4,14 @@ import { heuresDe, heuresTexte } from "@/lib/charge";
 import { chargerVueProjet, cheminVue, EnTeteVue, LIBELLE_STATUT } from "../commun";
 import { LienPersonne } from "@/components/Liens";
 import { choixDeLivrables } from "@/lib/donnees/livrables";
+import { LIBELLE_PRIORITE, priorite, PRIORITES, rangPriorite } from "@/lib/suivi";
+import { EtiquettePriorite } from "@/components/EtiquettePriorite";
 
 export const metadata: Metadata = { title: "Tâches du projet" };
 
 const ORDRE = ["en_cours", "a_faire", "bloquee", "faite"] as const;
 const TITRE_GROUPE: Record<string, string> = { en_cours: "En cours", a_faire: "À faire", bloquee: "Bloquées", faite: "Faites" };
-const TRIS = { echeance: "Échéance", livrable: "Livrable", personne: "Personne", estimation: "Temps estimé" } as const;
+const TRIS = { echeance: "Échéance", priorite: "Priorité", livrable: "Livrable", personne: "Personne", estimation: "Temps estimé" } as const;
 
 export default async function PageListe({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ pour?: string; tri?: string; livrable?: string }> }) {
   const { id } = await params;
@@ -29,7 +31,9 @@ export default async function PageListe({ params, searchParams }: { params: Prom
       ? a.personne.localeCompare(b.personne, "fr") || (a.echeance ?? "9").localeCompare(b.echeance ?? "9")
       : tri === "estimation"
         ? (b.estimationHeures ?? 0) - (a.estimationHeures ?? 0)
-        : Number(b.retard) - Number(a.retard) || (a.echeance ?? "9").localeCompare(b.echeance ?? "9"),
+        : tri === "priorite"
+          ? rangPriorite(a.priorite) - rangPriorite(b.priorite) || Number(b.retard) - Number(a.retard) || (a.echeance ?? "9").localeCompare(b.echeance ?? "9")
+          : Number(b.retard) - Number(a.retard) || (a.echeance ?? "9").localeCompare(b.echeance ?? "9"),
   );
   const ouvertes = taches.filter((t) => t.statut !== "faite");
   // Le tri choisit aussi le regroupement, pour que le changement se voie : par état (échéance),
@@ -48,6 +52,11 @@ export default async function PageListe({ params, searchParams }: { params: Prom
             taches: taches.filter((t) => t.assigneId === pid).sort((a, b) => ORDRE.indexOf(a.statut) - ORDRE.indexOf(b.statut) || (a.echeance ?? "9").localeCompare(b.echeance ?? "9")),
           }))
           .filter((g) => g.taches.length)
+      : tri === "priorite"
+      ? [
+          ...PRIORITES.map((pr) => ({ cle: pr, titre: `Priorité ${LIBELLE_PRIORITE[pr].toLowerCase()}`, taches: ouvertes.filter((t) => priorite(t.priorite) === pr) })),
+          { cle: "faites", titre: "Faites", taches: taches.filter((t) => t.statut === "faite") },
+        ].filter((g) => g.taches.length)
       : tri === "estimation"
         ? [
             { cle: "ouvertes", titre: "Tâches ouvertes, de la plus longue à la plus courte", taches: ouvertes },
@@ -142,7 +151,10 @@ export default async function PageListe({ params, searchParams }: { params: Prom
                     const e = echeanceRelative(t.echeance, jour);
                     return (
                       <tr key={t.id} style={t.statut === "faite" ? { color: "var(--discret)" } : undefined}>
-                        <td>{t.ouvrable ? <a href={`/taches/${t.id}?retour=${retour}`}>{t.titre}</a> : t.titre}</td>
+                        <td>
+                          {t.ouvrable ? <a href={`/taches/${t.id}?retour=${retour}`}>{t.titre}</a> : t.titre}
+                          <EtiquettePriorite priorite={t.priorite} faite={t.statut === "faite"} recurrente={!!t.recurrenceId} />
+                        </td>
                         <td style={{ whiteSpace: "nowrap" }}>
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
                             <span className="mono mono--petit" aria-hidden="true">

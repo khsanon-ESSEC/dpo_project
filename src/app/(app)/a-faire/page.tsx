@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { exigerUtilisateur } from "@/lib/auth/session";
+import { EtiquettePriorite } from "@/components/EtiquettePriorite";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { aujourdhui, dateCourte, echeanceRelative, jourComplet } from "@/lib/dates";
 import { mesLivrables } from "@/lib/donnees/livrables";
@@ -106,6 +107,7 @@ export default async function PageAFaire({ searchParams }: { searchParams: Promi
                             {t.titre}
                           </a>
                           <span className="rangee__sous">
+                            <EtiquettePriorite priorite={t.priorite} faite={t.statut === "faite"} recurrente={!!t.recurrenceId} debut />
                             {t.projetId ? (
                               <LienProjet id={t.projetId} visible={voit(t.projetId)}>
                                 {t.projetTitre}

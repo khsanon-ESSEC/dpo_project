@@ -21,7 +21,10 @@ import { enchainementDe, precedentesPossibles } from "@/lib/donnees/dependances"
 import { ListeFiltrable } from "@/components/ListeFiltrable";
 import { tousLesProjetsActifs } from "@/lib/donnees/projets";
 import { tacheSupprimable, apresLeLivrable } from "@/lib/projets";
-import { ajouterPrecedente, annuler, noterTempsPasse, retablir, retirerPrecedente, retirerTempsPasse, supprimer } from "../actions";
+import { ajouterPrecedente, annuler, arreterLaRepetition, noterTempsPasse, repeterLaTache, retablir, retirerPrecedente, retirerTempsPasse, supprimer } from "../actions";
+import { regleDe } from "@/lib/donnees/recurrence";
+import { DELAI_CREATION, JOURS_MOIS, JOURS_SEMAINE, rythmeTexte, type Frequence } from "@/lib/recurrence";
+import { LIBELLE_PRIORITE, priorite as lirePriorite } from "@/lib/suivi";
 import { JOURS_RETRO, tempsDeLaTache } from "@/lib/donnees/temps";
 import { dureeTexte } from "@/lib/projets";
 import { ajouterJours } from "@/lib/dates";
@@ -30,9 +33,9 @@ export const metadata: Metadata = { title: "Tâche" };
 
 const LIBELLE: Record<string, string> = { a_faire: "À faire", en_cours: "En cours", bloquee: "Bloquée", faite: "Faite" };
 
-export default async function PageTache({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ statut?: string; retour?: string; erreur?: string; temps?: string }> }) {
+export default async function PageTache({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ statut?: string; retour?: string; erreur?: string; temps?: string; repetition?: string }> }) {
   const { id } = await params;
-  const { statut: statutDemande, retour: retourDemande, erreur, temps: tempsFait } = await searchParams;
+  const { statut: statutDemande, retour: retourDemande, erreur, temps: tempsFait, repetition: repetitionFaite } = await searchParams;
   const retour = retourValide(retourDemande);
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
@@ -56,6 +59,11 @@ export default async function PageTache({ params, searchParams }: { params: Prom
   const possibles = !t.annuleeLe && t.projetId && peutModifierTache(a, t) ? await precedentesPossibles(t) : [];
   // Temps passé : ce qui a été noté, comparé à l'estimation.
   const temps = await tempsDeLaTache(t.id);
+  // Répétition : la règle de la tâche (si elle se répète), son rythme ; proposé par défaut : le jour de l'échéance.
+  const regle = await regleDe(t);
+  const prio = lirePriorite(t.priorite);
+  const jourEcheance = t.echeance ? new Date(`${t.echeance}T12:00:00Z`).getUTCDay() : 0;
+  const rythmeParDefaut = jourEcheance >= 1 && jourEcheance <= 5 ? `semaine:${jourEcheance}` : "semaine:1";
   const actuel = org.personnes.get(t.assigneId)!;
   if (!personnes.some((x) => x.id === t.assigneId)) personnes.push({ id: t.assigneId, nom: nomComplet(actuel), externe: actuel.externe, organisation: actuel.organisation });
   // « @ » ou « pour … » dans la ligne de mise à jour : les personnes à qui l'on peut confier cette tâche
@@ -75,7 +83,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
     : [];
 
   const decrire = (ev: (typeof evenements)[number]) => {
-    if (ev.type === "creation") return "Créée";
+    if (ev.type === "creation") return ev.note ? `Créée · ${ev.note.toLowerCase()}` : "Créée";
     if (ev.type === "statut") return `${LIBELLE[ev.apres ?? ""] ?? ev.apres}${ev.note ? ` : ${ev.note}` : ""}`;
     if (ev.type === "echeance") return `Échéance déplacée au ${dateCourte(ev.apres)}`;
     if (ev.type === "titre") return `Renommée : « ${ev.apres} »`;
@@ -89,6 +97,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
     if (ev.type === "retablie") return "Rétablie";
     if (ev.type === "relance") return `Relance${ev.note ? ` : « ${ev.note} »` : ""}`;
     if (ev.type === "relance_annulee") return "Relance annulée";
+    if (ev.type === "priorite") return `Priorité : ${LIBELLE_PRIORITE[lirePriorite(ev.apres)].toLowerCase()}`;
     return ev.note ?? "";
   };
 
@@ -121,6 +130,12 @@ export default async function PageTache({ params, searchParams }: { params: Prom
             <dt>chef de projet</dt>
             <dd style={{ fontSize: 22, lineHeight: "28px", fontWeight: 300 }}>{chef ? <LienPersonne id={chef.id}>{nomComplet(chef)}</LienPersonne> : "—"}</dd>
           </div>
+          {prio !== "normale" ? (
+            <div className={`chiffre${prio === "haute" ? " chiffre--veille" : ""}`}>
+              <dt>priorité</dt>
+              <dd style={{ fontSize: 22, lineHeight: "28px", fontWeight: 300 }}>{LIBELLE_PRIORITE[prio]}</dd>
+            </div>
+          ) : null}
           {t.estimationHeures ? (
             <div className="chiffre">
               <dt>temps estimé</dt>
@@ -396,6 +411,74 @@ export default async function PageTache({ params, searchParams }: { params: Prom
             ) : null}
           </section>
         ) : null}
+        {!t.annuleeLe && (regle || modifiable) ? (
+          <section className="carte" id="repetition" aria-labelledby="t-repetition" style={{ scrollMarginTop: 80, display: "flex", flexDirection: "column", gap: 10 }}>
+            <h2 id="t-repetition" className="carte__titre" style={{ margin: 0 }}>
+              Répétition{regle && !regle.arreteeLe ? ` · ${rythmeTexte(regle.frequence, regle.jour)}` : ""}
+            </h2>
+            {repetitionFaite === "active" ? (
+              <p className="succes" role="status" style={{ margin: 0 }}>
+                La tâche se répète : la prochaine sera créée {DELAI_CREATION[(regle?.frequence ?? "semaine") as Frequence]} jours avant son échéance.
+              </p>
+            ) : repetitionFaite === "arretee" ? (
+              <p className="succes" role="status" style={{ margin: 0 }}>
+                Répétition arrêtée : les tâches déjà créées restent.
+              </p>
+            ) : null}
+            {regle && !regle.arreteeLe ? (
+              <>
+                <p className="note" style={{ margin: 0 }}>
+                  Prochaine échéance le {dateCourte(regle.prochaineLe)} ; la tâche sera créée vers le {dateCourte(ajouterJours(regle.prochaineLe, -DELAI_CREATION[regle.frequence as Frequence]))}, pour {regle.assigneId === u.id ? "vous" : nomComplet(org.personnes.get(regle.assigneId) ?? { prenom: "", nom: "?" })}. Une échéance qui tombe un samedi ou un dimanche passe au vendredi.
+                </p>
+                {modifiable || regle.creeParId === u.id ? (
+                  <form action={arreterLaRepetition.bind(null, t.id)}>
+                    <button type="submit" className="bouton-mini">
+                      Arrêter la répétition
+                    </button>
+                  </form>
+                ) : null}
+              </>
+            ) : (
+              <>
+                {regle?.arreteeLe ? (
+                  <p className="note" style={{ margin: 0 }}>
+                    Cette tâche se répétait ({rythmeTexte(regle.frequence, regle.jour)}) ; la répétition est arrêtée.
+                  </p>
+                ) : (
+                  <p className="note" style={{ margin: 0 }}>
+                    Une tâche qui revient (point hebdomadaire, rapport mensuel) : elle sera recréée à chaque fois, quelques jours avant son échéance.
+                  </p>
+                )}
+                {modifiable ? (
+                  <form action={repeterLaTache.bind(null, t.id)} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                    <div className="champ" style={{ flex: "1 1 220px", minWidth: 0 }}>
+                      <label htmlFor="rep-rythme">Répéter</label>
+                      <select id="rep-rythme" name="rythme" defaultValue={rythmeParDefaut}>
+                        <optgroup label="Chaque semaine">
+                          {JOURS_SEMAINE.map((j, i) => (
+                            <option key={j} value={`semaine:${i + 1}`}>
+                              Chaque {j}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Chaque mois">
+                          {JOURS_MOIS.map((j) => (
+                            <option key={j} value={`mois:${j}`}>
+                              {j === 31 ? "Le dernier jour du mois" : `Le ${j === 1 ? "1er" : j} du mois`}
+                            </option>
+                          ))}
+                        </optgroup>
+                      </select>
+                    </div>
+                    <button type="submit" className="bouton-contour">
+                      Répéter
+                    </button>
+                  </form>
+                ) : null}
+              </>
+            )}
+          </section>
+        ) : null}
         {t.annuleeLe ? null : (
           <DefinitionTache
             key={`def-${t.majLe.toISOString()}`}
@@ -404,6 +487,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
             description={t.description}
             projetId={t.projetId ?? ""}
             livrableId={t.livrableId ?? ""}
+            priorite={t.priorite}
             livrables={livrables}
             parLivrable={parLivrable}
             assigneId={t.assigneId}

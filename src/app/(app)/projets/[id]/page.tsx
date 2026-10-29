@@ -19,10 +19,12 @@ import { Icone } from "@/components/Icone";
 import { LienPersonne } from "@/components/Liens";
 import { ChoixPersonne } from "@/components/ChoixPersonne";
 import { ListeFiltrable } from "@/components/ListeFiltrable";
-import { agirLivrable, corrigerDecision, enregistrerUnRisque, mettreAJourProjet, noterUneDecision, retirerUneDecision, retirerUnRisque, signalerUnRisque, statutDuRisque, terminerUnePhase } from "./actions";
+import { agirLivrable, cloturerLeProjet, corrigerDecision, enregistrerLeBudget, rouvrirLeProjet, enregistrerUnRisque, mettreAJourProjet, noterUneDecision, retirerUneDecision, retirerUnRisque, signalerUnRisque, statutDuRisque, terminerUnePhase } from "./actions";
 import { decisionsDuProjet, instancesConnues } from "@/lib/donnees/decisions";
 import { phasesDuProjet, risquesDuProjet } from "@/lib/donnees/risques";
 import { tempsDuProjet } from "@/lib/donnees/temps";
+import { etatAvantCloture } from "@/lib/donnees/cloture";
+import { DEVISES, LIBELLE_OBJECTIFS, LIBELLE_PRIORITE, montantTexte, niveauBudget, OBJECTIFS, partEngagee, peutEtreCloture, pointsAvantCloture, priorite as lirePriorite, type Objectifs } from "@/lib/suivi";
 import { criticite, gravite, LIBELLE_GRAVITE, LIBELLE_IMPACT, LIBELLE_PROBABILITE, LIBELLE_STATUT_RISQUE, phaseDepassee, phaseEnCours, type Niveau, type StatutRisque } from "@/lib/risques";
 import { dureeTexte } from "@/lib/projets";
 import { livrablesDuProjet } from "@/lib/donnees/livrables";
@@ -46,9 +48,9 @@ const SANTE = {
   dans_les_temps: { texte: "Dans les temps", classe: "ton-ok" },
 } as const;
 
-export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string; decision?: string; risque?: string }> }) {
+export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string; decision?: string; risque?: string; cloture?: string; budget?: string }> }) {
   const { id } = await params;
-  const { propose, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut, decision: decisionBrut, risque: risqueBrut } = await searchParams;
+  const { propose, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut, decision: decisionBrut, risque: risqueBrut, cloture: clotureFait, budget: budgetFait } = await searchParams;
   const livrableFait = livrableBrut === "pret" || livrableBrut === "valider" || livrableBrut === "renvoyer" || livrableBrut === "rouvrir" ? livrableBrut : null;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
@@ -92,6 +94,14 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const phaseCourante = phaseEnCours(phases, jour);
   const nomPhase = new Map(phases.map((ph) => [ph.id, ph.nom]));
   const risquesOuverts = risques.filter((r) => r.statut === "ouvert");
+  // Clôture : ce qui reste ouvert (signalé à qui peut clôturer) ; budget : vu par qui gère le projet.
+  const etatCloture = peutModifier && peutEtreCloture(p) ? await etatAvantCloture(id) : null;
+  const pointsCloture = etatCloture ? pointsAvantCloture(etatCloture) : [];
+  const finalise = p.statut === "finalise";
+  const prio = lirePriorite(p.priorite);
+  const nivBudget = niveauBudget(p.budgetPrevu, p.budgetEngage);
+  const partBudget = partEngagee(p.budgetPrevu, p.budgetEngage);
+  const sponsorP = p.sponsorId ? org.personnes.get(p.sponsorId) : undefined;
   const risqueFait = risqueBrut ? ({ note: "Risque noté au registre.", modifie: "Risque mis à jour.", ouvert: "Risque rouvert.", maitrise: "Risque marqué maîtrisé.", clos: "Risque clos.", retire: "Risque retiré du registre." } as Record<string, string>)[risqueBrut] ?? null : null;
   const decisionFaite = decisionBrut === "notee" ? "Décision notée au registre." : decisionBrut === "corrigee" ? "Décision corrigée." : decisionBrut === "retiree" ? "Décision retirée du registre." : null;
   const valides = lv.livrables.filter((l) => l.etat === "atteint").length;
@@ -359,7 +369,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   return (
     <>
       <Bandeau
-        surtitre={[demande ? "Demande de projet" : refuse ? "Demande refusée" : p.strategique ? "Stratégique" : "Projet", p.division ? p.division : null, p.archiveLe ? "Archivé" : null, actif || p.archiveLe ? LIBELLE_STATUT_PROJET[p.statut] : null, p.programme].filter(Boolean).join(" · ")}
+        surtitre={[demande ? "Demande de projet" : refuse ? "Demande refusée" : p.strategique ? "Stratégique" : "Projet", p.division ? p.division : null, p.archiveLe ? "Archivé" : null, actif || p.archiveLe ? LIBELLE_STATUT_PROJET[p.statut] : null, actif && prio !== "normale" ? `Priorité ${LIBELLE_PRIORITE[prio].toLowerCase()}` : null, p.programme].filter(Boolean).join(" · ")}
         titre={p.titre}
         retour={
           <a href="/projets" className="retour">
@@ -589,6 +599,51 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
         </div>
         <div className="colonnes colonnes--tablette">
           <div className="colonne-large">
+            {finalise ? (
+              <section className="carte cloture" id="cloture" aria-labelledby="p-cloture" style={{ scrollMarginTop: 80 }}>
+                <h2 id="p-cloture" className="carte__titre">
+                  Projet clôturé{p.clotureLe ? ` le ${dateLongue(p.clotureLe)}` : ""}
+                  {p.clotureParId && nom(p.clotureParId) ? <span className="carte__titre-sous"> par {nom(p.clotureParId)}</span> : null}
+                </h2>
+                {clotureFait === "faite" ? (
+                  <p className="succes" role="status" style={{ margin: "8px 0" }}>
+                    Le projet est clôturé. {p.sponsorId ? "L'équipe et le sponsor sont prévenus." : "L'équipe est prévenue."}
+                  </p>
+                ) : null}
+                {p.objectifsAtteints ? (
+                  <p className={`cloture__objectifs cloture__objectifs--${p.objectifsAtteints}`}>
+                    Objectifs : {LIBELLE_OBJECTIFS[p.objectifsAtteints as Objectifs] ?? p.objectifsAtteints}
+                  </p>
+                ) : null}
+                {p.bilanCloture ? (
+                  <>
+                    <h3 className="sante-barre__titre" style={{ margin: "12px 0 4px" }}>
+                      Bilan
+                    </h3>
+                    <p className="cloture__texte">{p.bilanCloture}</p>
+                  </>
+                ) : null}
+                {p.leconsApprises ? (
+                  <>
+                    <h3 className="sante-barre__titre" style={{ margin: "12px 0 4px" }}>
+                      Leçons apprises
+                    </h3>
+                    <p className="cloture__texte">{p.leconsApprises}</p>
+                  </>
+                ) : null}
+                {peutModifier && !p.archiveLe ? (
+                  <form action={rouvrirLeProjet.bind(null, p.id)} style={{ marginTop: 12 }}>
+                    <button type="submit" className="bouton-mini">
+                      Rouvrir le projet
+                    </button>
+                  </form>
+                ) : null}
+              </section>
+            ) : clotureFait === "rouvert" ? (
+              <p className="succes" role="status" style={{ margin: 0 }}>
+                Le projet est rouvert : il repart « en cours ».
+              </p>
+            ) : null}
             {phases.length ? (
               <section className="carte phases-projet" id="phases" aria-labelledby="p-phases" style={{ scrollMarginTop: 80 }}>
                 <div className="carte__entete">
@@ -968,6 +1023,62 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 </ul>
               </section>
             ) : null}
+            {etatCloture ? (
+              <section className="carte" id="cloture" aria-labelledby="p-cloturer" style={{ scrollMarginTop: 80 }}>
+                <details className="cloture__details" open={clotureFait === "ouvrir" ? true : undefined}>
+                  <summary className="cloture__resume">
+                    <h2 id="p-cloturer" className="carte__titre" style={{ margin: 0 }}>
+                      Clôturer le projet
+                    </h2>
+                    <span className="note" style={{ margin: 0 }}>
+                      Le bilan, les objectifs, les leçons apprises ; le projet passe « finalisé ».
+                    </span>
+                  </summary>
+                  {pointsCloture.length ? (
+                    <div className="cloture__points" role="note">
+                      <p style={{ margin: "0 0 4px", fontWeight: 500 }}>Encore ouvert :</p>
+                      <ul>
+                        {pointsCloture.map((x) => (
+                          <li key={x}>{x}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="note" style={{ margin: "10px 0" }}>
+                      Plus rien d&apos;ouvert : tâches faites, livrables validés.
+                    </p>
+                  )}
+                  <form action={cloturerLeProjet.bind(null, p.id)} className="decision__form">
+                    <div className="decision__form-ligne">
+                      <div className="champ">
+                        <label htmlFor="cl-le">Date de clôture</label>
+                        <input id="cl-le" name="clotureLe" type="date" defaultValue={jour} max={jour} min={p.dateEntree ?? undefined} required />
+                      </div>
+                      <fieldset className="segmente" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+                        <legend style={{ padding: 0, marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Objectifs du projet</legend>
+                        {OBJECTIFS.map((o) => (
+                          <label key={o} className="segmente__choix">
+                            <input type="radio" name="objectifs" value={o} required defaultChecked={p.objectifsAtteints === o} />
+                            <span>{LIBELLE_OBJECTIFS[o]}</span>
+                          </label>
+                        ))}
+                      </fieldset>
+                    </div>
+                    <div className="champ">
+                      <label htmlFor="cl-bilan">Bilan</label>
+                      <textarea id="cl-bilan" name="bilan" rows={4} required minLength={10} maxLength={4000} defaultValue={p.bilanCloture} placeholder="Ce qui a été livré, ce qui ne l'a pas été, l'écart avec ce qui était prévu (dates, périmètre)." />
+                    </div>
+                    <div className="champ">
+                      <label htmlFor="cl-lecons">Leçons apprises (facultatif)</label>
+                      <textarea id="cl-lecons" name="lecons" rows={3} maxLength={4000} defaultValue={p.leconsApprises} placeholder="Ce qu'on referait, ce qu'on éviterait : elles serviront aux prochains projets." />
+                    </div>
+                    <button type="submit" className="bouton-contour" style={{ alignSelf: "flex-start" }}>
+                      <Icone nom="coche" taille={16} /> Clôturer le projet
+                    </button>
+                  </form>
+                </details>
+              </section>
+            ) : null}
           </div>
 
           <div className="colonne-etroite">
@@ -1000,6 +1111,78 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                 </div>
               ) : null}
             </section>
+
+            {peutModifier && actif ? (
+              <section className="carte budget" id="budget" aria-labelledby="p-budget" style={{ scrollMarginTop: 80 }}>
+                <h2 id="p-budget" className="carte__titre">
+                  Budget
+                </h2>
+                {budgetFait ? (
+                  <p className="succes" role="status" style={{ margin: "8px 0" }}>
+                    Budget enregistré.
+                  </p>
+                ) : null}
+                {p.budgetPrevu !== null || p.budgetEngage !== null ? (
+                  <>
+                    <dl className="budget__chiffres">
+                      <div>
+                        <dt>Prévu</dt>
+                        <dd>{p.budgetPrevu !== null ? montantTexte(p.budgetPrevu, p.budgetDevise) : "—"}</dd>
+                      </div>
+                      <div>
+                        <dt>Engagé{partBudget !== null ? ` · ${partBudget} %` : ""}</dt>
+                        <dd className={nivBudget === "depasse" ? "ton-retard" : nivBudget === "attention" ? "ton-veille" : undefined}>{p.budgetEngage !== null ? montantTexte(p.budgetEngage, p.budgetDevise) : "—"}</dd>
+                      </div>
+                    </dl>
+                    {partBudget !== null ? (
+                      <div className="temps-jauge" aria-hidden="true">
+                        <span className={`temps-jauge__plein${nivBudget === "depasse" ? " temps-jauge__plein--retard" : nivBudget === "attention" ? " temps-jauge__plein--depasse" : ""}`} style={{ width: `${Math.min(100, partBudget)}%` }} />
+                      </div>
+                    ) : null}
+                    {nivBudget === "depasse" ? <p className="livrable__alerte" style={{ marginLeft: 0 }}>Budget dépassé de {montantTexte((p.budgetEngage ?? 0) - (p.budgetPrevu ?? 0), p.budgetDevise)}.</p> : null}
+                    {p.budgetNote ? <p className="note" style={{ margin: "4px 0 0" }}>{p.budgetNote}</p> : null}
+                    {p.budgetMajLe ? <p className="note" style={{ margin: "4px 0 0" }}>Mis à jour le {dateCourte(p.budgetMajLe)}</p> : null}
+                  </>
+                ) : (
+                  <p className="note" style={{ margin: "4px 0 8px" }}>Pas de budget noté. Visible seulement par ceux qui gèrent le projet.</p>
+                )}
+                <details className="decision__corriger">
+                  <summary className="bouton-mini">{p.budgetPrevu === null && p.budgetEngage === null ? "Noter le budget" : "Mettre à jour"}</summary>
+                  <form action={enregistrerLeBudget.bind(null, p.id)} className="decision__form">
+                    <div className="decision__form-ligne">
+                      <div className="champ">
+                        <label htmlFor="bu-prevu">Prévu</label>
+                        <input id="bu-prevu" name="prevu" inputMode="decimal" maxLength={24} defaultValue={p.budgetPrevu !== null ? String(p.budgetPrevu) : ""} placeholder="2 500 000" />
+                      </div>
+                      <div className="champ">
+                        <label htmlFor="bu-engage">Engagé à ce jour</label>
+                        <input id="bu-engage" name="engage" inputMode="decimal" maxLength={24} defaultValue={p.budgetEngage !== null ? String(p.budgetEngage) : ""} placeholder="1 200 000" />
+                      </div>
+                    </div>
+                    <div className="decision__form-ligne">
+                      <div className="champ">
+                        <label htmlFor="bu-devise">Devise</label>
+                        <select id="bu-devise" name="devise" defaultValue={p.budgetDevise}>
+                          {DEVISES.map((d) => (
+                            <option key={d} value={d}>
+                              {d === "HTG" ? "Gourdes (HTG)" : "Dollars (USD)"}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="champ">
+                        <label htmlFor="bu-note">Note (facultatif)</label>
+                        <input id="bu-note" name="note" maxLength={500} defaultValue={p.budgetNote} placeholder="Ex. : hors licences, payées par la DTI" />
+                      </div>
+                    </div>
+                    <span className="aide">« 2 500 000 », « 2,5 M » ou « 800 k ». Laisser vide ce qu&apos;on ne sait pas.</span>
+                    <button type="submit" className="bouton-contour" style={{ alignSelf: "flex-start" }}>
+                      <Icone nom="coche" taille={16} /> Enregistrer
+                    </button>
+                  </form>
+                </details>
+              </section>
+            ) : null}
 
             {peutModifier && actif ? (
               <section className="carte" aria-labelledby="p-maj">
@@ -1097,6 +1280,16 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                     </span>
                     <span className="rangee__meta" style={{ fontSize: 12 }}>
                       {ouvertesParPersonne.get(referentP.id) ?? ""}
+                    </span>
+                  </li>
+                ) : null}
+                {sponsorP ? (
+                  <li className="rangee" style={{ minHeight: 52 }}>
+                    <span className="rangee__texte">
+                      <span className="rangee__titre">
+                        <LienPersonne id={sponsorP.id}>{nomComplet(sponsorP)}</LienPersonne>
+                      </span>
+                      <span className="rangee__sous">Sponsor métier{sponsorP.externe && sponsorP.organisation ? ` · ${sponsorP.organisation}` : ""}</span>
                     </span>
                   </li>
                 ) : null}

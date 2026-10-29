@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
+import { LIBELLE_PRIORITE, PRIORITES } from "@/lib/suivi";
 import { creerTache, type EtatNouvelleTache } from "../actions";
 import { dateCourte, lundiDe } from "@/lib/dates";
 import { ChoixPour, externesPermisPour, NOUVELLE_PERSONNE, type PersonneChoix } from "@/components/ChoixPour";
@@ -156,6 +157,16 @@ export function FormulaireNouvelleTache({
           </span>
         </div>
       ) : null}
+      <div className="champ" style={{ maxWidth: 220 }}>
+        <label htmlFor="priorite">Priorité</label>
+        <select id="priorite" name="priorite" defaultValue="normale">
+          {PRIORITES.map((x) => (
+            <option key={x} value={x}>
+              {LIBELLE_PRIORITE[x]}
+            </option>
+          ))}
+        </select>
+      </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         <ChoixPour id="assigneId" personnes={personnes} permis={permis} externesPermis={externesPermis} valeur={pourValide} onChange={setPour} />
         {ind && n ? (

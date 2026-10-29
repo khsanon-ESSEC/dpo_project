@@ -7762,3 +7762,117 @@ a.pastille-rapport:hover {
   background: var(--veille-point);
   color: var(--encre-or, #3c2a08);
 }
+
+/* ---------------------------------------------------------------------------
+   Lot 4 : priorité, tâches récurrentes, clôture, budget (28 octobre 2026)
+   --------------------------------------------------------------------------- */
+.etiquette-priorite,
+.etiquette-repetee {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 17px;
+  font-weight: 600;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+.etiquette-priorite--debut,
+.etiquette-repetee.etiquette-priorite--debut {
+  margin-left: 0;
+  margin-right: 6px;
+}
+.etiquette-priorite--haute {
+  color: var(--encre-or);
+  background: var(--veille-point);
+}
+.etiquette-priorite--basse {
+  color: var(--discret);
+  background: var(--piste);
+}
+.etiquette-repetee {
+  font-weight: 500;
+  color: var(--discret);
+  border: 1px solid var(--filet-fort);
+  padding: 0 5px;
+  line-height: 15px;
+}
+.temps-jauge__plein--retard {
+  background: var(--retard-point);
+}
+/* Budget : deux montants côte à côte. */
+.budget__chiffres {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 8px 0 10px;
+}
+.budget__chiffres dt {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--discret);
+}
+.budget__chiffres dd {
+  margin: 2px 0 0;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+}
+/* Clôture : le bilan sur la fiche, et le formulaire replié. */
+.cloture {
+  box-shadow: inset 3px 0 0 var(--ok-point);
+}
+.cloture__objectifs {
+  display: inline-block;
+  margin: 8px 0 0;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--ok-point);
+}
+.cloture__objectifs--en_partie {
+  color: var(--encre-or);
+  background: var(--veille-point);
+}
+.cloture__objectifs--non {
+  background: var(--retard-point);
+}
+.cloture__texte {
+  margin: 0;
+  white-space: pre-line;
+  font-size: 15px;
+  line-height: 22px;
+}
+.cloture__resume {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  list-style: none;
+}
+.cloture__resume::-webkit-details-marker {
+  display: none;
+}
+.cloture__resume .carte__titre::after {
+  content: " ▸";
+  color: var(--discret);
+}
+.cloture__details[open] .cloture__resume .carte__titre::after {
+  content: " ▾";
+}
+.cloture__points {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--veille-point) 14%, var(--surface));
+  font-size: 13px;
+  line-height: 19px;
+}
+.cloture__points ul {
+  margin: 0;
+  padding-left: 18px;
+}
