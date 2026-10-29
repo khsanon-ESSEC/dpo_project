@@ -343,3 +343,53 @@ export async function moisDesRapports(): Promise<string[]> {
   const l = await db.select({ mois: schema.rapportsConseil.mois }).from(schema.rapportsConseil).where(eq(schema.rapportsConseil.genre, "mensuel")).orderBy(asc(schema.rapportsConseil.mois));
   return l.map((x) => x.mois!).filter(Boolean);
 }
+
+/**
+ * Comparer deux rapports (demandé le 29 octobre 2026) : les lignes d'un rapport, en lecture seule (un brouillon
+ * montre les dates des fiches projet, sans rien écrire), limitées aux projets que la personne voit.
+ */
+export async function lignesComparables(rapportId: string, statut: string, visibles: Set<string> | "tous") {
+  const lignes = await db
+    .select({ ligne: schema.lignesConseil, projet: schema.projets })
+    .from(schema.lignesConseil)
+    .innerJoin(schema.projets, eq(schema.projets.id, schema.lignesConseil.projetId))
+    .where(eq(schema.lignesConseil.rapportId, rapportId))
+    .orderBy(asc(schema.lignesConseil.ordre));
+  return lignes
+    .filter((l) => visibles === "tous" || visibles.has(l.projet.id))
+    .map(({ ligne, projet }) => ({
+      projetId: projet.id,
+      code: projet.code,
+      titre: projet.titre,
+      programme: projet.programme,
+      ordre: ligne.ordre,
+      etat: ligne.etatAvancement,
+      fin: statut === "brouillon" ? projet.dateFinPrevue : ligne.nouvelleDateFin,
+      lancement: statut === "brouillon" ? projet.dateLancementPrevue : ligne.dateLancement,
+    }));
+}
+
+/** Les rapports qu'on peut comparer : ceux de l'historique, et le rapport du mois en cours s'il existe (brouillon). */
+export async function rapportsComparables(visibles: Set<string> | "tous", moiId: string) {
+  const liste = await historiqueConseil(visibles, moiId);
+  const courant = await rapportDuMois(moisCourant());
+  if (courant && !liste.some((r) => r.id === courant.id)) {
+    const lignes = await lignesComparables(courant.id, courant.statut, visibles);
+    if (lignes.length)
+      liste.unshift({
+        id: courant.id,
+        genre: "mensuel",
+        mois: courant.mois,
+        titre: courant.titre,
+        date: courant.mois!,
+        statut: courant.statut,
+        approuveLe: courant.approuveLe,
+        approuvePar: null,
+        auteur: null,
+        creeParId: courant.creeParId,
+        codes: lignes.map((l) => l.code),
+        datesChangees: 0,
+      });
+  }
+  return liste.sort((x, y) => y.date.localeCompare(x.date));
+}

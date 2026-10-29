@@ -69,6 +69,9 @@ export default async function PagePonctuel({ params }: { params: Promise<{ id: s
             </div>
           </dl>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            <a href={`/conseil/comparer?b=${r.id}`} className="bouton-contour">
+              <Icone nom="colonnes" taille={18} /> Comparer
+            </a>
             <a href={`/api/conseil/ponctuel/${r.id}/word`} className={brouillon ? "bouton-contour" : "bouton-ambre"}>
               <Icone nom="telecharger" taille={18} /> Fichier Word
             </a>

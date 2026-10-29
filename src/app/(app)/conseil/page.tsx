@@ -25,7 +25,8 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
   const tousLesMois = [...new Set([...(await moisDesRapports()), courant])].sort();
   const precedent = [...tousLesMois].reverse().find((m) => m < mois) ?? null;
   const suivant = tousLesMois.find((m) => m > mois && m <= courant) ?? null;
-  const navigation = (
+  const rapportPrecedent = precedent ? await rapportDuMois(precedent) : null;
+  const navigation = (rapportId?: string) => (
     <nav className="bilan-periode__nav" aria-label="Autre mois" style={{ marginBottom: 12 }}>
       {precedent ? (
         <a href={`/conseil?mois=${precedent}`} className="bouton-icone" aria-label={`Rapport ${deMois(precedent)}`} title={`Rapport ${deMois(precedent)}`}>
@@ -41,6 +42,11 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
       <a href="/conseil/historique" className="lien-discret" style={{ marginLeft: 12 }}>
         Tous les rapports soumis →
       </a>
+      {rapportId && rapportPrecedent ? (
+        <a href={`/conseil/comparer?a=${rapportPrecedent.id}&b=${rapportId}`} className="lien-discret" style={{ marginLeft: 12 }}>
+          Comparer avec {moisAnnee(precedent!)} →
+        </a>
+      ) : null}
     </nav>
   );
   if (mois < courant && !existant) {
@@ -49,7 +55,7 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
         <Bandeau surtitre="Rapport mensuel au conseil" titre={moisAnnee(mois).replace(/^./, (c) => c.toUpperCase())} />
         <div className="page">
           <SousOnglets onglets={ONGLETS_CONSEIL} courant="/conseil" label="Rapports au conseil" />
-          {navigation}
+          {navigation()}
           <p className="vide">Aucun rapport au conseil n&apos;a été fait pour ce mois.</p>
         </div>
       </>
@@ -71,7 +77,7 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
       </Bandeau>
       <div className="page">
         <SousOnglets onglets={ONGLETS_CONSEIL} courant="/conseil" label="Rapports au conseil" />
-        {navigation}
+        {navigation(r.id)}
         <div className="ligne-actions">
           <dl style={{ margin: 0, display: "flex", flexWrap: "wrap", gap: "12px 40px" }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>

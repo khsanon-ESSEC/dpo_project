@@ -8023,3 +8023,155 @@ a.pastille-rapport:hover {
     gap: 20px;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Comparer deux rapports au conseil (29 octobre 2026) : les projets alignés, A à gauche, B à droite ; ce qui diffère
+   de A est marqué dans B (fond ambre pâle et filet), jamais par la couleur seule (« Fin repoussée +3 sem. »).
+   --------------------------------------------------------------------------- */
+.comparaison__choix {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+}
+.comparaison__choix .champ {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.comparaison__fleche {
+  color: var(--discret);
+  padding-bottom: 12px;
+}
+@media (max-width: 699px) {
+  .comparaison__fleche {
+    display: none;
+  }
+}
+.comparaison {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.comparaison__entete,
+.comparaison__ligne {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px 24px;
+}
+.comparaison__entete {
+  display: none;
+}
+.comparaison__ligne {
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--surface-filet);
+}
+.comparaison__projet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+  min-width: 0;
+}
+.comparaison__projet .rangee__texte {
+  flex: 1 1 220px;
+}
+.comparaison__marques {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.comparaison__rapport {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+.comparaison__lettre {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--choisi);
+  color: var(--encre);
+  font-size: 13px;
+  font-weight: 600;
+}
+.comparaison__lettre--petite {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+.comparaison__cote {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px 10px;
+  align-content: start;
+  min-width: 0;
+}
+.comparaison__cote > :not(.comparaison__lettre) {
+  grid-column: 2;
+}
+.comparaison__cote > .comparaison__lettre {
+  grid-row: 1 / span 2;
+}
+.comparaison__cote--vide {
+  display: block;
+  color: var(--discret);
+  font-size: 14px;
+  font-style: italic;
+}
+.comparaison__dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0;
+}
+.comparaison__dates > div {
+  padding: 2px 6px;
+  margin: -2px -6px;
+}
+.comparaison__dates dt {
+  font-size: 12px;
+  color: var(--discret);
+}
+.comparaison__dates dd {
+  margin: 0;
+  font-size: 14px;
+}
+.comparaison__etat {
+  margin: 0;
+  font-size: 14px;
+  line-height: 21px;
+  white-space: pre-line;
+  max-width: 100ch;
+}
+.comparaison [data-change="1"] {
+  background: var(--tag);
+  box-shadow: inset 3px 0 0 var(--veille-point);
+}
+.comparaison__etat[data-change="1"] {
+  padding: 6px 10px;
+}
+@media (min-width: 1100px) {
+  .comparaison__entete {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1fr);
+    padding: 0 21px;
+  }
+  .comparaison__ligne {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  .comparaison__cote > .comparaison__lettre {
+    display: none;
+  }
+  .comparaison__cote {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .comparaison__cote > :not(.comparaison__lettre) {
+    grid-column: 1;
+  }
+}

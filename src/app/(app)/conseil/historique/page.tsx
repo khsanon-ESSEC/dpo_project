@@ -64,6 +64,11 @@ export default async function PageHistoriqueConseil({ searchParams }: { searchPa
               Ponctuels · {tous.filter((r) => r.genre === "ponctuel").length}
             </a>
           </nav>
+          {tous.length >= 2 ? (
+            <a href="/conseil/comparer" className="bouton-contour">
+              <Icone nom="colonnes" taille={16} /> Comparer deux rapports
+            </a>
+          ) : null}
         </div>
         {liste.length === 0 ? <p className="vide">Aucun rapport au conseil n&apos;a encore été soumis.</p> : null}
         {annees.map((an) => (

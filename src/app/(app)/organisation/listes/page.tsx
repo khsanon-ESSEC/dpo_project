@@ -65,10 +65,12 @@ export default async function PageListes({ searchParams }: { searchParams: Promi
                   <li key={v.id} id={`valeur-${v.id}`} style={{ scrollMarginTop: 80 }}>
                     <div className="rangee" style={{ gap: 12, flexWrap: "wrap", opacity: v.actif ? 1 : 0.6 }}>
                       <form action={renommerDansLaListe.bind(null, v.id)} className="ligne-liste-ref" style={{ display: "flex", gap: 8, flex: "1 1 320px", minWidth: 0, alignItems: "center" }}>
-                        <label htmlFor={`v-${v.id}`} className="visuellement-cache">
-                          Nom
-                        </label>
-                        <input id={`v-${v.id}`} name="libelle" defaultValue={v.libelle} required minLength={2} maxLength={LONGUEUR_LIBELLE[g]} style={{ flex: "1 1 auto", minWidth: 0 }} />
+                        <div className="champ" style={{ flex: "1 1 auto", minWidth: 0 }}>
+                          <label htmlFor={`v-${v.id}`} className="visuellement-cache">
+                            Nom
+                          </label>
+                          <input id={`v-${v.id}`} name="libelle" defaultValue={v.libelle} required minLength={2} maxLength={LONGUEUR_LIBELLE[g]} />
+                        </div>
                         <button type="submit" className="bouton-mini">
                           Renommer
                         </button>
