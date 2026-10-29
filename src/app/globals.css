@@ -424,7 +424,7 @@ select {
 }
 .bandeau__corps {
   position: relative;
-  max-width: 1180px;
+  max-width: var(--largeur-page);
   padding: 44px 48px 40px;
   display: flex;
   flex-direction: column;
@@ -544,7 +544,7 @@ select {
 /* ---------- Page ---------- */
 .page {
   width: 100%;
-  max-width: 1180px;
+  max-width: var(--largeur-page);
   padding: 32px 48px 56px;
   display: flex;
   flex-direction: column;
@@ -1200,9 +1200,10 @@ select {
 }
 
 /* ---------- Grille de projets ---------- */
+/* Une grille : autant de cartes par ligne que l'écran en tient, la dernière ligne garde la même largeur. */
 .grille-projets {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
   gap: 24px;
 }
 .carte-projet {
@@ -4548,7 +4549,7 @@ a.lien-projet:focus-visible {
   background: var(--bande);
 }
 .barre-globale__corps {
-  max-width: 1180px;
+  max-width: var(--largeur-page);
   padding: 14px 48px 10px;
 }
 .barre-globale .saisie-rapide {
@@ -7888,4 +7889,46 @@ a.pastille-rapport:hover {
 }
 .saisie-rapide__exemple span {
   font-style: italic;
+}
+
+/* ---------------------------------------------------------------------------
+   Grands écrans (29 octobre 2026) : la page prend toute la largeur, avec la même marge à gauche et à droite
+   (jusqu'à 3 200 px, au-delà d'un très grand écran), au lieu de 1 180 ; les grilles ajoutent des colonnes ;
+   la fiche d'un projet partage sa colonne principale en deux ; les paragraphes gardent une longueur de ligne
+   lisible.
+   --------------------------------------------------------------------------- */
+:root {
+  --largeur-page: 3200px;
+}
+.colonnes--tablette {
+  container-type: inline-size;
+}
+.colonne-large__partie {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+@container (min-width: 1800px) {
+  .colonne-large--double {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    column-gap: 28px;
+  }
+}
+.carte .note,
+.page > .note,
+.bandeau__corps .note {
+  max-width: 100ch;
+}
+@media (min-width: 1600px) {
+  .barre-globale .saisie-rapide {
+    max-width: 1000px;
+  }
+}
+@media (max-width: 899px) {
+  .colonne-large__partie {
+    gap: 20px;
+  }
 }

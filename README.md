@@ -173,6 +173,10 @@ Ces chiffres décrivent ce qui est enregistré dans l'application ; ils ne mesur
 - **Réunions en chiffres** et **charge** : mêmes règles que la semaine, le rapport et la charge ; un projet qu'on ne voit pas compte dans « Autres projets », sans son nom.
 - **Suivi du pilote** : une semaine d'avant les premières données de l'application n'a pas de valeur (pas un zéro). Sur un mois ou plus, les parts se calculent sur l'ensemble des semaines de la période (rapports attendus, rédacteurs), et « ont ouvert l'application » compte les personnes distinctes de la période.
 
+## Grands écrans
+
+Les pages occupent toute la largeur de la fenêtre, avec la même marge des deux côtés (variable `--largeur-page` dans `src/app/globals.css`). Les grilles ajoutent des colonnes quand la place le permet ; les paragraphes restent limités à une largeur lisible. La fiche d'un projet passe en trois colonnes quand sa zone principale dépasse 1 800 px (requête de conteneur `@container`), soit une fenêtre d’environ 2 000 px de large ; en dessous, la mise en page reste celle d'un portable.
+
 ## Personnes hors division et projets d'autres divisions
 
 - **Ajouter quelqu'un** : dans « Avec qui » d'une réunion (« + Quelqu'un d'autre, hors division »), dans « Pour » d'une tâche (« Quelqu'un d'autre, hors division… »), dans l'équipe d'un projet ou comme chef de projet. On donne son nom et son département ou sa société. Une fiche déjà connue (même nom, même organisation, sans tenir compte des accents ni des majuscules) est reprise plutôt que recréée.

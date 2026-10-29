@@ -598,487 +598,492 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
           </div>
         </div>
         <div className="colonnes colonnes--tablette">
-          <div className="colonne-large">
-            {finalise ? (
-              <section className="carte cloture" id="cloture" aria-labelledby="p-cloture" style={{ scrollMarginTop: 80 }}>
-                <h2 id="p-cloture" className="carte__titre">
-                  Projet clôturé{p.clotureLe ? ` le ${dateLongue(p.clotureLe)}` : ""}
-                  {p.clotureParId && nom(p.clotureParId) ? <span className="carte__titre-sous"> par {nom(p.clotureParId)}</span> : null}
-                </h2>
-                {clotureFait === "faite" ? (
-                  <p className="succes" role="status" style={{ margin: "8px 0" }}>
-                    Le projet est clôturé. {p.sponsorId ? "L'équipe et le sponsor sont prévenus." : "L'équipe est prévenue."}
-                  </p>
-                ) : null}
-                {p.objectifsAtteints ? (
-                  <p className={`cloture__objectifs cloture__objectifs--${p.objectifsAtteints}`}>
-                    Objectifs : {LIBELLE_OBJECTIFS[p.objectifsAtteints as Objectifs] ?? p.objectifsAtteints}
-                  </p>
-                ) : null}
-                {p.bilanCloture ? (
-                  <>
-                    <h3 className="sante-barre__titre" style={{ margin: "12px 0 4px" }}>
-                      Bilan
-                    </h3>
-                    <p className="cloture__texte">{p.bilanCloture}</p>
-                  </>
-                ) : null}
-                {p.leconsApprises ? (
-                  <>
-                    <h3 className="sante-barre__titre" style={{ margin: "12px 0 4px" }}>
-                      Leçons apprises
-                    </h3>
-                    <p className="cloture__texte">{p.leconsApprises}</p>
-                  </>
-                ) : null}
-                {peutModifier && !p.archiveLe ? (
-                  <form action={rouvrirLeProjet.bind(null, p.id)} style={{ marginTop: 12 }}>
-                    <button type="submit" className="bouton-mini">
-                      Rouvrir le projet
-                    </button>
-                  </form>
-                ) : null}
-              </section>
-            ) : clotureFait === "rouvert" ? (
-              <p className="succes" role="status" style={{ margin: 0 }}>
-                Le projet est rouvert : il repart « en cours ».
-              </p>
-            ) : null}
-            {phases.length ? (
-              <section className="carte phases-projet" id="phases" aria-labelledby="p-phases" style={{ scrollMarginTop: 80 }}>
+          {/* Sur un grand écran, la colonne principale se partage en deux : le plan (phases, livrables, tâches) et le pilotage (risques, décisions, avancement, documents). */}
+          <div className="colonne-large colonne-large--double">
+            <div className="colonne-large__partie">
+              {finalise ? (
+                <section className="carte cloture" id="cloture" aria-labelledby="p-cloture" style={{ scrollMarginTop: 80 }}>
+                  <h2 id="p-cloture" className="carte__titre">
+                    Projet clôturé{p.clotureLe ? ` le ${dateLongue(p.clotureLe)}` : ""}
+                    {p.clotureParId && nom(p.clotureParId) ? <span className="carte__titre-sous"> par {nom(p.clotureParId)}</span> : null}
+                  </h2>
+                  {clotureFait === "faite" ? (
+                    <p className="succes" role="status" style={{ margin: "8px 0" }}>
+                      Le projet est clôturé. {p.sponsorId ? "L'équipe et le sponsor sont prévenus." : "L'équipe est prévenue."}
+                    </p>
+                  ) : null}
+                  {p.objectifsAtteints ? (
+                    <p className={`cloture__objectifs cloture__objectifs--${p.objectifsAtteints}`}>
+                      Objectifs : {LIBELLE_OBJECTIFS[p.objectifsAtteints as Objectifs] ?? p.objectifsAtteints}
+                    </p>
+                  ) : null}
+                  {p.bilanCloture ? (
+                    <>
+                      <h3 className="sante-barre__titre" style={{ margin: "12px 0 4px" }}>
+                        Bilan
+                      </h3>
+                      <p className="cloture__texte">{p.bilanCloture}</p>
+                    </>
+                  ) : null}
+                  {p.leconsApprises ? (
+                    <>
+                      <h3 className="sante-barre__titre" style={{ margin: "12px 0 4px" }}>
+                        Leçons apprises
+                      </h3>
+                      <p className="cloture__texte">{p.leconsApprises}</p>
+                    </>
+                  ) : null}
+                  {peutModifier && !p.archiveLe ? (
+                    <form action={rouvrirLeProjet.bind(null, p.id)} style={{ marginTop: 12 }}>
+                      <button type="submit" className="bouton-mini">
+                        Rouvrir le projet
+                      </button>
+                    </form>
+                  ) : null}
+                </section>
+              ) : clotureFait === "rouvert" ? (
+                <p className="succes" role="status" style={{ margin: 0 }}>
+                  Le projet est rouvert : il repart « en cours ».
+                </p>
+              ) : null}
+              {phases.length ? (
+                <section className="carte phases-projet" id="phases" aria-labelledby="p-phases" style={{ scrollMarginTop: 80 }}>
+                  <div className="carte__entete">
+                    <h2 id="p-phases" className="carte__titre">
+                      Phases{phaseCourante ? ` · ${phaseCourante.nom} en cours` : " · toutes terminées"}
+                    </h2>
+                    {peutModifier && actif ? (
+                      <a href={`/projets/${p.id}/modifier#phases`} className="lien-discret">
+                        Gérer les phases →
+                      </a>
+                    ) : null}
+                  </div>
+                  <ol className="phases-projet__frise">
+                    {phases.map((ph) => {
+                      const etat = ph.termineeLe ? "terminee" : ph.id === phaseCourante?.id ? (phaseDepassee(ph, jour) ? "depassee" : "en-cours") : phaseDepassee(ph, jour) ? "depassee" : "a-venir";
+                      return (
+                        <li key={ph.id} className={`phases-projet__etape phases-projet__etape--${etat}`} aria-current={ph.id === phaseCourante?.id ? "step" : undefined}>
+                          <span className="phases-projet__point" aria-hidden="true">
+                            {ph.termineeLe ? <CocheSeule /> : null}
+                          </span>
+                          <span className="phases-projet__nom">{ph.nom}</span>
+                          <span className="phases-projet__dates">
+                            {ph.termineeLe ? `terminée le ${dateCourte(ph.termineeLe)}` : ph.fin ? `${phaseDepassee(ph, jour) ? "fin dépassée : " : "jusqu'au "}${dateCourte(ph.fin)}` : ph.debut ? `dès le ${dateCourte(ph.debut)}` : ""}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  {peutModifier && actif && phaseCourante ? (
+                    <form action={terminerUnePhase.bind(null, p.id, phaseCourante.id, true, "fiche")} style={{ marginTop: 10 }}>
+                      <button type="submit" className="bouton-mini">
+                        <Icone nom="coche" taille={14} /> Terminer « {phaseCourante.nom} »
+                      </button>
+                    </form>
+                  ) : null}
+                </section>
+              ) : peutModifier && actif ? (
+                <p className="note" style={{ margin: 0 }}>
+                  Pas encore de phases :{" "}
+                  <a href={`/projets/${p.id}/modifier#phases`} className="lien-discret">
+                    découper le projet en phases
+                  </a>
+                  .
+                </p>
+              ) : null}
+
+              <section className="carte carte--liste livrables" id="livrables" aria-labelledby="p-livrables" style={{ scrollMarginTop: 80 }}>
                 <div className="carte__entete">
-                  <h2 id="p-phases" className="carte__titre">
-                    Phases{phaseCourante ? ` · ${phaseCourante.nom} en cours` : " · toutes terminées"}
+                  <h2 id="p-livrables" className="carte__titre">
+                    Livrables · {valides}/{lv.livrables.length} validés
                   </h2>
                   {peutModifier && actif ? (
-                    <a href={`/projets/${p.id}/modifier#phases`} className="lien-discret">
-                      Gérer les phases →
+                    <a href={`/projets/${p.id}/modifier#livrables`} className="lien-discret">
+                      Gérer les livrables →
                     </a>
                   ) : null}
                 </div>
-                <ol className="phases-projet__frise">
-                  {phases.map((ph) => {
-                    const etat = ph.termineeLe ? "terminee" : ph.id === phaseCourante?.id ? (phaseDepassee(ph, jour) ? "depassee" : "en-cours") : phaseDepassee(ph, jour) ? "depassee" : "a-venir";
-                    return (
-                      <li key={ph.id} className={`phases-projet__etape phases-projet__etape--${etat}`} aria-current={ph.id === phaseCourante?.id ? "step" : undefined}>
-                        <span className="phases-projet__point" aria-hidden="true">
-                          {ph.termineeLe ? <CocheSeule /> : null}
-                        </span>
-                        <span className="phases-projet__nom">{ph.nom}</span>
-                        <span className="phases-projet__dates">
-                          {ph.termineeLe ? `terminée le ${dateCourte(ph.termineeLe)}` : ph.fin ? `${phaseDepassee(ph, jour) ? "fin dépassée : " : "jusqu'au "}${dateCourte(ph.fin)}` : ph.debut ? `dès le ${dateCourte(ph.debut)}` : ""}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ol>
-                {peutModifier && actif && phaseCourante ? (
-                  <form action={terminerUnePhase.bind(null, p.id, phaseCourante.id, true, "fiche")} style={{ marginTop: 10 }}>
-                    <button type="submit" className="bouton-mini">
-                      <Icone nom="coche" taille={14} /> Terminer « {phaseCourante.nom} »
-                    </button>
-                  </form>
+                {lvMessage ? (
+                  <p className="succes" role="status" style={{ margin: "8px 0" }}>
+                    {lvMessage}
+                  </p>
                 ) : null}
-              </section>
-            ) : peutModifier && actif ? (
-              <p className="note" style={{ margin: 0 }}>
-                Pas encore de phases :{" "}
-                <a href={`/projets/${p.id}/modifier#phases`} className="lien-discret">
-                  découper le projet en phases
-                </a>
-                .
-              </p>
-            ) : null}
-
-            <section className="carte carte--liste livrables" id="livrables" aria-labelledby="p-livrables" style={{ scrollMarginTop: 80 }}>
-              <div className="carte__entete">
-                <h2 id="p-livrables" className="carte__titre">
-                  Livrables · {valides}/{lv.livrables.length} validés
-                </h2>
-                {peutModifier && actif ? (
-                  <a href={`/projets/${p.id}/modifier#livrables`} className="lien-discret">
-                    Gérer les livrables →
-                  </a>
-                ) : null}
-              </div>
-              {lvMessage ? (
-                <p className="succes" role="status" style={{ margin: "8px 0" }}>
-                  {lvMessage}
-                </p>
-              ) : null}
-              {lv.livrables.length ? (
-                <p className="note" style={{ margin: "4px 0 10px" }}>
-                  Chaque livrable a un responsable : il détermine les tâches qui y mènent, peut en confier à l&apos;équipe du projet, puis le déclare prêt à valider.
-                  {lv.horsLivrable.ouvertes ? (
-                    <>
-                      {" "}
-                      <a href={`/projets/${p.id}/liste?livrable=aucun`} className="lien-discret">
-                        {lv.horsLivrable.ouvertes} tâche{lv.horsLivrable.ouvertes > 1 ? "s" : ""} ouverte{lv.horsLivrable.ouvertes > 1 ? "s" : ""} hors livrable
-                      </a>
-                      .
-                    </>
-                  ) : null}
-                </p>
-              ) : null}
-              <ol className="livrables__liste">
-                {actifs.map(rendreLivrable)}
-                {livrablesValides.length ? (
-                  <li className="livrable livrable--valides">
-                    <details className="livrables__valides">
-                      <summary>
-                        {livrablesValides.length} livrable{livrablesValides.length > 1 ? "s" : ""} validé{livrablesValides.length > 1 ? "s" : ""}
-                      </summary>
-                      <ol className="livrables__liste">{livrablesValides.map(rendreLivrable)}</ol>
-                    </details>
-                  </li>
-                ) : null}
-                {lv.livrables.length === 0 ? (
-                  <li className="vide">
-                    Aucun livrable.{peutModifier && actif ? (
+                {lv.livrables.length ? (
+                  <p className="note" style={{ margin: "4px 0 10px" }}>
+                    Chaque livrable a un responsable : il détermine les tâches qui y mènent, peut en confier à l&apos;équipe du projet, puis le déclare prêt à valider.
+                    {lv.horsLivrable.ouvertes ? (
                       <>
                         {" "}
-                        <a href={`/projets/${p.id}/modifier#livrables`} className="lien-discret">
-                          Ajouter les livrables du projet
+                        <a href={`/projets/${p.id}/liste?livrable=aucun`} className="lien-discret">
+                          {lv.horsLivrable.ouvertes} tâche{lv.horsLivrable.ouvertes > 1 ? "s" : ""} ouverte{lv.horsLivrable.ouvertes > 1 ? "s" : ""} hors livrable
                         </a>
                         .
                       </>
                     ) : null}
-                  </li>
+                  </p>
                 ) : null}
-              </ol>
-            </section>
+                <ol className="livrables__liste">
+                  {actifs.map(rendreLivrable)}
+                  {livrablesValides.length ? (
+                    <li className="livrable livrable--valides">
+                      <details className="livrables__valides">
+                        <summary>
+                          {livrablesValides.length} livrable{livrablesValides.length > 1 ? "s" : ""} validé{livrablesValides.length > 1 ? "s" : ""}
+                        </summary>
+                        <ol className="livrables__liste">{livrablesValides.map(rendreLivrable)}</ol>
+                      </details>
+                    </li>
+                  ) : null}
+                  {lv.livrables.length === 0 ? (
+                    <li className="vide">
+                      Aucun livrable.{peutModifier && actif ? (
+                        <>
+                          {" "}
+                          <a href={`/projets/${p.id}/modifier#livrables`} className="lien-discret">
+                            Ajouter les livrables du projet
+                          </a>
+                          .
+                        </>
+                      ) : null}
+                    </li>
+                  ) : null}
+                </ol>
+              </section>
 
-            <section className="carte carte--liste" id="decisions" aria-labelledby="p-decisions" style={{ scrollMarginTop: 80 }}>
-              <h2 id="p-decisions" className="carte__titre">
-                Décisions · {decisions.length}
-              </h2>
-              {decisionFaite ? (
-                <p className="succes" role="status" style={{ margin: "8px 0" }}>
-                  {decisionFaite}
-                </p>
-              ) : null}
-              {decisions.length === 0 ? <p className="note" style={{ margin: "4px 0 8px" }}>Ce qui a été décidé sur le projet, quand, par qui et pourquoi : la mémoire du projet, pour ceux qui le rejoignent et pour le rapport au conseil.</p> : null}
-              <ol className="decisions">{decisions.slice(0, 5).map(rendreDecision)}</ol>
-              {decisions.length > 5 ? (
-                <details className="decisions__anciennes">
-                  <summary className="lien-discret">
-                    {decisions.length - 5} décision{decisions.length - 5 > 1 ? "s" : ""} plus ancienne{decisions.length - 5 > 1 ? "s" : ""}
-                  </summary>
-                  <ol className="decisions">{decisions.slice(5).map(rendreDecision)}</ol>
-                </details>
-              ) : null}
-              {noteDecisions ? (
-                <details className="decision__nouvelle" open={decisions.length === 0 ? true : undefined}>
-                  <summary className="bouton-mini">
-                    <Icone nom="ajouter" taille={14} /> Noter une décision
-                  </summary>
-                  <form action={noterUneDecision.bind(null, p.id)} className="decision__form">
-                    <div className="champ">
-                      <label htmlFor="dec-texte">Décision</label>
-                      <textarea id="dec-texte" name="texte" rows={2} required maxLength={1000} placeholder="Ex. : la mise en ligne se fera en deux vagues, d'abord les clients « Early adopters »" />
-                    </div>
-                    <div className="decision__form-ligne">
-                      <div className="champ">
-                        <label htmlFor="dec-le">Décidée le</label>
-                        <input id="dec-le" name="decideeLe" type="date" max={jour} defaultValue={jour} />
-                      </div>
-                      <div className="champ">
-                        <label htmlFor="dec-par">Par</label>
-                        <ListeFiltrable id="dec-par" name="instance" libre options={instances.map((x) => ({ value: x, label: x }))} maxLength={120} placeholder="Ex. : Comité de pilotage" nouveau="Nouvelle instance" />
-                      </div>
-                    </div>
-                    <div className="champ">
-                      <label htmlFor="dec-contexte">Pourquoi (facultatif)</label>
-                      <input id="dec-contexte" name="contexte" maxLength={1000} placeholder="Ex. : limiter le risque après l'audit de sécurité" />
-                    </div>
-                    <button type="submit" className="bouton-contour" style={{ alignSelf: "flex-start" }}>
-                      <Icone nom="ajouter" taille={16} /> Noter la décision
-                    </button>
-                  </form>
-                </details>
-              ) : null}
-            </section>
-
-            <section className="carte carte--liste" id="risques" aria-labelledby="p-risques" style={{ scrollMarginTop: 80 }}>
-              <h2 id="p-risques" className="carte__titre">
-                Risques · {risquesOuverts.length} ouvert{risquesOuverts.length > 1 ? "s" : ""}
-              </h2>
-              {risqueFait ? (
-                <p className="succes" role="status" style={{ margin: "8px 0" }}>
-                  {risqueFait}
-                </p>
-              ) : null}
-              {risques.length ? (
-                <div className="risques__tete">
-                  <div className="matrice-risques" role="img" aria-label={`Risques ouverts par probabilité et impact : ${risquesOuverts.map((r) => `${r.titre}, probabilité ${LIBELLE_PROBABILITE[r.probabilite as Niveau].toLowerCase()}, impact ${LIBELLE_IMPACT[r.impact as Niveau].toLowerCase()}`).join(" ; ") || "aucun"}`}>
-                    {([3, 2, 1] as Niveau[]).map((pr) =>
-                      ([1, 2, 3] as Niveau[]).map((im) => {
-                        const n = risquesOuverts.filter((r) => r.probabilite === pr && r.impact === im).length;
-                        return (
-                          <span key={`${pr}-${im}`} className={`matrice-risques__case matrice-risques__case--${gravite(pr, im)}${n ? " matrice-risques__case--pleine" : ""}`}>
-                            {n || ""}
+              <section className="carte carte--liste" aria-labelledby="p-taches">
+                <div className="carte__entete">
+                  <h2 id="p-taches" className="carte__titre">
+                    Tâches · {f.nTaches}
+                  </h2>
+                  <a href={`/projets/${p.id}/liste`} className="lien-discret">
+                    Toutes les tâches →
+                  </a>
+                </div>
+                <div role="img" aria-label={`${f.compte.faite} faites, ${f.compte.en_cours} en cours, ${f.compte.a_faire} à faire, ${f.compte.bloquee} bloquées`} style={{ margin: "14px 0 10px", display: "flex", height: 10, gap: 2 }}>
+                  <span style={{ flex: f.compte.faite, background: "var(--arc)" }} />
+                  <span style={{ flex: f.compte.en_cours, background: "var(--arc-2)" }} />
+                  <span style={{ flex: f.compte.a_faire, background: "var(--piste)" }} />
+                  <span style={{ flex: f.compte.bloquee, background: "var(--veille-point)" }} />
+                </div>
+                <div aria-hidden="true" style={{ display: "flex", flexWrap: "wrap", gap: "6px 20px", marginBottom: 14, fontSize: 12, color: "var(--discret)" }}>
+                  <span>■ {f.compte.faite} faites</span>
+                  <span>{f.compte.en_cours} en cours</span>
+                  <span>{f.compte.a_faire} à faire</span>
+                  <span className="ton-veille">{f.compte.bloquee} bloquée{f.compte.bloquee > 1 ? "s" : ""}</span>
+                </div>
+                {temps.minutes ? (
+                  <p className="note" style={{ margin: "-4px 0 12px" }}>
+                    Temps passé noté : <strong>{dureeTexte(temps.minutes)}</strong>
+                    {temps.heuresEstimees ? ` pour ${temps.heuresEstimees} h estimées sur l'ensemble des tâches` : ""} ({temps.tachesAvecTemps} tâche{temps.tachesAvecTemps > 1 ? "s" : ""} avec du temps noté).
+                  </p>
+                ) : null}
+                <ul className="liste">
+                  {f.urgentes.map((t) => {
+                    const e = echeanceRelative(t.echeance, jour);
+                    return (
+                      <li key={t.id}>
+                        <a href={`/taches/${t.id}`} className="rangee">
+                          <span className="mono mono--petit" aria-hidden="true">
+                            {t.initiales}
                           </span>
-                        );
-                      }),
-                    )}
-                    <span className="matrice-risques__axe matrice-risques__axe--y" aria-hidden="true">
-                      Probabilité
-                    </span>
-                    <span className="matrice-risques__axe matrice-risques__axe--x" aria-hidden="true">
-                      Impact
+                          <span className="rangee__texte">
+                            <span className="rangee__titre">{t.titre}</span>
+                          </span>
+                          <span className={`rangee__meta ${t.statut === "bloquee" ? "ton-veille" : t.retard ? "ton-retard" : ""}`}>{t.statut === "bloquee" ? "Bloquée" : e.texte || "Sans échéance"}</span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+
+            </div>
+            <div className="colonne-large__partie">
+              <section className="carte carte--liste" id="risques" aria-labelledby="p-risques" style={{ scrollMarginTop: 80 }}>
+                <h2 id="p-risques" className="carte__titre">
+                  Risques · {risquesOuverts.length} ouvert{risquesOuverts.length > 1 ? "s" : ""}
+                </h2>
+                {risqueFait ? (
+                  <p className="succes" role="status" style={{ margin: "8px 0" }}>
+                    {risqueFait}
+                  </p>
+                ) : null}
+                {risques.length ? (
+                  <div className="risques__tete">
+                    <div className="matrice-risques" role="img" aria-label={`Risques ouverts par probabilité et impact : ${risquesOuverts.map((r) => `${r.titre}, probabilité ${LIBELLE_PROBABILITE[r.probabilite as Niveau].toLowerCase()}, impact ${LIBELLE_IMPACT[r.impact as Niveau].toLowerCase()}`).join(" ; ") || "aucun"}`}>
+                      {([3, 2, 1] as Niveau[]).map((pr) =>
+                        ([1, 2, 3] as Niveau[]).map((im) => {
+                          const n = risquesOuverts.filter((r) => r.probabilite === pr && r.impact === im).length;
+                          return (
+                            <span key={`${pr}-${im}`} className={`matrice-risques__case matrice-risques__case--${gravite(pr, im)}${n ? " matrice-risques__case--pleine" : ""}`}>
+                              {n || ""}
+                            </span>
+                          );
+                        }),
+                      )}
+                      <span className="matrice-risques__axe matrice-risques__axe--y" aria-hidden="true">
+                        Probabilité
+                      </span>
+                      <span className="matrice-risques__axe matrice-risques__axe--x" aria-hidden="true">
+                        Impact
+                      </span>
+                    </div>
+                    <p className="note" style={{ margin: 0 }}>
+                      Probabilité × impact : critique à partir de 6 (rouge). Un risque critique ouvert met le projet à surveiller.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="note" style={{ margin: "4px 0 8px" }}>Ce qui pourrait empêcher le projet d&apos;aboutir, à quel point c&apos;est probable et grave, qui le suit et ce qui est prévu.</p>
+                )}
+                <ol className="decisions">
+                  {risques.map((r) => {
+                    const g = gravite(r.probabilite, r.impact);
+                    return (
+                      <li key={r.id} id={`risque-${r.id}`} className={`decision risque risque--${r.statut}`} style={{ scrollMarginTop: 80 }}>
+                        <span className={`risque__note risque__note--${g}`} title={`Criticité ${criticite(r.probabilite, r.impact)} sur 9`}>
+                          {LIBELLE_GRAVITE[g]} · {criticite(r.probabilite, r.impact)}
+                        </span>
+                        <div className="decision__corps">
+                          <p className="decision__texte">{r.titre}</p>
+                          <p className="decision__sous">
+                            Probabilité {LIBELLE_PROBABILITE[r.probabilite as Niveau].toLowerCase()} · impact {LIBELLE_IMPACT[r.impact as Niveau].toLowerCase()}
+                            {r.responsable ? ` · suivi par ${r.responsable}` : ""}
+                            {r.revueLe ? ` · revue le ${dateCourte(r.revueLe)}` : ""}
+                            {r.statut !== "ouvert" ? ` · ${LIBELLE_STATUT_RISQUE[r.statut as StatutRisque].toLowerCase()}` : ""}
+                          </p>
+                          {r.reponse ? <p className="decision__contexte">Réponse : {r.reponse}</p> : null}
+                          {actif && noteDecisions ? (
+                            <div className="livrable__actions" style={{ marginLeft: 0 }}>
+                              {(["ouvert", "maitrise", "clos"] as StatutRisque[])
+                                .filter((st) => st !== r.statut)
+                                .map((st) => (
+                                  <form key={st} action={statutDuRisque.bind(null, p.id, r.id, st)}>
+                                    <button type="submit" className="bouton-mini">
+                                      {st === "ouvert" ? "Rouvrir" : st === "maitrise" ? "Maîtrisé" : "Clore"}
+                                    </button>
+                                  </form>
+                                ))}
+                              <details className="decision__corriger" style={{ marginTop: 0 }}>
+                                <summary className="bouton-mini">Modifier</summary>
+                                {formulaireRisque(r)}
+                                {peutModifierDecision(u.id, peutModifier, r.auteurId) ? (
+                                  <form action={retirerUnRisque.bind(null, p.id, r.id)} style={{ marginTop: 8 }}>
+                                    <button type="submit" className="bouton-mini" style={{ color: "var(--retard)", borderColor: "var(--retard-point)" }}>
+                                      Retirer du registre
+                                    </button>
+                                  </form>
+                                ) : null}
+                              </details>
+                            </div>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+                {noteDecisions ? (
+                  <details className="decision__nouvelle" open={risques.length === 0 ? true : undefined}>
+                    <summary className="bouton-mini">
+                      <Icone nom="ajouter" taille={14} /> Ajouter un risque
+                    </summary>
+                    {formulaireRisque(null)}
+                  </details>
+                ) : null}
+              </section>
+
+              <section className="carte carte--liste" id="decisions" aria-labelledby="p-decisions" style={{ scrollMarginTop: 80 }}>
+                <h2 id="p-decisions" className="carte__titre">
+                  Décisions · {decisions.length}
+                </h2>
+                {decisionFaite ? (
+                  <p className="succes" role="status" style={{ margin: "8px 0" }}>
+                    {decisionFaite}
+                  </p>
+                ) : null}
+                {decisions.length === 0 ? <p className="note" style={{ margin: "4px 0 8px" }}>Ce qui a été décidé sur le projet, quand, par qui et pourquoi : la mémoire du projet, pour ceux qui le rejoignent et pour le rapport au conseil.</p> : null}
+                <ol className="decisions">{decisions.slice(0, 5).map(rendreDecision)}</ol>
+                {decisions.length > 5 ? (
+                  <details className="decisions__anciennes">
+                    <summary className="lien-discret">
+                      {decisions.length - 5} décision{decisions.length - 5 > 1 ? "s" : ""} plus ancienne{decisions.length - 5 > 1 ? "s" : ""}
+                    </summary>
+                    <ol className="decisions">{decisions.slice(5).map(rendreDecision)}</ol>
+                  </details>
+                ) : null}
+                {noteDecisions ? (
+                  <details className="decision__nouvelle" open={decisions.length === 0 ? true : undefined}>
+                    <summary className="bouton-mini">
+                      <Icone nom="ajouter" taille={14} /> Noter une décision
+                    </summary>
+                    <form action={noterUneDecision.bind(null, p.id)} className="decision__form">
+                      <div className="champ">
+                        <label htmlFor="dec-texte">Décision</label>
+                        <textarea id="dec-texte" name="texte" rows={2} required maxLength={1000} placeholder="Ex. : la mise en ligne se fera en deux vagues, d'abord les clients « Early adopters »" />
+                      </div>
+                      <div className="decision__form-ligne">
+                        <div className="champ">
+                          <label htmlFor="dec-le">Décidée le</label>
+                          <input id="dec-le" name="decideeLe" type="date" max={jour} defaultValue={jour} />
+                        </div>
+                        <div className="champ">
+                          <label htmlFor="dec-par">Par</label>
+                          <ListeFiltrable id="dec-par" name="instance" libre options={instances.map((x) => ({ value: x, label: x }))} maxLength={120} placeholder="Ex. : Comité de pilotage" nouveau="Nouvelle instance" />
+                        </div>
+                      </div>
+                      <div className="champ">
+                        <label htmlFor="dec-contexte">Pourquoi (facultatif)</label>
+                        <input id="dec-contexte" name="contexte" maxLength={1000} placeholder="Ex. : limiter le risque après l'audit de sécurité" />
+                      </div>
+                      <button type="submit" className="bouton-contour" style={{ alignSelf: "flex-start" }}>
+                        <Icone nom="ajouter" taille={16} /> Noter la décision
+                      </button>
+                    </form>
+                  </details>
+                ) : null}
+              </section>
+
+              {pointsAv.some((x) => !x.avant) ? (
+                <section className="carte" aria-labelledby="p-avancement" id="avancement" style={{ scrollMarginTop: 80 }}>
+                  <h2 id="p-avancement" className="carte__titre" style={{ marginBottom: 4 }}>
+                    Avancement
+                  </h2>
+                  <ChoixPeriode plan={planAv} noms={nomsAv} lien={(v, pp) => `/projets/${id}?vue=${v}${pp ? `&p=${pp}` : ""}#avancement`} comparer={comparerAv} />
+                  <p className="note" style={{ margin: "0 0 12px" }}>
+                    {avancement[0].terminees} tâche{avancement[0].terminees > 1 ? "s" : ""} terminée{avancement[0].terminees > 1 ? "s" : ""} {nomsAv.actuel.charAt(0).toLowerCase() + nomsAv.actuel.slice(1)}
+                    {comparerAv ? ` (${ecart(avancement[0].terminees, avancement[1].terminees) ?? "—"} par rapport ${aLa(nomsAv.avantCourt)})` : ""} ; {avancement[0].faites} sur {avancement[0].total} depuis le début. Quand les
+                    deux courbes s&apos;écartent, le travail s&apos;ajoute plus vite qu&apos;il ne se termine.
+                  </p>
+                  <Courbes
+                    titre={`Avancement du projet, ${planAv.vue === "semaine" ? "semaine par semaine" : "mois par mois"}`}
+                    unite="nombre"
+                    nomActuel="Tâches terminées"
+                    nomAvant="Tâches au total"
+                    points={planAv.axe.map((cle, k) => ({
+                      cle,
+                      libelle: etiquettesAv[k].libelle,
+                      court: etiquettesAv[k].court,
+                      actuel: !pointsAv[k] || pointsAv[k].avant ? null : pointsAv[k].faites,
+                      avant: !pointsAv[k] || pointsAv[k].avant ? null : pointsAv[k].total,
+                      libelleAvant: "au total",
+                      enCours: !!planAv.serie[k] && planAv.serie[k].fin >= jour,
+                    }))}
+                  />
+                </section>
+              ) : null}
+
+              <DocumentsProjet
+                projetId={p.id}
+                documents={documents}
+                noms={nomsDeposants}
+                moiId={u.id}
+                gere={peutModifier}
+                peutDeposer={peutDeposer}
+                erreur={doc ? doc.slice(0, 800) : undefined}
+                ajoutes={docOk ? Number(docOk) || 0 : undefined}
+                retire={docRetire === "1"}
+              />
+
+              {rapports ? (
+                <section className="carte carte--liste" aria-labelledby="p-rapports">
+                  <div className="carte__entete">
+                    <h2 id="p-rapports" className="carte__titre">
+                      Rapports du vendredi · ce projet
+                    </h2>
+                    <span className="rangee__meta">
+                      {rapports.length} reçu{rapports.length > 1 ? "s" : ""}
                     </span>
                   </div>
-                  <p className="note" style={{ margin: 0 }}>
-                    Probabilité × impact : critique à partir de 6 (rouge). Un risque critique ouvert met le projet à surveiller.
+                  <p className="note" style={{ marginBottom: 12 }}>
+                    Seulement les lignes qui concernent ce projet.
                   </p>
-                </div>
-              ) : (
-                <p className="note" style={{ margin: "4px 0 8px" }}>Ce qui pourrait empêcher le projet d&apos;aboutir, à quel point c&apos;est probable et grave, qui le suit et ce qui est prévu.</p>
-              )}
-              <ol className="decisions">
-                {risques.map((r) => {
-                  const g = gravite(r.probabilite, r.impact);
-                  return (
-                    <li key={r.id} id={`risque-${r.id}`} className={`decision risque risque--${r.statut}`} style={{ scrollMarginTop: 80 }}>
-                      <span className={`risque__note risque__note--${g}`} title={`Criticité ${criticite(r.probabilite, r.impact)} sur 9`}>
-                        {LIBELLE_GRAVITE[g]} · {criticite(r.probabilite, r.impact)}
-                      </span>
-                      <div className="decision__corps">
-                        <p className="decision__texte">{r.titre}</p>
-                        <p className="decision__sous">
-                          Probabilité {LIBELLE_PROBABILITE[r.probabilite as Niveau].toLowerCase()} · impact {LIBELLE_IMPACT[r.impact as Niveau].toLowerCase()}
-                          {r.responsable ? ` · suivi par ${r.responsable}` : ""}
-                          {r.revueLe ? ` · revue le ${dateCourte(r.revueLe)}` : ""}
-                          {r.statut !== "ouvert" ? ` · ${LIBELLE_STATUT_RISQUE[r.statut as StatutRisque].toLowerCase()}` : ""}
-                        </p>
-                        {r.reponse ? <p className="decision__contexte">Réponse : {r.reponse}</p> : null}
-                        {actif && noteDecisions ? (
-                          <div className="livrable__actions" style={{ marginLeft: 0 }}>
-                            {(["ouvert", "maitrise", "clos"] as StatutRisque[])
-                              .filter((st) => st !== r.statut)
-                              .map((st) => (
-                                <form key={st} action={statutDuRisque.bind(null, p.id, r.id, st)}>
-                                  <button type="submit" className="bouton-mini">
-                                    {st === "ouvert" ? "Rouvrir" : st === "maitrise" ? "Maîtrisé" : "Clore"}
-                                  </button>
-                                </form>
-                              ))}
-                            <details className="decision__corriger" style={{ marginTop: 0 }}>
-                              <summary className="bouton-mini">Modifier</summary>
-                              {formulaireRisque(r)}
-                              {peutModifierDecision(u.id, peutModifier, r.auteurId) ? (
-                                <form action={retirerUnRisque.bind(null, p.id, r.id)} style={{ marginTop: 8 }}>
-                                  <button type="submit" className="bouton-mini" style={{ color: "var(--retard)", borderColor: "var(--retard-point)" }}>
-                                    Retirer du registre
-                                  </button>
-                                </form>
-                              ) : null}
-                            </details>
-                          </div>
-                        ) : null}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ol>
-              {noteDecisions ? (
-                <details className="decision__nouvelle" open={risques.length === 0 ? true : undefined}>
-                  <summary className="bouton-mini">
-                    <Icone nom="ajouter" taille={14} /> Ajouter un risque
-                  </summary>
-                  {formulaireRisque(null)}
-                </details>
-              ) : null}
-            </section>
-
-            {pointsAv.some((x) => !x.avant) ? (
-              <section className="carte" aria-labelledby="p-avancement" id="avancement" style={{ scrollMarginTop: 80 }}>
-                <h2 id="p-avancement" className="carte__titre" style={{ marginBottom: 4 }}>
-                  Avancement
-                </h2>
-                <ChoixPeriode plan={planAv} noms={nomsAv} lien={(v, pp) => `/projets/${id}?vue=${v}${pp ? `&p=${pp}` : ""}#avancement`} comparer={comparerAv} />
-                <p className="note" style={{ margin: "0 0 12px" }}>
-                  {avancement[0].terminees} tâche{avancement[0].terminees > 1 ? "s" : ""} terminée{avancement[0].terminees > 1 ? "s" : ""} {nomsAv.actuel.charAt(0).toLowerCase() + nomsAv.actuel.slice(1)}
-                  {comparerAv ? ` (${ecart(avancement[0].terminees, avancement[1].terminees) ?? "—"} par rapport ${aLa(nomsAv.avantCourt)})` : ""} ; {avancement[0].faites} sur {avancement[0].total} depuis le début. Quand les
-                  deux courbes s&apos;écartent, le travail s&apos;ajoute plus vite qu&apos;il ne se termine.
-                </p>
-                <Courbes
-                  titre={`Avancement du projet, ${planAv.vue === "semaine" ? "semaine par semaine" : "mois par mois"}`}
-                  unite="nombre"
-                  nomActuel="Tâches terminées"
-                  nomAvant="Tâches au total"
-                  points={planAv.axe.map((cle, k) => ({
-                    cle,
-                    libelle: etiquettesAv[k].libelle,
-                    court: etiquettesAv[k].court,
-                    actuel: !pointsAv[k] || pointsAv[k].avant ? null : pointsAv[k].faites,
-                    avant: !pointsAv[k] || pointsAv[k].avant ? null : pointsAv[k].total,
-                    libelleAvant: "au total",
-                    enCours: !!planAv.serie[k] && planAv.serie[k].fin >= jour,
-                  }))}
-                />
-              </section>
-            ) : null}
-
-            <section className="carte carte--liste" aria-labelledby="p-taches">
-              <div className="carte__entete">
-                <h2 id="p-taches" className="carte__titre">
-                  Tâches · {f.nTaches}
-                </h2>
-                <a href={`/projets/${p.id}/liste`} className="lien-discret">
-                  Toutes les tâches →
-                </a>
-              </div>
-              <div role="img" aria-label={`${f.compte.faite} faites, ${f.compte.en_cours} en cours, ${f.compte.a_faire} à faire, ${f.compte.bloquee} bloquées`} style={{ margin: "14px 0 10px", display: "flex", height: 10, gap: 2 }}>
-                <span style={{ flex: f.compte.faite, background: "var(--arc)" }} />
-                <span style={{ flex: f.compte.en_cours, background: "var(--arc-2)" }} />
-                <span style={{ flex: f.compte.a_faire, background: "var(--piste)" }} />
-                <span style={{ flex: f.compte.bloquee, background: "var(--veille-point)" }} />
-              </div>
-              <div aria-hidden="true" style={{ display: "flex", flexWrap: "wrap", gap: "6px 20px", marginBottom: 14, fontSize: 12, color: "var(--discret)" }}>
-                <span>■ {f.compte.faite} faites</span>
-                <span>{f.compte.en_cours} en cours</span>
-                <span>{f.compte.a_faire} à faire</span>
-                <span className="ton-veille">{f.compte.bloquee} bloquée{f.compte.bloquee > 1 ? "s" : ""}</span>
-              </div>
-              {temps.minutes ? (
-                <p className="note" style={{ margin: "-4px 0 12px" }}>
-                  Temps passé noté : <strong>{dureeTexte(temps.minutes)}</strong>
-                  {temps.heuresEstimees ? ` pour ${temps.heuresEstimees} h estimées sur l'ensemble des tâches` : ""} ({temps.tachesAvecTemps} tâche{temps.tachesAvecTemps > 1 ? "s" : ""} avec du temps noté).
-                </p>
-              ) : null}
-              <ul className="liste">
-                {f.urgentes.map((t) => {
-                  const e = echeanceRelative(t.echeance, jour);
-                  return (
-                    <li key={t.id}>
-                      <a href={`/taches/${t.id}`} className="rangee">
-                        <span className="mono mono--petit" aria-hidden="true">
-                          {t.initiales}
+                  <ul className="liste">
+                    {rapports.map((r) => (
+                      <li key={r.auteurId} style={{ display: "flex", gap: 14, padding: "16px 0" }}>
+                        <span className="mono" aria-hidden="true">
+                          {r.prenom[0]}
+                          {r.nom[0]}
                         </span>
-                        <span className="rangee__texte">
-                          <span className="rangee__titre">{t.titre}</span>
-                        </span>
-                        <span className={`rangee__meta ${t.statut === "bloquee" ? "ton-veille" : t.retard ? "ton-retard" : ""}`}>{t.statut === "bloquee" ? "Bloquée" : e.texte || "Sans échéance"}</span>
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-
-            <DocumentsProjet
-              projetId={p.id}
-              documents={documents}
-              noms={nomsDeposants}
-              moiId={u.id}
-              gere={peutModifier}
-              peutDeposer={peutDeposer}
-              erreur={doc ? doc.slice(0, 800) : undefined}
-              ajoutes={docOk ? Number(docOk) || 0 : undefined}
-              retire={docRetire === "1"}
-            />
-
-            {rapports ? (
-              <section className="carte carte--liste" aria-labelledby="p-rapports">
-                <div className="carte__entete">
-                  <h2 id="p-rapports" className="carte__titre">
-                    Rapports du vendredi · ce projet
-                  </h2>
-                  <span className="rangee__meta">
-                    {rapports.length} reçu{rapports.length > 1 ? "s" : ""}
-                  </span>
-                </div>
-                <p className="note" style={{ marginBottom: 12 }}>
-                  Seulement les lignes qui concernent ce projet.
-                </p>
-                <ul className="liste">
-                  {rapports.map((r) => (
-                    <li key={r.auteurId} style={{ display: "flex", gap: 14, padding: "16px 0" }}>
-                      <span className="mono" aria-hidden="true">
-                        {r.prenom[0]}
-                        {r.nom[0]}
-                      </span>
-                      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-                        <span style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
-                          <span style={{ fontSize: 15, fontWeight: 500 }}>
-                            <LienPersonne id={r.auteurId}>{r.auteur}</LienPersonne>
+                        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+                          <span style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+                            <span style={{ fontSize: 15, fontWeight: 500 }}>
+                              <LienPersonne id={r.auteurId}>{r.auteur}</LienPersonne>
+                            </span>
+                            <span className="rangee__sous">{r.envoyeLe ? `Reçu à ${heure(r.envoyeLe)}` : ""}</span>
                           </span>
-                          <span className="rangee__sous">{r.envoyeLe ? `Reçu à ${heure(r.envoyeLe)}` : ""}</span>
-                        </span>
-                        <ul className="liste" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          {r.lignes.map((l, n) => (
-                            <li key={n} style={{ borderTop: 0, display: "grid", gridTemplateColumns: "136px minmax(0, 1fr)", gap: 12, fontSize: 14, lineHeight: "20px" }}>
-                              <span className="carte__titre" style={{ margin: 0, fontSize: 10, lineHeight: "20px", letterSpacing: "0.16em" }}>
-                                {l.champ}
-                              </span>
-                              <span>{l.texte}</span>
-                            </li>
+                          <ul className="liste" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {r.lignes.map((l, n) => (
+                              <li key={n} style={{ borderTop: 0, display: "grid", gridTemplateColumns: "136px minmax(0, 1fr)", gap: 12, fontSize: 14, lineHeight: "20px" }}>
+                                <span className="carte__titre" style={{ margin: 0, fontSize: 10, lineHeight: "20px", letterSpacing: "0.16em" }}>
+                                  {l.champ}
+                                </span>
+                                <span>{l.texte}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </li>
+                    ))}
+                    {rapports.length === 0 ? <li className="vide">Aucun rapport reçu sur ce projet cette semaine.</li> : null}
+                  </ul>
+                </section>
+              ) : null}
+              {etatCloture ? (
+                <section className="carte" id="cloture" aria-labelledby="p-cloturer" style={{ scrollMarginTop: 80 }}>
+                  <details className="cloture__details" open={clotureFait === "ouvrir" ? true : undefined}>
+                    <summary className="cloture__resume">
+                      <h2 id="p-cloturer" className="carte__titre" style={{ margin: 0 }}>
+                        Clôturer le projet
+                      </h2>
+                      <span className="note" style={{ margin: 0 }}>
+                        Le bilan, les objectifs, les leçons apprises ; le projet passe « finalisé ».
+                      </span>
+                    </summary>
+                    {pointsCloture.length ? (
+                      <div className="cloture__points" role="note">
+                        <p style={{ margin: "0 0 4px", fontWeight: 500 }}>Encore ouvert :</p>
+                        <ul>
+                          {pointsCloture.map((x) => (
+                            <li key={x}>{x}</li>
                           ))}
                         </ul>
                       </div>
-                    </li>
-                  ))}
-                  {rapports.length === 0 ? <li className="vide">Aucun rapport reçu sur ce projet cette semaine.</li> : null}
-                </ul>
-              </section>
-            ) : null}
-            {etatCloture ? (
-              <section className="carte" id="cloture" aria-labelledby="p-cloturer" style={{ scrollMarginTop: 80 }}>
-                <details className="cloture__details" open={clotureFait === "ouvrir" ? true : undefined}>
-                  <summary className="cloture__resume">
-                    <h2 id="p-cloturer" className="carte__titre" style={{ margin: 0 }}>
-                      Clôturer le projet
-                    </h2>
-                    <span className="note" style={{ margin: 0 }}>
-                      Le bilan, les objectifs, les leçons apprises ; le projet passe « finalisé ».
-                    </span>
-                  </summary>
-                  {pointsCloture.length ? (
-                    <div className="cloture__points" role="note">
-                      <p style={{ margin: "0 0 4px", fontWeight: 500 }}>Encore ouvert :</p>
-                      <ul>
-                        {pointsCloture.map((x) => (
-                          <li key={x}>{x}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : (
-                    <p className="note" style={{ margin: "10px 0" }}>
-                      Plus rien d&apos;ouvert : tâches faites, livrables validés.
-                    </p>
-                  )}
-                  <form action={cloturerLeProjet.bind(null, p.id)} className="decision__form">
-                    <div className="decision__form-ligne">
-                      <div className="champ">
-                        <label htmlFor="cl-le">Date de clôture</label>
-                        <input id="cl-le" name="clotureLe" type="date" defaultValue={jour} max={jour} min={p.dateEntree ?? undefined} required />
+                    ) : (
+                      <p className="note" style={{ margin: "10px 0" }}>
+                        Plus rien d&apos;ouvert : tâches faites, livrables validés.
+                      </p>
+                    )}
+                    <form action={cloturerLeProjet.bind(null, p.id)} className="decision__form">
+                      <div className="decision__form-ligne">
+                        <div className="champ">
+                          <label htmlFor="cl-le">Date de clôture</label>
+                          <input id="cl-le" name="clotureLe" type="date" defaultValue={jour} max={jour} min={p.dateEntree ?? undefined} required />
+                        </div>
+                        <fieldset className="segmente" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
+                          <legend style={{ padding: 0, marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Objectifs du projet</legend>
+                          {OBJECTIFS.map((o) => (
+                            <label key={o} className="segmente__choix">
+                              <input type="radio" name="objectifs" value={o} required defaultChecked={p.objectifsAtteints === o} />
+                              <span>{LIBELLE_OBJECTIFS[o]}</span>
+                            </label>
+                          ))}
+                        </fieldset>
                       </div>
-                      <fieldset className="segmente" style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-                        <legend style={{ padding: 0, marginBottom: 6, fontSize: 13, fontWeight: 500 }}>Objectifs du projet</legend>
-                        {OBJECTIFS.map((o) => (
-                          <label key={o} className="segmente__choix">
-                            <input type="radio" name="objectifs" value={o} required defaultChecked={p.objectifsAtteints === o} />
-                            <span>{LIBELLE_OBJECTIFS[o]}</span>
-                          </label>
-                        ))}
-                      </fieldset>
-                    </div>
-                    <div className="champ">
-                      <label htmlFor="cl-bilan">Bilan</label>
-                      <textarea id="cl-bilan" name="bilan" rows={4} required minLength={10} maxLength={4000} defaultValue={p.bilanCloture} placeholder="Ce qui a été livré, ce qui ne l'a pas été, l'écart avec ce qui était prévu (dates, périmètre)." />
-                    </div>
-                    <div className="champ">
-                      <label htmlFor="cl-lecons">Leçons apprises (facultatif)</label>
-                      <textarea id="cl-lecons" name="lecons" rows={3} maxLength={4000} defaultValue={p.leconsApprises} placeholder="Ce qu'on referait, ce qu'on éviterait : elles serviront aux prochains projets." />
-                    </div>
-                    <button type="submit" className="bouton-contour" style={{ alignSelf: "flex-start" }}>
-                      <Icone nom="coche" taille={16} /> Clôturer le projet
-                    </button>
-                  </form>
-                </details>
-              </section>
-            ) : null}
+                      <div className="champ">
+                        <label htmlFor="cl-bilan">Bilan</label>
+                        <textarea id="cl-bilan" name="bilan" rows={4} required minLength={10} maxLength={4000} defaultValue={p.bilanCloture} placeholder="Ce qui a été livré, ce qui ne l'a pas été, l'écart avec ce qui était prévu (dates, périmètre)." />
+                      </div>
+                      <div className="champ">
+                        <label htmlFor="cl-lecons">Leçons apprises (facultatif)</label>
+                        <textarea id="cl-lecons" name="lecons" rows={3} maxLength={4000} defaultValue={p.leconsApprises} placeholder="Ce qu'on referait, ce qu'on éviterait : elles serviront aux prochains projets." />
+                      </div>
+                      <button type="submit" className="bouton-contour" style={{ alignSelf: "flex-start" }}>
+                        <Icone nom="coche" taille={16} /> Clôturer le projet
+                      </button>
+                    </form>
+                  </details>
+                </section>
+              ) : null}
+            </div>
           </div>
 
           <div className="colonne-etroite">
