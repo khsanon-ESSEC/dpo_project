@@ -90,7 +90,7 @@ const revalider = () => {
   revalidatePath("/reunions");
   revalidatePath("/semaine");
   revalidatePath("/rapport");
-  revalidatePath("/a-faire");
+  revalidatePath("/taches");
 };
 
 export async function noter(form: FormData) {

@@ -25,7 +25,8 @@ function instantLocal(d: Date): string {
 /** Écrans connus du suivi du pilote, avec leur nom lisible. */
 const L: Record<string, string> = {
     "/semaine": "Ma semaine",
-    "/a-faire": "À faire",
+    "/taches": "Mes tâches",
+    "/a-faire": "Mes tâches (ancienne adresse)",
     "/reunions": "Réunions",
     "/bilan": "Mon bilan",
     "/rapport": "Rapport du vendredi",

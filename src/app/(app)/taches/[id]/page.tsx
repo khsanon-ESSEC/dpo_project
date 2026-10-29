@@ -114,7 +114,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
           retour ? (
             <a href={retour} className="retour">
               <Icone nom="chevron-gauche" taille={18} />{" "}
-              {retour.startsWith("/projets/") && projet ? projet.titre : retour === "/charge" ? "Charge de travail" : retour === "/a-faire" ? "À faire" : retour.startsWith("/equipe") ? "Équipe" : "Ma semaine"}
+              {retour.startsWith("/projets/") && projet ? projet.titre : retour === "/charge" ? "Charge de travail" : retour === "/taches" || retour === "/a-faire" ? "Mes tâches" : retour.startsWith("/equipe") ? "Équipe" : "Ma semaine"}
             </a>
           ) : (
             <a href="/semaine" className="retour">

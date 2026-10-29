@@ -32,7 +32,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
   // Un jour choisi dans la frise (passé ou non) : sa semaine s'affiche, et ce qui s'y est passé.
   const choisi = jourDemande && /^\d{4}-\d{2}-\d{2}$/.test(jourDemande) && !Number.isNaN(Date.parse(jourDemande)) ? jourDemande : null;
   const semaineVue = lundiDe(choisi ?? jour);
-  // Le jour montré : celui choisi dans la frise, sinon aujourd'hui. La liste des tâches est dans « À faire ».
+  // Le jour montré : celui choisi dans la frise, sinon aujourd'hui. La liste des tâches est dans « Mes tâches ».
   const jourVu = choisi ?? jour;
   const [taches, jours, projets, rapport, maCharge, journee, rapportVu, reunions] = await Promise.all([
     tachesDe([u.id]),
@@ -62,13 +62,13 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
     <>
       <Bandeau surtitre={jourComplet(jour)} titre="Ma semaine">
         <div className="chiffres">
-          <a href="/a-faire?voir=faites#mes-taches" className="chiffre-lien" aria-label={`${c.faites} tâches terminées sur ${c.total} : voir les tâches faites`}>
+          <a href="/taches?voir=faites#mes-taches" className="chiffre-lien" aria-label={`${c.faites} tâches terminées sur ${c.total} : voir les tâches faites`}>
             <Anneau fait={c.faites} total={c.total} legende="faites" label={`${c.faites} tâches terminées sur ${c.total}`} />
           </a>
           <dl style={{ margin: 0, display: "flex", flexWrap: "wrap", gap: "12px 48px" }}>
             <div className="chiffre chiffre--retard">
               <dt>
-                <LienChiffre href="/a-faire?voir=retard#mes-taches" detail="voir les tâches en retard">
+                <LienChiffre href="/taches?voir=retard#mes-taches" detail="voir les tâches en retard">
                   en retard
                 </LienChiffre>
               </dt>
@@ -76,7 +76,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
             </div>
             <div className="chiffre">
               <dt>
-                <LienChiffre href="/a-faire?voir=bloquees#mes-taches" detail="voir les tâches bloquées">
+                <LienChiffre href="/taches?voir=bloquees#mes-taches" detail="voir les tâches bloquées">
                   {c.bloquees > 1 ? "bloquées" : "bloquée"}
                 </LienChiffre>
               </dt>
@@ -84,7 +84,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
             </div>
             <div className="chiffre">
               <dt>
-                <LienChiffre href="/a-faire?voir=afaire#mes-taches" detail="voir les tâches à faire">
+                <LienChiffre href="/taches?voir=afaire#mes-taches" detail="voir les tâches à faire">
                   à faire
                 </LienChiffre>
               </dt>
@@ -151,7 +151,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
                   Revenir à aujourd&apos;hui
                 </a>
               ) : (
-                <a href="/a-faire" className="lien-discret">
+                <a href="/taches" className="lien-discret">
                   Mes tâches →
                 </a>
               )}

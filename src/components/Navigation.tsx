@@ -42,12 +42,12 @@ export function Rail({ elements, initiales, nom }: { elements: ElementNav[]; ini
   );
 }
 
-/** Barre du bas sur téléphone : quatre entrées au plus ; « Plus » mène à tout le reste. */
+/** Barre du bas sur téléphone : cinq entrées au plus ; « Plus » mène à tout le reste. */
 export function Onglets({ elements }: { elements: ElementNav[] }) {
   const pathname = usePathname();
   return (
     <nav className="onglets" aria-label="Navigation principale">
-      {elements.slice(0, 4).map((e) => (
+      {elements.slice(0, 5).map((e) => (
         <a key={e.href} href={e.href} aria-current={estCourant(pathname, e) ? "page" : undefined}>
           <span style={{ position: "relative", display: "flex" }}>
             <Icone nom={e.icone} />

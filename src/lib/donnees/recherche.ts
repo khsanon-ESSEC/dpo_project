@@ -115,7 +115,7 @@ function ecransPermis(u: Utilisateur, a: Acces) {
   const redige = redigeUnRapport(u);
   const E: [string, string, string, boolean][] = [
     ["ma semaine semaine aujourd hui", "Ma semaine", "/semaine", true],
-    ["a faire mes taches liste", "À faire", "/a-faire", true],
+    ["mes taches taches a faire liste", "Mes tâches", "/taches", true],
     ["reunions mes reunions", "Réunions", "/reunions", true],
     ["mon bilan bilan", "Mon bilan", "/bilan", interne],
     ["rapport rapport du vendredi mon rapport", "Rapport de la semaine", "/rapport", redige],

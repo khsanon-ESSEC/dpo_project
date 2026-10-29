@@ -38,9 +38,12 @@ export default async function LayoutApplication({ children }: { children: React.
   const PROJETS: ElementNav = { href: "/projets", libelle: "Projets", icone: "tableau-de-bord" };
   // Les exécutifs ne rédigent pas de rapport : ils lisent ceux de tout le monde (Équipe → Rapports).
   const redige = redigeUnRapport(u);
-  const SEMAINE: ElementNav = { href: "/semaine", libelle: "Semaine", icone: "calendrier", actifs: ["/reunions", "/bilan", "/a-faire"] };
+  const SEMAINE: ElementNav = { href: "/semaine", libelle: "Semaine", icone: "calendrier", actifs: ["/reunions", "/bilan"] };
+  // Mes tâches (une tâche ouverte, ou le formulaire d'une nouvelle, en fait partie) ; /a-faire en est l'ancienne adresse.
+  const TACHES: ElementNav = { href: "/taches", libelle: "Mes tâches", icone: "liste", actifs: ["/a-faire"] };
   const elements: ElementNav[] = [
     SEMAINE,
+    TACHES,
     ...(redige ? [RAPPORT] : []),
     ...(equipe ? [EQUIPE] : []),
     PROJETS,
@@ -50,17 +53,19 @@ export default async function LayoutApplication({ children }: { children: React.
     // page des résultats complets, quand on appuie sur Entrée.
     { href: "/alertes", libelle: "Alertes", icone: "notification", compte: alertes },
   ];
-  // Téléphone : quatre entrées. La dernière, « Plus », mène à tout le reste (avec le nombre d'alertes non lues).
+  // Téléphone : cinq entrées. La dernière, « Plus », mène à tout le reste (avec le nombre d'alertes non lues).
   const telephone: ElementNav[] = redige
     ? [
         SEMAINE,
+        TACHES,
         RAPPORT,
         equipe ? EQUIPE : PROJETS,
         { href: "/plus", libelle: "Plus", icone: "menu", compte: alertes, actifs: ["/alertes", "/profil", "/conseil", "/organisation", "/recherche", "/pilote", ...(equipe ? ["/projets"] : [])] },
       ]
     : [
         SEMAINE,
-        EQUIPE,
+        TACHES,
+        ...(equipe ? [EQUIPE] : []),
         PROJETS,
         { href: "/plus", libelle: "Plus", icone: "menu", compte: alertes, actifs: ["/alertes", "/profil", "/conseil", "/organisation", "/recherche", "/pilote"] },
       ];

@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Plus" };
 
 type Entree = { href: string; libelle: string; sous?: string; icone: string; compte?: number };
 
-/** Sur téléphone, la barre du bas n'a que quatre entrées : cette page mène à tout le reste. */
+/** Sur téléphone, la barre du bas n'a que cinq entrées : cette page mène à tout le reste. */
 export default async function PagePlus() {
   const u = await exigerUtilisateur();
   const a = await acces(u);

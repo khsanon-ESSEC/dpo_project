@@ -129,6 +129,7 @@ describe.skipIf(!URL_TEST)("revue de sécurité : contrôles d'accès", () => {
     const P = await import("@/lib/donnees/pilote");
     expect(P.ecranDe("/projets/0b5e9a3c-1d2e-4f5a-8b9c-0d1e2f3a4b5c/gantt?x=1")).toBe("/projets/[id]/gantt");
     expect(P.ecranDe("/a-faire")).toBe("/a-faire");
+    expect(P.ecranDe("/taches?voir=retard")).toBe("/taches");
     expect(P.ecranDe("/n-importe-quoi")).toBeNull();
     expect(P.ecranDe("/api/recherche")).toBeNull();
   });

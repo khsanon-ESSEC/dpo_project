@@ -178,6 +178,9 @@ describe("page de retour après une action", () => {
     const id = "0b9d9f3e-1c2a-4b5c-8d7e-0123456789ab";
     expect(retourValide(`/projets/${id}#livrable-${id}`)).toBe(`/projets/${id}#livrable-${id}`);
     expect(retourValide("/a-faire")).toBe("/a-faire");
+    expect(retourValide("/taches")).toBe("/taches");
+    expect(retourValide("/taches#mes-taches")).toBe("/taches#mes-taches");
+    expect(retourValide(`/taches/${id}`)).toBeNull();
     expect(retourValide("//exemple.com")).toBeNull();
     expect(retourValide(`/projets/${id}#"><script>`)).toBeNull();
     expect(retourValide(`/projets/${id}?x=1`)).toBeNull();
