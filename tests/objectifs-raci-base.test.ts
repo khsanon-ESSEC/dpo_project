@@ -62,6 +62,29 @@ describe.skipIf(!URL_TEST)("objectifs, RACI et fiche de projet", () => {
     expect(await O.retirerObjectif(await acces("myriam.valcin"), UR, r.id)).toEqual({ ok: true });
   });
 
+  it("valeurs constatées : un historique daté (une par jour), la dernière recopiée sur le bénéfice (29 octobre 2026)", async () => {
+    const mv = await acces("myriam.valcin");
+    const r = await O.ajouterObjectif(mv, UR, "benefice", { libelle: "Délai de traitement", indicateur: "Délai moyen", depart: "24", cible: "12" });
+    if (!("id" in r)) throw new Error("bénéfice");
+    // Deux mesures passées (le seul moyen d'en avoir à des jours différents dans un test), puis celle du jour.
+    await D.db.insert(D.schema.constatsBenefice).values([{ objectifId: r.id, valeur: "22", le: "2026-09-30" }, { objectifId: r.id, valeur: "20", le: "2026-10-15" }]);
+    expect(await O.noterConstat(mv, UR, r.id, "18")).toEqual({ ok: true });
+    // Corrigée le même jour : la mesure du jour est remplacée, pas ajoutée.
+    expect(await O.noterConstat(mv, UR, r.id, "17")).toEqual({ ok: true });
+    const h = (await O.constatsDesBenefices([r.id])).get(r.id)!;
+    expect(h.map((x) => x.valeur)).toEqual(["22", "20", "17"]);
+    const [b] = await D.db.select().from(D.schema.objectifsProjet).where(eq(D.schema.objectifsProjet.id, r.id));
+    expect(b.constate).toBe("17");
+    const { progression } = await import("@/lib/progression");
+    expect(progression(b.depart, b.cible, h)).toMatchObject({ ecart: -3, base: "precedent", mieux: true, parcouru: 58 });
+    // Vider la valeur retire la mesure du jour : la précédente redevient la dernière.
+    expect(await O.noterConstat(mv, UR, r.id, "")).toEqual({ ok: true });
+    const [b2] = await D.db.select().from(D.schema.objectifsProjet).where(eq(D.schema.objectifsProjet.id, r.id));
+    expect(b2).toMatchObject({ constate: "20", constateLe: "2026-10-15" });
+    expect(await O.retirerObjectif(mv, UR, r.id)).toEqual({ ok: true });
+    expect((await O.constatsDesBenefices([r.id])).get(r.id)).toBeUndefined();
+  });
+
   it("un projet archivé : objectifs figés, et pas de valeur constatée", async () => {
     const [b] = await D.db.select().from(D.schema.objectifsProjet).where(and(eq(D.schema.objectifsProjet.projetId, MS), eq(D.schema.objectifsProjet.genre, "benefice")));
     expect(await O.noterConstat(await acces("frantz.desrosiers"), MS, b.id, "1")).toHaveProperty("erreur");

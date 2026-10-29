@@ -8512,7 +8512,83 @@ a.livrable__lien:focus-visible {
 }
 .benefice__constate dd {
   font-weight: 600;
+}
+.benefice__constate--mieux dd {
   color: var(--ok);
+}
+.benefice__constate--moins dd {
+  color: var(--retard);
+}
+/* Progression d'un bénéfice d'une mesure à l'autre (29 octobre 2026). */
+.benefice__progression {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 20px;
+  font-size: 13px;
+  line-height: 18px;
+}
+.benefice__ecart {
+  font-weight: 500;
+}
+.benefice__ecart--mieux {
+  color: var(--ok);
+}
+.benefice__ecart--moins {
+  color: var(--retard);
+}
+.benefice__ecart--neutre {
+  color: var(--discret);
+}
+.benefice__chemin {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--discret);
+}
+.benefice__jauge {
+  position: relative;
+  display: inline-block;
+  width: 120px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--piste);
+  overflow: hidden;
+}
+.benefice__jauge > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--arc);
+}
+.benefice__jauge > span.benefice__jauge--atteinte {
+  background: var(--ok-point);
+}
+.benefice__historique summary {
+  font-size: 13px;
+  cursor: pointer;
+}
+.benefice__historique ol {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.benefice__historique li {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 13px;
+  line-height: 18px;
+}
+.benefice__historique li + li {
+  border-top: 1px solid var(--filet);
+}
+.benefice__historique-date {
+  color: var(--discret);
+}
+.benefice__historique-valeur {
+  font-variant-numeric: tabular-nums;
 }
 .objectif-form {
   grid-template-columns: minmax(0, 1fr) auto;

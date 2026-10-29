@@ -5,7 +5,7 @@
  * lancement). Tout le monde qui voit le projet les lit. Les actions vérifient que la personne voit le projet.
  */
 import "server-only";
-import { and, asc, eq, inArray, max } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, max } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Acces } from "@/lib/acces";
 import { aujourdhui } from "@/lib/dates";
@@ -105,9 +105,30 @@ export async function noterConstat(a: Acces, projetId: string, id: string, valeu
   const x = await ligne(projetId, id);
   if (!x || x.genre !== "benefice") return { erreur: "Bénéfice introuvable." };
   const v = String(valeur ?? "").normalize("NFC").replace(/\s+/g, " ").trim().slice(0, LONGUEUR.valeur);
-  await db.update(schema.objectifsProjet).set({ constate: v, constateLe: v ? aujourdhui() : null, majLe: new Date() }).where(eq(schema.objectifsProjet.id, id));
+  const jour = aujourdhui();
+  // L'historique (29 octobre 2026) : une mesure par jour ; une correction le même jour la remplace ; une valeur vide
+  // retire la mesure du jour. La dernière mesure reste recopiée sur le bénéfice.
+  if (v) {
+    await db
+      .insert(schema.constatsBenefice)
+      .values({ objectifId: id, valeur: v, le: jour, parId: a.moi.id })
+      .onConflictDoUpdate({ target: [schema.constatsBenefice.objectifId, schema.constatsBenefice.le], set: { valeur: v, parId: a.moi.id, creeLe: new Date() } });
+  } else {
+    await db.delete(schema.constatsBenefice).where(and(eq(schema.constatsBenefice.objectifId, id), eq(schema.constatsBenefice.le, jour)));
+  }
+  const [dernier] = await db.select().from(schema.constatsBenefice).where(eq(schema.constatsBenefice.objectifId, id)).orderBy(desc(schema.constatsBenefice.le)).limit(1);
+  await db.update(schema.objectifsProjet).set({ constate: dernier?.valeur ?? "", constateLe: dernier?.le ?? null, majLe: new Date() }).where(eq(schema.objectifsProjet.id, id));
   await noter(a.moi.id, "benefice_constate", projetId, { id, avant: x.constate, constate: v });
   return { ok: true };
+}
+
+/** L'historique des valeurs constatées de ces bénéfices, du plus ancien au plus récent (src/lib/progression.ts). */
+export async function constatsDesBenefices(ids: string[]): Promise<Map<string, { valeur: string; le: string }[]>> {
+  const m = new Map<string, { valeur: string; le: string }[]>();
+  if (!ids.length) return m;
+  const l = await db.select().from(schema.constatsBenefice).where(inArray(schema.constatsBenefice.objectifId, ids)).orderBy(asc(schema.constatsBenefice.le));
+  for (const x of l) m.set(x.objectifId, [...(m.get(x.objectifId) ?? []), { valeur: x.valeur, le: x.le }]);
+  return m;
 }
 
 /** Les objectifs d'une demande de projet (un par ligne), écrits à sa création par qui la propose. */

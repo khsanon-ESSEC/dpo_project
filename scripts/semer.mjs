@@ -388,6 +388,15 @@ await sql.begin(async (tx) => {
   await benefice("UR", 3, "Des clients plus satisfaits du service en ligne", "NPS des clients en ligne", "+12", "+25");
   await objectif("UC", 1, "Offrir aux entreprises les virements de masse et le paiement des salaires en ligne");
   await benefice("UC", 1, "Moins de remises de fichiers de paie en agence", "Fichiers de paie reçus en agence par mois", "", "");
+  // Des mesures successives (29 octobre 2026) : la progression d'une mesure à l'autre se lit sur la fiche.
+  const mesures = async (pj, ordre, liste) => {
+    const [b] = await tx`select id from objectifs_projet where projet_id = ${PJ[pj]} and genre = 'benefice' and ordre = ${ordre}`;
+    for (const [le, valeur] of liste) await tx`insert into constats_benefice (objectif_id, valeur, le) values (${b.id}, ${valeur}, ${le})`;
+    const [le, valeur] = liste[liste.length - 1];
+    await tx`update objectifs_projet set constate = ${valeur}, constate_le = ${le} where id = ${b.id}`;
+  };
+  await mesures("UR", 1, [["2026-08-31", "21 %"], ["2026-09-30", "24 %"], ["2026-10-28", "27 %"]]);
+  await mesures("UR", 2, [["2026-09-30", "1 050"], ["2026-10-28", "1 100"]]);
 
   // ---------- Temps passé noté sur quelques tâches ----------
   const temps = async (pj, titre, entrees) => {
@@ -518,6 +527,7 @@ await sql.begin(async (tx) => {
     (${ancien}, 'objectif', 2, ${"Former tous les utilisateurs avant l'arrêt de l'ancienne messagerie"}, 'en_partie')`;
   await tx`insert into objectifs_projet (projet_id, genre, ordre, libelle, indicateur, depart, cible, constate, constate_le) values
     (${ancien}, 'benefice', 1, ${"Moins d'incidents de messagerie"}, ${"Incidents par mois"}, ${"14"}, ${"4"}, ${"3"}, ${"2026-07-31"})`;
+  await tx`insert into constats_benefice (objectif_id, valeur, le) select id, v.valeur, v.le::date from objectifs_projet, (values ('6', '2026-05-31'), ('4', '2026-06-30'), ('3', '2026-07-31')) as v(valeur, le) where projet_id = ${ancien} and genre = 'benefice'`;
   await tx`update projets set objectifs_atteints = 'en_partie', cloture_le = ${"2026-04-30"}, bilan_cloture = ${"Toutes les boîtes sont migrées ; un quart des utilisateurs n'a pas suivi la formation."} where id = ${ancien} and objectifs_atteints = ''`;
 
   // ---------- Modèles de rapport (configurés par les administrateurs) ----------

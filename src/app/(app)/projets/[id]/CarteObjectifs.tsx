@@ -4,6 +4,7 @@ import { LONGUEUR, estMesurable, texteMesure } from "@/lib/objectifs";
 import type { ObjectifProjet } from "@/lib/donnees/objectifs";
 import type { Objectifs } from "@/lib/suivi";
 import { noterLeConstat } from "./actions-objectifs";
+import { nombre, progression, texteEcart, unite, type Constat } from "@/lib/progression";
 
 const EVALUATION: Record<Objectifs, string> = { oui: "Atteint", en_partie: "Atteint en partie", non: "Pas atteint" };
 
@@ -12,7 +13,26 @@ const EVALUATION: Record<Objectifs, string> = { oui: "Atteint", en_partie: "Atte
  * (bénéfices : indicateur, départ → cible, valeur constatée). Qui gère le projet note la valeur constatée, aussi
  * après la clôture.
  */
-export function CarteObjectifs({ projetId, objectifs, benefices, gere, modifiable, constatPossible, message }: { projetId: string; objectifs: ObjectifProjet[]; benefices: ObjectifProjet[]; gere: boolean; modifiable: boolean; constatPossible: boolean; message?: string | null }) {
+export function CarteObjectifs({
+  projetId,
+  objectifs,
+  benefices,
+  constats,
+  gere,
+  modifiable,
+  constatPossible,
+  message,
+}: {
+  projetId: string;
+  objectifs: ObjectifProjet[];
+  benefices: ObjectifProjet[];
+  /** L'historique des valeurs constatées de chaque bénéfice (29 octobre 2026). */
+  constats?: Map<string, Constat[]>;
+  gere: boolean;
+  modifiable: boolean;
+  constatPossible: boolean;
+  message?: string | null;
+}) {
   if (!objectifs.length && !benefices.length) {
     if (!gere || !modifiable) return null;
     return (
@@ -63,7 +83,12 @@ export function CarteObjectifs({ projetId, objectifs, benefices, gere, modifiabl
         <>
           <h3 className="sante-barre__titre objectifs-projet__titre">Bénéfices attendus</h3>
           <ul className="objectifs-projet__benefices">
-            {benefices.map((b) => (
+            {benefices.map((b) => {
+              const historique = constats?.get(b.id) ?? (b.constate && b.constateLe ? [{ valeur: b.constate, le: b.constateLe }] : []);
+              const pr = progression(b.depart, b.cible, historique);
+              const u = unite(b.cible) || unite(b.depart) || unite(b.constate);
+              const ton = pr.mieux === true || pr.atteinte ? "mieux" : pr.mieux === false ? "moins" : "neutre";
+              return (
               <li key={b.id} className="benefice">
                 <span className="benefice__libelle">{b.libelle}</span>
                 {b.indicateur ? (
@@ -80,7 +105,7 @@ export function CarteObjectifs({ projetId, objectifs, benefices, gere, modifiabl
                       <dt>Cible</dt>
                       <dd>{b.cible || "—"}</dd>
                     </div>
-                    <div className={b.constate ? "benefice__constate" : undefined}>
+                    <div className={b.constate ? `benefice__constate benefice__constate--${ton}` : undefined}>
                       <dt>Constaté{b.constateLe ? ` le ${dateCourte(b.constateLe)}` : ""}</dt>
                       <dd>{b.constate || "pas encore"}</dd>
                     </div>
@@ -88,6 +113,44 @@ export function CarteObjectifs({ projetId, objectifs, benefices, gere, modifiabl
                 ) : (
                   <span className="rangee__sous ton-veille">Sans indicateur : il ne pourra pas se vérifier.</span>
                 )}
+                {b.indicateur && pr.dernier && (pr.ecart !== null || pr.parcouru !== null) ? (
+                  <div className="benefice__progression">
+                    {pr.ecart !== null ? (
+                      <span className={`benefice__ecart benefice__ecart--${pr.ecart === 0 ? "neutre" : pr.mieux === true ? "mieux" : pr.mieux === false ? "moins" : "neutre"}`}>
+                        <span aria-hidden="true">{pr.ecart < 0 ? "↓" : pr.ecart > 0 ? "↑" : "="}</span>{" "}
+                        {pr.ecart === 0 ? "Inchangé" : texteEcart(pr.ecart, u)}{" "}
+                        {pr.base === "precedent" ? `depuis la mesure du ${dateCourte(pr.precedent!.le)} (${pr.precedent!.valeur})` : "depuis le départ"}
+                        {pr.mieux === true ? " · vers la cible" : pr.mieux === false ? " · on s'éloigne de la cible" : ""}
+                      </span>
+                    ) : null}
+                    {pr.parcouru !== null ? (
+                      <span className="benefice__chemin">
+                        <span className="benefice__jauge" role="img" aria-label={pr.atteinte ? "Cible atteinte" : `${Math.max(0, pr.parcouru)} % du chemin entre le départ et la cible`}>
+                          <span style={{ width: `${Math.min(100, Math.max(0, pr.parcouru))}%` }} className={pr.atteinte ? "benefice__jauge--atteinte" : undefined} />
+                        </span>
+                        <span className="benefice__chemin-texte">{pr.atteinte ? "Cible atteinte" : `${Math.max(0, pr.parcouru)} % du chemin vers la cible`}</span>
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+                {historique.length > 1 ? (
+                  <details className="benefice__historique">
+                    <summary className="lien-discret">Historique · {historique.length} mesures</summary>
+                    <ol>
+                      {[...historique].reverse().map((m, i, l) => {
+                        const avant = l[i + 1];
+                        const e = avant && nombre(m.valeur) !== null && nombre(avant.valeur) !== null ? nombre(m.valeur)! - nombre(avant.valeur)! : null;
+                        return (
+                          <li key={m.le}>
+                            <span className="benefice__historique-date">{dateCourte(m.le)}</span>
+                            <span className="benefice__historique-valeur">{m.valeur}</span>
+                            {e !== null && e !== 0 ? <span className="discret">{texteEcart(Math.round(e * 100) / 100, u)}</span> : null}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </details>
+                ) : null}
                 {gere && constatPossible && estMesurable(b) ? (
                   <details className="livrable__renvoi">
                     <summary className="bouton-mini">{b.constate ? "Mettre à jour la valeur constatée" : "Noter la valeur constatée"}</summary>
@@ -101,7 +164,8 @@ export function CarteObjectifs({ projetId, objectifs, benefices, gere, modifiabl
                   </details>
                 ) : null}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </>
       ) : null}

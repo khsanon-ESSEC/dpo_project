@@ -365,6 +365,23 @@ export const objectifsProjet = pgTable(
 );
 
 /**
+ * L'historique des valeurs constatées d'un bénéfice attendu (29 octobre 2026) : une ligne par jour de mesure (une
+ * correction le même jour remplace la valeur). objectifs_projet.constate garde la dernière. src/lib/progression.ts.
+ */
+export const constatsBenefice = pgTable(
+  "constats_benefice",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    objectifId: uuid("objectif_id").notNull().references(() => objectifsProjet.id, { onDelete: "cascade" }),
+    valeur: text().notNull(),
+    le: date().notNull(),
+    parId: uuid("par_id").references(() => personnes.id, { onDelete: "set null" }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("constat_benefice_jour").on(t.objectifId, t.le)],
+);
+
+/**
  * RACI (demandé le 29 octobre 2026) : le RACI type de la DPO (cle « type », sans projet), et celui d'un projet qui
  * s'en écarte (cle = l'identifiant du projet). Règles : src/lib/raci.ts.
  */

@@ -42,7 +42,7 @@ import { Courbes } from "@/components/Courbes";
 import { FriseReports } from "@/components/Graphiques";
 import { ChoixListe } from "@/components/ChoixListe";
 import { choixListes } from "@/lib/donnees/listes";
-import { objectifsDuProjet } from "@/lib/donnees/objectifs";
+import { objectifsDuProjet, constatsDesBenefices } from "@/lib/donnees/objectifs";
 import { nomsPourRaci, raciDuProjet } from "@/lib/donnees/raci";
 import { peutNoterConstat } from "@/lib/objectifs";
 import { TableauRaci } from "@/components/Raci";
@@ -115,6 +115,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const noteDecisions = actif && peutTenirLesRegistres(u.id, peutModifier, p);
   const instances = noteDecisions ? await instancesConnues() : [];
   const [phases, risques, temps, objs, rc] = await Promise.all([phasesDuProjet(id), risquesDuProjet(id), tempsDuProjet(id), objectifsDuProjet(id), raciDuProjet(id)]);
+  const constats = await constatsDesBenefices(objs.benefices.map((b) => b.id));
   const nomsRaci = await nomsPourRaci(p, rc.raci);
   const objectifsOuverts = !p.archiveLe && p.statut !== "refuse" && p.statut !== "finalise";
   const phaseCourante = phaseEnCours(phases, jour);
@@ -817,7 +818,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                   Le projet est rouvert : il repart « en cours ».
                 </p>
               ) : null}
-              <CarteObjectifs projetId={p.id} objectifs={objs.objectifs} benefices={objs.benefices} gere={peutModifier} modifiable={objectifsOuverts} constatPossible={peutNoterConstat(p)} message={fait === "constat" ? "Valeur constatée enregistrée." : null} />
+              <CarteObjectifs projetId={p.id} objectifs={objs.objectifs} benefices={objs.benefices} constats={constats} gere={peutModifier} modifiable={objectifsOuverts} constatPossible={peutNoterConstat(p)} message={fait === "constat" ? "Valeur constatée enregistrée." : null} />
               {phases.length ? (
                 <section className="carte phases-projet" id="phases" aria-labelledby="p-phases" style={{ scrollMarginTop: 80 }}>
                   <div className="carte__entete">
