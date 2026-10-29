@@ -147,6 +147,14 @@ export const projets = pgTable("projets", {
   bilanCloture: text("bilan_cloture").notNull().default(""),
   objectifsAtteints: text("objectifs_atteints").notNull().default(""),
   leconsApprises: text("lecons_apprises").notNull().default(""),
+  /**
+   * Cases de la fiche de projet (29 octobre 2026, src/lib/cadrage.ts) : type de solution, informations déjà
+   * disponibles, spécialisations de la DPO impliquées. Null : pas encore remplies (projets d'avant).
+   */
+  cadrage: jsonb().$type<{ types: string[]; infos: string[]; specialisations: string[] }>(),
+  /** Kit de démarrage (src/lib/kit.ts) : quand il a été ajouté (ou écarté), et par qui ; la fiche ne le propose plus. */
+  kitLe: timestamp("kit_le", { withTimezone: true }),
+  kitParId: uuid("kit_par_id").references((): AnyPgColumn => personnes.id, { onDelete: "set null" }),
   creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
   majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
 });

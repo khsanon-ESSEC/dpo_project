@@ -14,6 +14,7 @@ import {
   changerRoleMembre,
   deciderDemande,
   deplacerIndicateur,
+  enregistrerCadrage,
   modifierProjet,
   proposerProjet,
   renommerIndicateur,
@@ -24,6 +25,7 @@ import {
 import { peutDeciderDemande, peutGererProjet } from "@/lib/projets";
 import { externeDuFormulaire } from "@/lib/donnees/externes";
 import { retourLivrable } from "./[id]/livrables/commun";
+import { cadrageDuFormulaire } from "@/lib/cadrage";
 
 const UUID = /^[0-9a-f-]{36}$/;
 
@@ -63,6 +65,7 @@ export async function proposer(form: FormData) {
       chefSuggereId: (await externeDuFormulaire(form, "chef", u.id)) ?? String(form.get("chefSuggereId") ?? ""),
       code: String(form.get("code") ?? ""),
       division: String(form.get("division") ?? ""),
+      cadrage: cadrageDuFormulaire(form),
     },
     u.id,
     executif ? { statut: String(form.get("statut") ?? ""), referentId: String(form.get("referentId") ?? ""), dateEntree: String(form.get("dateEntree") ?? "") } : undefined,
@@ -126,6 +129,8 @@ export async function enregistrerProjet(projetId: string, form: FormData) {
     },
     u.id,
   );
+  const cadrage = cadrageDuFormulaire(form);
+  if (cadrage && !("erreur" in r)) await enregistrerCadrage(projetId, cadrage, u.id);
   revalider(projetId);
   redirect(`/projets/${projetId}/modifier${"erreur" in r ? `?erreur=${encodeURIComponent(r.erreur)}` : "?enregistre=1"}`);
 }

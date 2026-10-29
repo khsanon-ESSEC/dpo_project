@@ -861,6 +861,18 @@ await sql.begin(async (tx) => {
   await tx`insert into listes_projet (genre, libelle) select distinct 'programme', programme from projets where programme <> '' on conflict do nothing`;
   await tx`insert into listes_projet (genre, libelle) select distinct 'division', division from projets where division <> '' on conflict do nothing`;
 
+  // Fiche de projet (type de solution, informations disponibles, spécialisations) : sur quelques projets, et sur la
+  // demande TD, pour que son kit de démarrage soit complet une fois acceptée. Les projets acceptés ont déjà leurs
+  // livrables : le kit ne leur est pas proposé.
+  const cadrages = {
+    UR: { types: ["amelioration_produit"], infos: ["techniques", "organisationnelles"], specialisations: ["solutions", "deploiement"] },
+    UC: { types: ["amelioration_produit"], infos: ["techniques", "organisationnelles", "financieres"], specialisations: ["solutions", "deploiement"] },
+    PR: { types: ["nouveau_processus"], infos: ["organisationnelles"], specialisations: ["etudes", "solutions"] },
+    TD: { types: ["amelioration_processus", "nouveau_processus"], infos: ["techniques", "organisationnelles"], specialisations: ["solutions", "deploiement"] },
+  };
+  for (const [code, c] of Object.entries(cadrages)) await tx`update projets set cadrage = ${sql.json(c)} where code = ${code}`;
+  await tx`update projets set kit_le = cree_le where statut not in ('requete', 'refuse')`;
+
   await tx`insert into journal (action, objet, details) values ('donnees_exemple', 'base', ${sql.json({ personnes: gens.length, projets: projets.length, version: VERSION_DONNEES_EXEMPLE })})`;
 });
 

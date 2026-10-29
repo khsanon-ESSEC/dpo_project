@@ -162,6 +162,13 @@
       "when": 1793283741095,
       "tag": "0022_objectifs-raci",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793293538102,
+      "tag": "0023_cadrage-kit",
+      "breakpoints": true
     }
   ]
 }

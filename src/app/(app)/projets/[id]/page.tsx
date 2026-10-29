@@ -47,6 +47,10 @@ import { nomsPourRaci, raciDuProjet } from "@/lib/donnees/raci";
 import { peutNoterConstat } from "@/lib/objectifs";
 import { TableauRaci } from "@/components/Raci";
 import { CarteObjectifs } from "./CarteObjectifs";
+import { ecarterLeKit } from "./kit/actions";
+import { kitDuProjet, projetPourKit } from "@/lib/donnees/kit";
+import { tailleDuKit } from "@/lib/kit";
+import { cadrageValide, lignesCadrage } from "@/lib/cadrage";
 
 export const metadata: Metadata = { title: "Projet" };
 
@@ -56,9 +60,9 @@ const SANTE = {
   dans_les_temps: { texte: "Dans les temps", classe: "ton-ok" },
 } as const;
 
-export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; cree?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string; decision?: string; risque?: string; cloture?: string; budget?: string; fait?: string }> }) {
+export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; cree?: string; kit?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string; decision?: string; risque?: string; cloture?: string; budget?: string; fait?: string }> }) {
   const { id } = await params;
-  const { propose, cree, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut, decision: decisionBrut, risque: risqueBrut, cloture: clotureFait, budget: budgetFait, fait } = await searchParams;
+  const { propose, cree, kit: kitFait, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut, decision: decisionBrut, risque: risqueBrut, cloture: clotureFait, budget: budgetFait, fait } = await searchParams;
   const livrableFait = livrableBrut === "pret" || livrableBrut === "valider" || livrableBrut === "renvoyer" || livrableBrut === "rouvrir" || livrableBrut === "ajoute" ? livrableBrut : null;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
@@ -77,6 +81,10 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const [membres, roles] = await Promise.all([membresDuProjet(id), peutModifier && actif ? rolesDesEquipes() : Promise.resolve([] as string[])]);
   const nom = (pid: string | null) => (pid && org.personnes.get(pid) ? nomComplet(org.personnes.get(pid)!) : null);
   const listesDivision = demande && peutDeciderDemande(a, p) ? (await choixListes()).division : [];
+  // Kit de démarrage : proposé à qui gère le projet, une fois accepté, tant qu'il n'a été ni utilisé ni écarté.
+  const kitPropose = peutModifier && !p.kitLe && projetPourKit(p) ? await kitDuProjet(p) : null;
+  const kitBilan = /^\d+-\d+-\d+-\d+-\d+$/.test(kitFait ?? "") ? kitFait!.split("-").map(Number) : null;
+  const cadrage = cadrageValide(p.cadrage);
   const personnesActives = [...org.personnes.values()]
     .filter((x) => x.actif)
     .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
@@ -452,6 +460,57 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
           <p className="succes" role="status">
             Projet créé et validé. Son chef de projet est prévenu.
           </p>
+        ) : kitBilan ? (
+          <p className="succes" role="status">
+            Kit ajouté au projet :{" "}
+            {[
+              kitBilan[0] ? `${kitBilan[0]} phases` : null,
+              kitBilan[1] ? `${kitBilan[1]} livrable${kitBilan[1] > 1 ? "s" : ""}` : null,
+              kitBilan[2] ? `${kitBilan[2]} risque${kitBilan[2] > 1 ? "s" : ""}` : null,
+              kitBilan[3] ? `${kitBilan[3]} bénéfice${kitBilan[3] > 1 ? "s" : ""} attendu${kitBilan[3] > 1 ? "s" : ""}` : null,
+              kitBilan[4] ? `${kitBilan[4]} personne${kitBilan[4] > 1 ? "s" : ""} dans l'équipe` : null,
+            ]
+              .filter(Boolean)
+              .join(", ")}
+            . Les livrables et les risques sont confiés au chef de projet.
+          </p>
+        ) : null}
+        {kitPropose && tailleDuKit(kitPropose) > 0 ? (
+          <section className="carte kit-bandeau" aria-labelledby="p-kit">
+            <div className="kit-bandeau__texte">
+              <h2 id="p-kit" className="carte__titre" style={{ margin: 0 }}>
+                Kit de démarrage
+              </h2>
+              <p style={{ margin: 0, fontSize: 15, lineHeight: "22px" }}>
+                D&apos;après la fiche du projet, l&apos;application propose{" "}
+                {[
+                  kitPropose.phases.length ? `les ${kitPropose.phases.length} phases types` : null,
+                  kitPropose.livrables.length ? `${kitPropose.livrables.length} livrable${kitPropose.livrables.length > 1 ? "s" : ""}` : null,
+                  kitPropose.risques.length ? `${kitPropose.risques.length} risque${kitPropose.risques.length > 1 ? "s" : ""}` : null,
+                  kitPropose.benefices.length ? `${kitPropose.benefices.length} bénéfice${kitPropose.benefices.length > 1 ? "s" : ""} attendu${kitPropose.benefices.length > 1 ? "s" : ""}` : null,
+                  kitPropose.personnes.length ? `${kitPropose.personnes.length} personne${kitPropose.personnes.length > 1 ? "s" : ""} à associer` : null,
+                ]
+                  .filter(Boolean)
+                  .join(", ")}
+                . Vous choisissez ce que vous gardez.
+              </p>
+              {!cadrage ? (
+                <p className="note ton-veille" style={{ margin: 0 }}>
+                  La fiche ne dit pas encore le type de solution ni les spécialisations : remplissez-les dans « Modifier le projet » pour un kit adapté.
+                </p>
+              ) : null}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+              <a href={`/projets/${p.id}/kit`} className="bouton-ambre">
+                Voir le kit
+              </a>
+              <form action={ecarterLeKit.bind(null, p.id)}>
+                <button type="submit" className="bouton-mini">
+                  Ne pas l&apos;utiliser
+                </button>
+              </form>
+            </div>
+          </section>
         ) : null}
         {erreur ? (
           <p className="erreur" role="alert">
@@ -480,6 +539,13 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
               ) : null}
             </p>
             {p.justification ? <p style={{ margin: 0, whiteSpace: "pre-line", fontSize: 15, lineHeight: "22px" }}>{p.justification}</p> : null}
+            {cadrage ? (
+              <p className="note" style={{ margin: 0 }}>
+                {lignesCadrage(cadrage)
+                  .map((l) => `${l.rubrique} : ${l.valeur}`)
+                  .join(" · ")}
+              </p>
+            ) : null}
             {refuse ? (
               <p className="erreur" style={{ margin: 0 }}>
                 Refusée

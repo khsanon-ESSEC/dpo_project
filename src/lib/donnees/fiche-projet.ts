@@ -5,6 +5,7 @@
  * documents à qui peut les lire.
  */
 import "server-only";
+import { cadrageValide, lignesCadrage } from "@/lib/cadrage";
 import { db, schema } from "@/db";
 import { and, count, eq, isNull } from "drizzle-orm";
 import type { Acces } from "@/lib/acces";
@@ -91,6 +92,11 @@ export async function ficheAExporter(a: Acces, projetId: string) {
       sante: p.statut === "requete" || p.statut === "refuse" || p.statut === "finalise" ? null : SANTE[p.sante],
       santeMotif: p.sante !== "dans_les_temps" ? p.santeMotif : "",
       archive: !!p.archiveLe,
+      /** Les cases de la fiche de projet de la DPO (type de solution, informations disponibles, spécialisations). */
+      cadrage: (() => {
+        const c = cadrageValide(p.cadrage);
+        return c ? lignesCadrage(c) : [];
+      })(),
     },
     personnes: {
       sponsor: nom(p.sponsorId),

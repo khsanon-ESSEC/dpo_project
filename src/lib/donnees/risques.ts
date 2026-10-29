@@ -12,7 +12,7 @@ import { aujourdhui } from "@/lib/dates";
 import { noter } from "@/lib/journal";
 import { chargerOrganisation, personneActuelle } from "@/lib/organisation";
 import { peutGererProjet, peutTenirLesRegistres } from "@/lib/projets";
-import { niveau, PHASES_TYPES, statutRisque, trierRisques, type StatutRisque } from "@/lib/risques";
+import { niveau, repartirPhasesTypes, statutRisque, trierRisques, type StatutRisque } from "@/lib/risques";
 import { nomComplet } from "@/lib/regles";
 import { acteur, projetPourAssignation } from "./gestion";
 import { recalculerSante } from "./sante";
@@ -174,13 +174,9 @@ export async function utiliserPhasesTypes(a: Acces, projetId: string): Promise<{
   const r = await exigerGestion(a, projetId);
   if ("erreur" in r) return r;
   if ((await phasesDuProjet(projetId)).length) return { erreur: "Ce projet a déjà ses phases." };
-  const debut = r.projet.dateEntree;
-  const fin = r.projet.dateFinPrevue;
-  const jours = debut && fin && fin > debut ? (new Date(`${fin}T12:00:00Z`).getTime() - new Date(`${debut}T12:00:00Z`).getTime()) / 86400000 : 0;
-  const jour = (k: number) => new Date(new Date(`${debut}T12:00:00Z`).getTime() + Math.round((jours * k) / PHASES_TYPES.length) * 86400000).toISOString().slice(0, 10);
   const phases = await db
     .insert(schema.phasesProjet)
-    .values(PHASES_TYPES.map((nom, i) => ({ projetId, ordre: i + 1, nom, debut: jours ? jour(i) : null, fin: jours ? (i === PHASES_TYPES.length - 1 ? fin : jour(i + 1)) : null })))
+    .values(repartirPhasesTypes(r.projet.dateEntree, r.projet.dateFinPrevue).map((x, i) => ({ projetId, ordre: i + 1, ...x })))
     .returning({ id: schema.phasesProjet.id, nom: schema.phasesProjet.nom, debut: schema.phasesProjet.debut, fin: schema.phasesProjet.fin });
   await noter(a.moi.id, "phases_types", projetId);
   await recalculerSante([projetId]);

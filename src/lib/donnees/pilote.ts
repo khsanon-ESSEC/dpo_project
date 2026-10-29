@@ -46,6 +46,7 @@ const L: Record<string, string> = {
     "/projets/[id]/calendrier": "Projet · calendrier",
     "/projets/[id]/charge": "Projet · charge",
     "/projets/[id]/modifier": "Projet · modifier",
+    "/projets/[id]/kit": "Projet · kit de démarrage",
     "/projets/[id]/livrables": "Projet · livrables",
     "/projets/[id]/livrables/nouveau": "Projet · nouveau livrable",
     "/projets/[id]/livrables/[id]": "Un livrable",

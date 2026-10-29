@@ -17,6 +17,8 @@ import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { ChoixPersonne } from "@/components/ChoixPersonne";
 import { ChoixListe } from "@/components/ChoixListe";
+import { ChampsCadrage } from "@/components/ChampsCadrage";
+import { cadrageValide } from "@/lib/cadrage";
 import { choixListes, peutGererListes } from "@/lib/donnees/listes";
 import { archiver, enregistrerProjet, supprimer } from "../../gestion-actions";
 import { objectifsDuProjet } from "@/lib/donnees/objectifs";
@@ -124,6 +126,7 @@ export default async function PageModifierProjet({ params, searchParams }: { par
               />
             </div>
           </div>
+          <ChampsCadrage valeur={cadrageValide(p.cadrage)} id="mp-cadrage" aide="Les cases de la fiche de projet : elles préparent le kit de démarrage (livrables, risques, bénéfices proposés)." />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
             <div style={{ flex: "1 1 260px", minWidth: 0 }}>
               <ChoixPersonne id="mp-chef" name="chefProjetId" prefixe="chef" libelle="Chef de projet" personnes={personnes} defaut={p.chefProjetId} vide={demande ? "À nommer" : "Choisir"} />

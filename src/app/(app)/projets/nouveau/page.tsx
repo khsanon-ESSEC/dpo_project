@@ -10,6 +10,7 @@ import { nomComplet } from "@/lib/regles";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
 import { ChoixPersonne } from "@/components/ChoixPersonne";
+import { ChampsCadrage } from "@/components/ChampsCadrage";
 import { proposer } from "../gestion-actions";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -104,6 +105,15 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
                 : "Pour le projet d'une autre division, son chef de projet peut être hors division ; la direction nommera un référent de la DPO."
             }
             lienListes={gereListes}
+          />
+          <ChampsCadrage
+            valeur={null}
+            id="pp-cadrage"
+            aide={
+              executif
+                ? "Comme sur la fiche de projet de la DPO. Ces cases préparent le kit de démarrage : livrables, risques et bénéfices proposés au chef de projet."
+                : "Comme sur la fiche de projet de la DPO. Une fois le projet accepté, ces cases préparent son kit de démarrage : livrables, risques et bénéfices proposés au chef de projet."
+            }
           />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
             <div style={{ flex: "2 1 240px", minWidth: 0 }}>

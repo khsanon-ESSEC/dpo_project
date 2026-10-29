@@ -42,6 +42,13 @@ export function trierRisques<T extends { statut: string; probabilite: number; im
 /** Les phases proposées pour démarrer (le chef de projet les renomme, en ajoute ou en retire). */
 export const PHASES_TYPES = ["Cadrage", "Conception", "Réalisation", "Validation métier", "Déploiement", "Clôture"];
 
+/** Les phases types réparties à parts égales de l'entrée à la fin prévue (sans dates si l'une manque). */
+export function repartirPhasesTypes(debut: string | null, fin: string | null): { nom: string; debut: string | null; fin: string | null }[] {
+  const jours = debut && fin && fin > debut ? (new Date(`${fin}T12:00:00Z`).getTime() - new Date(`${debut}T12:00:00Z`).getTime()) / 86400000 : 0;
+  const jour = (k: number) => new Date(new Date(`${debut}T12:00:00Z`).getTime() + Math.round((jours * k) / PHASES_TYPES.length) * 86400000).toISOString().slice(0, 10);
+  return PHASES_TYPES.map((nom, i) => ({ nom, debut: jours ? jour(i) : null, fin: jours ? (i === PHASES_TYPES.length - 1 ? fin : jour(i + 1)) : null }));
+}
+
 /**
  * La phase en cours : la première phase pas encore terminée dont le début est passé (ou sans date de début) ;
  * à défaut, la première pas terminée. Aucune si toutes sont terminées.

@@ -60,6 +60,9 @@ export default async function PageFicheProjet({ params }: { params: Promise<{ id
           <Fait t="Date d'entrée" v={dateLongue(f.dates.entree)} />
           <Fait t="Fin prévue" v={`${dateLongue(f.dates.finPrevue)}${f.dates.finInitiale && f.dates.finInitiale !== f.dates.finPrevue ? ` (initialement le ${dateCourteAnnee(f.dates.finInitiale)})` : ""}`} />
           <Fait t="Lancement prévu" v={dateLongue(f.dates.lancement)} />
+          {f.projet.cadrage.map((l) => (
+            <Fait key={l.rubrique} t={l.rubrique} v={l.valeur} />
+          ))}
         </dl>
         {f.projet.santeMotif ? <p className="fiche-doc__note">Santé : {f.projet.santeMotif}.</p> : null}
         {sections.map((s, i) => (

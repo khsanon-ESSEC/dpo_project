@@ -123,6 +123,7 @@ export async function ficheProjetWord(f: FicheProjet, options: { logoPng?: Buffe
     ["Date d'entrée", dateLongue(f.dates.entree)],
     ["Fin prévue", `${dateLongue(f.dates.finPrevue)}${f.dates.finInitiale && f.dates.finInitiale !== f.dates.finPrevue ? ` (initialement le ${dateLongue(f.dates.finInitiale)})` : ""}`],
     ["Lancement prévu", dateLongue(f.dates.lancement)],
+    ...f.projet.cadrage.map((l) => [l.rubrique, l.valeur] as [string, string]),
   ];
   corps.push(
     new Table({

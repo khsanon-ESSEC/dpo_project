@@ -10,6 +10,7 @@ import { db, schema } from "@/db";
 import { idsProjetsVisibles, type Acces } from "@/lib/acces";
 import { noter } from "@/lib/journal";
 import { aujourdhui } from "@/lib/dates";
+import type { Cadrage } from "@/lib/cadrage";
 import { chargerOrganisation, personneActuelle } from "@/lib/organisation";
 import { codeSuggere, codeValide, motifReport, peutAssigner, reportExigeMotif, projetOuvert, projetSupprimable, STATUTS_ACCEPTES, tacheSupprimable, verifierChefEtReferent, type StatutProjet } from "@/lib/projets";
 import { membresDeLaDirection, nomComplet, resoudreSuperieur } from "@/lib/regles";
@@ -49,7 +50,7 @@ export async function suggestionDeCode(titre: string) {
 // Demandes de projet
 // ---------------------------------------------------------------------------
 
-export type DemandeProjet = { titre: string; description: string; justification: string; programme: string; strategique: boolean; finSouhaitee: string; chefSuggereId: string; code: string; division?: string };
+export type DemandeProjet = { titre: string; description: string; justification: string; programme: string; strategique: boolean; finSouhaitee: string; chefSuggereId: string; code: string; division?: string; cadrage?: Cadrage | null };
 
 /** Création directe par un exécutif : le statut de départ, le référent DPO, la date d'entrée (aujourd'hui si vide). */
 export type CreationDirecte = { statut?: string; referentId?: string; dateEntree?: string };
@@ -107,6 +108,7 @@ export async function proposerProjet(d: DemandeProjet, parId: string, direct?: C
       demandeLe: new Date(),
       justification,
       division,
+      cadrage: d.cadrage ?? null,
       ...(direct ? { dateEntree: date(direct.dateEntree) ?? aujourdhui(), decisionParId: parId, decisionLe: new Date(), motifDecision: "" } : {}),
     })
     .returning({ id: schema.projets.id });
@@ -209,6 +211,12 @@ export type ModifProjet = {
   /** Priorité (absente du formulaire : inchangée). */
   priorite?: string;
 };
+
+/** Les cases de la fiche de projet (type de solution, informations disponibles, spécialisations) : src/lib/cadrage.ts. */
+export async function enregistrerCadrage(projetId: string, c: Cadrage, parId: string) {
+  await db.update(schema.projets).set({ cadrage: c, majLe: new Date() }).where(eq(schema.projets.id, projetId));
+  await noter(parId, "cadrage_modifie", projetId, c);
+}
 
 export async function modifierProjet(projetId: string, d: ModifProjet, parId: string): Promise<{ ok: true } | { erreur: string }> {
   const [p] = await db.select().from(schema.projets).where(eq(schema.projets.id, projetId));
