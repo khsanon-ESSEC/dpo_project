@@ -9481,8 +9481,9 @@ a.livrable__lien:focus-visible {
 }
 
 /* ---------- Rapport au conseil, tel qu'il part (29 octobre 2026) ----------
-   Ce qui s'affiche est ce qui s'imprime : des feuilles A4 à l'italienne, de même largeur à l'écran et sur papier,
-   aux couleurs fixes (un document, clair même en thème sombre). Sur téléphone seulement, la mise en page se resserre. */
+   Ce qui s'affiche est ce qui s'imprime : des feuilles Legal (8,5 × 14 po) à l'italienne, de même mise en page à
+   l'écran et sur papier (réduites pour tenir dans la largeur d'un portable), aux couleurs fixes (un document, clair
+   même en thème sombre). Sur téléphone seulement, la mise en page se resserre. */
 .zone-impression {
   overflow-x: auto;
 }
@@ -9503,20 +9504,27 @@ a.livrable__lien:focus-visible {
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
+/* Le cadre prend la hauteur des feuilles réduites (la réduction ne change pas la mise en page). */
+.pc-cadre[data-ajuste] {
+  overflow: hidden;
+}
 .pc-feuilles {
+  width: max-content;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 24px;
+  transform-origin: top left;
 }
 .pc-feuille {
   box-sizing: border-box;
-  width: 297mm;
-  min-height: 210mm;
+  width: 355.6mm;
+  min-height: 215.9mm;
   padding: 10mm 12mm;
   display: flex;
   flex-direction: column;
-  gap: 6mm;
+  gap: 5mm;
   background: #ffffff;
   border: 1px solid var(--surface-filet);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 8px 24px rgba(0, 0, 0, 0.06);
@@ -9723,7 +9731,7 @@ a.livrable__lien:focus-visible {
 }
 .pc-essentiel__ligne {
   display: grid;
-  grid-template-columns: minmax(0, 330px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 400px) minmax(0, 1fr);
   gap: 14px;
   align-items: baseline;
   padding: 7px 0 7px 10px;
@@ -9767,7 +9775,7 @@ a.livrable__lien:focus-visible {
 .pc-axe,
 .pc-ligne {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 120px;
+  grid-template-columns: 290px minmax(0, 1fr) 120px;
   gap: 14px;
   align-items: center;
 }
@@ -9916,26 +9924,34 @@ a.livrable__lien:focus-visible {
   height: 12px;
   border-left: 1.5px dashed rgba(31, 31, 31, 0.45);
 }
-/* Le détail : une fiche par projet, deux par rangée. */
-.pc-cartes {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5mm;
-  align-items: start;
-}
+/* Le détail : une bande par projet sur toute la largeur (projet │ état │ livrables et risque │ dates), 3 à 4 par
+   feuille. La couleur de la santé borde la bande à gauche ; le mot est dans la première colonne. */
 .pc-carte {
+  display: grid;
+  grid-template-columns: 256px minmax(0, 1fr) 244px 196px;
+  padding: 9px 0;
+  border: 1px solid var(--pc-filet);
+  border-left: 4px solid var(--pc-sante);
+  font-size: 12px;
+  line-height: 16px;
+  break-inside: avoid;
+}
+.pc-carte > * {
+  min-width: 0;
+  margin: 0;
+  padding: 0 14px;
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 12px 14px 14px;
-  border: 1px solid var(--pc-filet);
-  border-top: 4px solid var(--pc-sante);
-  break-inside: avoid;
+  align-items: flex-start;
+  gap: 6px;
+}
+.pc-carte > * + * {
+  border-left: 1px solid var(--pc-filet);
 }
 .pc-carte__entete {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
 }
 .pc-carte__titres {
   flex: 1;
@@ -9945,39 +9961,49 @@ a.livrable__lien:focus-visible {
 }
 .pc-carte__titres h4 {
   margin: 0;
-  font-size: 15px;
-  line-height: 20px;
+  font-size: 14px;
+  line-height: 18px;
   font-weight: 600;
   color: var(--pc-marine);
 }
 .pc-carte__programme {
   font-size: 11px;
+  line-height: 14px;
   color: var(--pc-discret);
 }
 .pc-carte__alerte {
   margin: 0;
-  padding: 6px 10px;
+  padding: 4px 8px;
   background: var(--pc-ambre-fond);
   color: var(--pc-ambre-encre);
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 11px;
+  line-height: 15px;
 }
 .pc-carte__etat {
   margin: 0;
-  font-size: 13px;
-  line-height: 19px;
+  font-size: 12.5px;
+  line-height: 17px;
+}
+.pc-carte__objectifs {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 15px;
+}
+.pc-carte__objectifs .pc-etiquette {
+  margin-right: 6px;
 }
 .pc-carte__risque {
   margin: 0;
-  font-size: 12px;
-  line-height: 17px;
+  font-size: 11.5px;
+  line-height: 15px;
   color: #8f2a1f;
 }
 .pc-livrables {
+  align-self: stretch;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 4px 10px;
+  gap: 3px 10px;
   font-size: 12px;
 }
 .pc-livrables__texte strong {
@@ -9997,6 +10023,7 @@ a.livrable__lien:focus-visible {
 .pc-livrables__prochain {
   grid-column: 1 / -1;
   font-size: 11px;
+  line-height: 14px;
   color: var(--pc-discret);
 }
 .pc-livrables__prochain--retard {
@@ -10005,6 +10032,7 @@ a.livrable__lien:focus-visible {
 }
 .pc-etiquette {
   font-size: 10px;
+  line-height: 13px;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -10014,29 +10042,28 @@ a.livrable__lien:focus-visible {
   margin-right: 6px;
   color: #8f2a1f;
 }
-.pc-objectifs ul {
-  margin: 2px 0 0;
-  padding-left: 16px;
-  font-size: 12px;
-  line-height: 17px;
-}
+/* Les dates : un petit tableau, le libellé à gauche, la date à droite. */
 .pc-dates {
-  margin: 0;
-  padding-top: 8px;
-  border-top: 1px solid var(--pc-filet);
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
+  align-items: stretch;
+  gap: 2px;
+}
+.pc-dates > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
 }
 .pc-dates dt {
-  font-size: 10px;
-  line-height: 13px;
+  font-size: 10.5px;
+  line-height: 16px;
   color: var(--pc-discret);
+  white-space: nowrap;
 }
 .pc-dates dd {
-  margin: 1px 0 0;
+  margin: 0;
   font-size: 12px;
   line-height: 16px;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 .pc-dates__change dd {
@@ -10046,6 +10073,7 @@ a.livrable__lien:focus-visible {
 /* Téléphone : on ne l'imprime pas d'ici ; la feuille se resserre pour se lire. */
 @media (max-width: 699px) {
   .pc-feuilles {
+    width: auto;
     align-items: stretch;
   }
   .pc-feuille {
@@ -10060,12 +10088,19 @@ a.livrable__lien:focus-visible {
   .pc-logo {
     width: 80px;
   }
-  .pc-chiffres,
-  .pc-cartes {
+  .pc-chiffres {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .pc-cartes {
+  /* La bande devient une fiche : les colonnes l'une sous l'autre. */
+  .pc-carte {
     grid-template-columns: minmax(0, 1fr);
+    row-gap: 10px;
+    padding: 12px 0;
+  }
+  .pc-carte > * + * {
+    border-left: 0;
+    border-top: 1px solid var(--pc-filet);
+    padding-top: 10px;
   }
   .pc-essentiel__ligne {
     grid-template-columns: minmax(0, 1fr);
@@ -10085,13 +10120,15 @@ a.livrable__lien:focus-visible {
     display: none;
   }
   .pc-dates {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 2px 16px;
   }
 }
 /* À l'impression : seulement les feuilles, une par page (la page de garde fait la synthèse). */
 @media print {
   @page {
-    size: A4 landscape;
+    size: legal landscape;
     margin: 10mm 12mm;
   }
   body:has(.zone-impression) .bandeau,
@@ -10119,13 +10156,21 @@ a.livrable__lien:focus-visible {
   .zone-impression {
     overflow: visible;
   }
+  /* La réduction d'écran ne s'imprime pas : la feuille sort à sa taille. */
+  .pc-cadre {
+    height: auto !important;
+    overflow: visible !important;
+  }
   .pc-feuilles {
     display: block;
+    width: auto;
+    margin: 0;
+    transform: none !important;
   }
   /* Une feuille par page, à la même hauteur qu'à l'écran (le pied en bas de page). */
   .pc-feuille {
     width: auto;
-    min-height: calc(190mm - 2px);
+    min-height: calc(195.9mm - 2px);
     padding: 0;
     border: 0;
     box-shadow: none;

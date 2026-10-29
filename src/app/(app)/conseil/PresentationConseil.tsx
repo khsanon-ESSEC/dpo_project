@@ -1,14 +1,15 @@
 /**
  * Le rapport au conseil tel qu'il part (présentation proposée le 29 octobre 2026, retenue le même jour) : ce qu'on voit
- * à l'écran est ce qui s'imprime. Deux feuilles A4 à l'italienne : la synthèse (chiffres du mois, l'essentiel de chaque
- * projet en une ligne, calendrier de livraison), puis le détail par projet. Les projets se lisent du plus préoccupant au
+ * à l'écran est ce qui s'imprime. Des feuilles Legal (8,5 × 14 po) à l'italienne : la synthèse (chiffres du mois,
+ * l'essentiel de chaque projet en une ligne, calendrier de livraison), puis le détail, une bande par projet, 3 à 4 par
+ * feuille. Les projets se lisent du plus préoccupant au
  * moins préoccupant : les membres du conseil ont peu de temps, l'important vient d'abord. Lecture seule : l'état
  * d'avancement se corrige dans le tableau de relecture.
  */
 import type { lignesConseil } from "@/lib/donnees/conseil";
 import { dateCourteAnnee, moisAnnee } from "@/lib/dates";
 import { axeCalendrier, ecart, essentielDuProjet, RANG_SANTE, texteEcart, type ApercuConseil, type DatesProjet } from "@/lib/presentation-conseil";
-import { FeuillesA4 } from "./FeuillesA4";
+import { Feuilles } from "./Feuilles";
 
 type Lignes = Awaited<ReturnType<typeof lignesConseil>>;
 
@@ -72,56 +73,62 @@ export function PresentationConseil({
   const aujourdhui = axe.position(jour);
   const titreMois = moisAnnee(mois);
 
-  const carte = (p: (typeof projets)[number]) => (
+  // Le détail : une bande par projet sur toute la largeur (3 à 4 par feuille Legal à l'italienne, demandé le
+  // 29 octobre 2026) ; chaque bande est un bloc, rangé dans la feuille qui peut la contenir.
+  const bande = (p: (typeof projets)[number]) => (
     <article key={p.id} className={`pc-carte pc-carte--${p.sante}`} aria-labelledby={`pc-p-${p.id}`}>
-      <header className="pc-carte__entete">
-        <span className="pc-carte__numero">{p.numero}</span>
-        <span className="pc-carte__titres">
-          <h4 id={`pc-p-${p.id}`}>{p.titre}</h4>
-          {p.programme ? <span className="pc-carte__programme">{p.programme}</span> : null}
+      <div className="pc-carte__identite">
+        <span className="pc-carte__entete">
+          <span className="pc-carte__numero">{p.numero}</span>
+          <span className="pc-carte__titres">
+            <h4 id={`pc-p-${p.id}`}>{p.titre}</h4>
+            {p.programme ? <span className="pc-carte__programme">{p.programme}</span> : null}
+          </span>
         </span>
         <Sante valeur={p.sante} />
-      </header>
-      {p.ceMois && p.ceMois > 0 ? (
-        <p className="pc-carte__alerte">
-          Fin repoussée ce mois : {dateCourteAnnee(p.dates.finDernier)} → <strong>{dateCourteAnnee(p.dates.nouvelleFin)}</strong> ({texteEcart(p.ceMois)})
-        </p>
-      ) : null}
-      <p className="pc-carte__etat">{p.etat}</p>
-      {p.livrables && p.livrables.total ? (
-        <div className="pc-livrables">
-          <span className="pc-livrables__texte">
-            <strong>
-              {p.livrables.valides}/{p.livrables.total}
-            </strong>{" "}
-            livrable{p.livrables.total > 1 ? "s" : ""} validé{p.livrables.valides > 1 ? "s" : ""}
-          </span>
-          <span className="pc-livrables__piste" aria-hidden="true">
-            <span style={{ width: `${(p.livrables.valides / p.livrables.total) * 100}%` }} />
-          </span>
-          {p.livrables.prochain ? (
-            <span className={`pc-livrables__prochain${p.livrables.prochain.enRetard ? " pc-livrables__prochain--retard" : ""}`}>
-              {p.livrables.prochain.enRetard ? "En retard" : "Prochain"} : {p.livrables.prochain.libelle}
-              {p.livrables.prochain.prevuLe ? `, prévu le ${dateCourteAnnee(p.livrables.prochain.prevuLe)}` : ""}
+        {p.ceMois && p.ceMois > 0 ? (
+          <p className="pc-carte__alerte">
+            Fin repoussée ce mois : {dateCourteAnnee(p.dates.finDernier)} → <strong>{dateCourteAnnee(p.dates.nouvelleFin)}</strong> ({texteEcart(p.ceMois)})
+          </p>
+        ) : null}
+      </div>
+      <div className="pc-carte__texte">
+        <span className="pc-etiquette">État d&apos;avancement</span>
+        <p className="pc-carte__etat">{p.etat}</p>
+        {p.objectifs.length ? (
+          <p className="pc-carte__objectifs">
+            <span className="pc-etiquette">Objectifs</span> {p.objectifs.join(" ; ")}
+          </p>
+        ) : null}
+      </div>
+      <div className="pc-carte__suivi">
+        {p.livrables && p.livrables.total ? (
+          <div className="pc-livrables">
+            <span className="pc-livrables__texte">
+              <strong>
+                {p.livrables.valides}/{p.livrables.total}
+              </strong>{" "}
+              livrable{p.livrables.total > 1 ? "s" : ""} validé{p.livrables.valides > 1 ? "s" : ""}
             </span>
-          ) : null}
-        </div>
-      ) : null}
-      {p.risqueCritique ? (
-        <p className="pc-carte__risque">
-          <span className="pc-etiquette">Risque critique</span> {p.risqueCritique}
-        </p>
-      ) : null}
-      {p.objectifs.length ? (
-        <div className="pc-objectifs">
-          <span className="pc-etiquette">Objectifs</span>
-          <ul>
-            {p.objectifs.map((o) => (
-              <li key={o}>{o}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+            <span className="pc-livrables__piste" aria-hidden="true">
+              <span style={{ width: `${(p.livrables.valides / p.livrables.total) * 100}%` }} />
+            </span>
+            {p.livrables.prochain ? (
+              <span className={`pc-livrables__prochain${p.livrables.prochain.enRetard ? " pc-livrables__prochain--retard" : ""}`}>
+                {p.livrables.prochain.enRetard ? "En retard" : "Prochain"} : {p.livrables.prochain.libelle}
+                {p.livrables.prochain.prevuLe ? `, prévu le ${dateCourteAnnee(p.livrables.prochain.prevuLe)}` : ""}
+              </span>
+            ) : null}
+          </div>
+        ) : (
+          <span className="pc-livrables__prochain">Aucun livrable défini</span>
+        )}
+        {p.risqueCritique ? (
+          <p className="pc-carte__risque">
+            <span className="pc-etiquette">Risque critique</span> {p.risqueCritique}
+          </p>
+        ) : null}
+      </div>
       <dl className="pc-dates">
         <div>
           <dt>Entrée</dt>
@@ -149,9 +156,6 @@ export function PresentationConseil({
       </dl>
     </article>
   );
-  // Le détail : deux fiches par rangée ; chaque rangée est un bloc (une feuille en contient autant qu'elle peut).
-  const rangees: (typeof projets)[] = [];
-  for (let i = 0; i < projets.length; i += 2) rangees.push(projets.slice(i, i + 2));
 
   // ---------- Les blocs de la synthèse ----------
   const tete = (
@@ -321,7 +325,7 @@ export function PresentationConseil({
 
   return (
     <article className="presentation-conseil" aria-label={`Rapport au conseil, ${titreMois}`}>
-      <FeuillesA4
+      <Feuilles
         pied={`Division Productivité et Organisation · Rapport au conseil · ${titreMois}`}
         sections={[
           { cle: "synthese", blocs: [tete, essentiel, calendrier] },
@@ -329,11 +333,7 @@ export function PresentationConseil({
             cle: "detail",
             blocs: [
               enteteDetail,
-              ...rangees.map((r) => (
-                <div key={r[0].id} className="pc-cartes">
-                  {r.map(carte)}
-                </div>
-              )),
+              ...projets.map(bande),
             ],
           },
         ]}

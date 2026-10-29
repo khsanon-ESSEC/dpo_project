@@ -152,7 +152,7 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
         {vue === "presentation" ? (
           <>
             <p className="note" style={{ margin: 0 }}>
-              Le rapport tel qu&apos;il part au conseil : ce qui s&apos;affiche ici est ce qui s&apos;imprime (A4 à l&apos;italienne). Les projets vont du plus préoccupant au moins préoccupant. Pour corriger un état d&apos;avancement : le{" "}
+              Le rapport tel qu&apos;il part au conseil : ce qui s&apos;affiche ici est ce qui s&apos;imprime (Legal, 8,5 × 14 po, à l&apos;italienne). Les projets vont du plus préoccupant au moins préoccupant. Pour corriger un état d&apos;avancement : le{" "}
               <a href={`/conseil?mois=${mois}&vue=tableau`} className="lien-discret">
                 tableau de relecture
               </a>
