@@ -136,6 +136,16 @@ describe.skipIf(!URL_TEST)("actions de la barre", () => {
     expect(d).toMatchObject({ ok: true, message: expect.stringMatching(/proposé : la direction est prévenue/) });
     expect(await annuler("daphnee.joseph", d.annulation)).toMatchObject({ ok: true });
     expect(await faire("daphnee.joseph", "Nouveau projet : Sans raison")).toMatchObject({ message: expect.stringMatching(/Dites pourquoi/) });
+
+    // Un exécutif : le projet naît validé, sans demande ; sans chef nommé, la barre le demande et ne crée rien.
+    expect(await faire("frantz.desrosiers", "Nouveau projet : Signature mobile : les clients signent en agence")).toMatchObject({ message: "Dites qui en sera le chef de projet : « … chef Myriam »." });
+    expect((await D.db.select().from(D.schema.projets).where(eq(D.schema.projets.titre, "Signature mobile"))).length).toBe(0);
+    const x = await faire("frantz.desrosiers", "Nouveau projet : Signature mobile code SM chef Myriam : les clients signent en agence");
+    expect(x).toMatchObject({ ok: true, message: "Projet SM « Signature mobile » créé, en cours, avec Myriam Valcin comme chef de projet." });
+    const [sm] = await D.db.select().from(D.schema.projets).where(eq(D.schema.projets.code, "SM"));
+    expect(sm).toMatchObject({ statut: "en_cours", chefProjetId: qui("myriam.valcin").id, decisionParId: qui("frantz.desrosiers").id });
+    expect((await D.db.select().from(D.schema.notifications).where(eq(D.schema.notifications.lien, `/projets/${sm.id}`))).filter((n) => n.type === "demande_projet")).toHaveLength(0);
+    expect(await annuler("frantz.desrosiers", x.annulation)).toMatchObject({ ok: true });
   });
 
   it("rapports : le ponctuel par une directrice, pas par une chargée de projets ; envoyer son rapport", async () => {

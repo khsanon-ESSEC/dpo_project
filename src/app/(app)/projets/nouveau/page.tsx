@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { exigerInterne } from "@/lib/auth/session";
+import { aujourdhui } from "@/lib/dates";
+import { LIBELLE_STATUT_PROJET, STATUTS_ACCEPTES } from "@/lib/projets";
 import { acces } from "@/lib/acces";
 import { choixListes, peutGererListes } from "@/lib/donnees/listes";
 import { ChoixListe } from "@/components/ChoixListe";
@@ -10,15 +12,23 @@ import { Icone } from "@/components/Icone";
 import { ChoixPersonne } from "@/components/ChoixPersonne";
 import { proposer } from "../gestion-actions";
 
-export const metadata: Metadata = { title: "Proposer un projet" };
+export async function generateMetadata(): Promise<Metadata> {
+  const u = await exigerInterne();
+  return { title: (await acces(u)).toutVoir ? "Créer un projet" : "Proposer un projet" };
+}
 
-/** Tout le monde peut proposer un projet : il naît en « Requête », la direction l'accepte ou le refuse. */
+/**
+ * Tout le monde peut proposer un projet : il naît en « Requête », la direction l'accepte ou le refuse.
+ * Un exécutif le crée directement (29 octobre 2026) : il nomme le chef de projet, et le projet naît validé.
+ */
 export default async function PageProposerProjet({ searchParams }: { searchParams: Promise<{ erreur?: string }> }) {
   const { erreur } = await searchParams;
   const u = await exigerInterne();
+  const a = await acces(u);
+  const executif = a.toutVoir;
   const org = await chargerOrganisation();
   const listes = await choixListes();
-  const gereListes = peutGererListes(u, await acces(u));
+  const gereListes = peutGererListes(u, a);
   const personnes = [...org.personnes.values()]
     .filter((p) => p.actif)
     .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
@@ -27,7 +37,7 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
     <>
       <Bandeau
         surtitre="Projets"
-        titre="Proposer un projet"
+        titre={executif ? "Créer un projet" : "Proposer un projet"}
         retour={
           <a href="/projets" className="retour">
             <Icone nom="chevron-gauche" taille={18} /> Projets
@@ -35,7 +45,9 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
         }
       >
         <p className="discret" style={{ margin: "8px 0 0", fontSize: 14, lineHeight: "21px", maxWidth: 640 }}>
-          Votre proposition part à la direction. Un directeur ou un exécutif l&apos;accepte et nomme le chef de projet, ou la refuse en vous disant pourquoi.
+          {executif
+            ? "Vous êtes exécutif : le projet est créé tout de suite, déjà validé, sans demande à accepter. Nommez son chef de projet ; il est prévenu."
+            : "Votre proposition part à la direction. Un directeur ou un exécutif l'accepte et nomme le chef de projet, ou la refuse en vous disant pourquoi."}
         </p>
       </Bandeau>
       <div className="page">
@@ -76,7 +88,7 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
               <ChoixListe id="pp-programme" name="programme" libelle="Programme (facultatif)" valeurs={listes.programme} vide="Aucun programme" lienListes={gereListes} />
             </div>
             <div className="champ" style={{ flex: "1 1 160px" }}>
-              <label htmlFor="pp-fin">Fin souhaitée (facultatif)</label>
+              <label htmlFor="pp-fin">{executif ? "Fin prévue (facultatif)" : "Fin souhaitée (facultatif)"}</label>
               <input id="pp-fin" name="finSouhaitee" type="date" />
             </div>
           </div>
@@ -86,12 +98,20 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
             libelle="Division du projet"
             valeurs={listes.division}
             vide="La DPO (projet de la division)"
-            aide="Pour le projet d'une autre division, son chef de projet peut être hors division ; la direction nommera un référent de la DPO."
+            aide={
+              executif
+                ? "Pour le projet d'une autre division, son chef de projet peut être hors division ; nommez alors un référent DPO plus bas."
+                : "Pour le projet d'une autre division, son chef de projet peut être hors division ; la direction nommera un référent de la DPO."
+            }
             lienListes={gereListes}
           />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 16, alignItems: "flex-start" }}>
             <div style={{ flex: "2 1 240px", minWidth: 0 }}>
-              <ChoixPersonne id="pp-chef" name="chefSuggereId" prefixe="chef" libelle="Chef de projet suggéré (facultatif)" personnes={personnes} vide="À choisir par la direction" />
+              {executif ? (
+                <ChoixPersonne id="pp-chef" name="chefSuggereId" prefixe="chef" libelle="Chef de projet" personnes={personnes} vide="Choisir" />
+              ) : (
+                <ChoixPersonne id="pp-chef" name="chefSuggereId" prefixe="chef" libelle="Chef de projet suggéré (facultatif)" personnes={personnes} vide="À choisir par la direction" />
+              )}
             </div>
             <div className="champ" style={{ flex: "1 1 120px" }}>
               <label htmlFor="pp-code">Code (facultatif)</label>
@@ -101,10 +121,40 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
               </span>
             </div>
           </div>
+          {executif ? (
+            <>
+              <ChoixPersonne
+                id="pp-referent"
+                name="referentId"
+                prefixe="referent"
+                libelle="Référent DPO"
+                personnes={personnes.filter((x) => !x.externe)}
+                vide="Aucun"
+                horsDivision={false}
+                aide="Si le chef de projet est hors division."
+              />
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+                <div className="champ" style={{ flex: "1 1 160px" }}>
+                  <label htmlFor="pp-statut">Statut de départ</label>
+                  <select id="pp-statut" name="statut" defaultValue="en_cours">
+                    {STATUTS_ACCEPTES.filter((x) => x !== "finalise").map((x) => (
+                      <option key={x} value={x}>
+                        {LIBELLE_STATUT_PROJET[x]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="champ" style={{ flex: "1 1 160px" }}>
+                  <label htmlFor="pp-entree">Date d&apos;entrée</label>
+                  <input id="pp-entree" name="dateEntree" type="date" defaultValue={aujourdhui()} />
+                </div>
+              </div>
+            </>
+          ) : null}
           <label className="role-manuel">
             <span className="rangee__texte">
               <span className="rangee__titre">Projet stratégique</span>
-              <span className="rangee__sous">À confirmer par la direction ; un projet stratégique figure au rapport au conseil.</span>
+              <span className="rangee__sous">{executif ? "Un projet stratégique figure au rapport au conseil." : "À confirmer par la direction ; un projet stratégique figure au rapport au conseil."}</span>
             </span>
             <input type="checkbox" className="interrupteur" name="strategique" />
           </label>
@@ -112,7 +162,7 @@ export default async function PageProposerProjet({ searchParams }: { searchParam
           </div>
           <div>
             <button type="submit" className="bouton-ambre">
-              Envoyer la proposition
+              {executif ? "Créer le projet" : "Envoyer la proposition"}
             </button>
           </div>
         </form>

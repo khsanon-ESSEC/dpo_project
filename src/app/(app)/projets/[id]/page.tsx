@@ -56,9 +56,9 @@ const SANTE = {
   dans_les_temps: { texte: "Dans les temps", classe: "ton-ok" },
 } as const;
 
-export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string; decision?: string; risque?: string; cloture?: string; budget?: string; fait?: string }> }) {
+export default async function PageProjet({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ propose?: string; cree?: string; erreur?: string; doc?: string; docOk?: string; docRetire?: string; vue?: string; p?: string; livrable?: string; decision?: string; risque?: string; cloture?: string; budget?: string; fait?: string }> }) {
   const { id } = await params;
-  const { propose, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut, decision: decisionBrut, risque: risqueBrut, cloture: clotureFait, budget: budgetFait, fait } = await searchParams;
+  const { propose, cree, erreur, doc, docOk, docRetire, vue: vueAvancement, p: pAvancement, livrable: livrableBrut, decision: decisionBrut, risque: risqueBrut, cloture: clotureFait, budget: budgetFait, fait } = await searchParams;
   const livrableFait = livrableBrut === "pret" || livrableBrut === "valider" || livrableBrut === "renvoyer" || livrableBrut === "rouvrir" ? livrableBrut : null;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const u = await exigerUtilisateur();
@@ -447,6 +447,10 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
         {propose ? (
           <p className="succes" role="status">
             Votre proposition est envoyée à la direction. Vous serez prévenu de sa décision.
+          </p>
+        ) : cree ? (
+          <p className="succes" role="status">
+            Projet créé et validé. Son chef de projet est prévenu.
           </p>
         ) : null}
         {erreur ? (

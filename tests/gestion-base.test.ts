@@ -76,6 +76,29 @@ describe.skipIf(!URL_TEST)("gestion des projets et des tâches", () => {
     expect((await notifications("myriam.valcin", "demande_projet")).some((n) => n.texte.includes("Signature électronique"))).toBe(false);
   });
 
+  it("un exécutif crée le projet directement : validé, sans demande ni alerte à la direction ; chef obligatoire (29 octobre 2026)", async () => {
+    const fd = qui("frantz.desrosiers").id;
+    expect(await G.proposerProjet(demande("Sans chef"), fd, { statut: "en_cours" })).toEqual({ erreur: "Nommez le chef de projet." });
+    // Chef hors division : un référent DPO est demandé, comme pour accepter une demande.
+    const consultante = qui("nathalie.celestin").id;
+    expect(await G.proposerProjet({ ...demande("Chef externe"), chefSuggereId: consultante }, fd, { statut: "en_cours" })).toEqual({ erreur: "Le chef de projet est hors division : nommez un référent de la DPO, qui gérera le projet ici." });
+    const r = await G.proposerProjet({ ...demande("Tableau de bord des agences"), chefSuggereId: qui("myriam.valcin").id }, fd, { statut: "en_attente", dateEntree: "2026-11-02" });
+    expect(r).toHaveProperty("id");
+    const p = await projet((r as { id: string }).id);
+    expect(p).toMatchObject({ statut: "en_attente", chefProjetId: qui("myriam.valcin").id, dateEntree: "2026-11-02", demandeParId: fd, decisionParId: fd });
+    // Personne n'a de demande à décider ; la cheffe de projet est prévenue.
+    for (const c of ["marc-antoine.louis", "nadege.augustin"]) expect((await notifications(c, "demande_projet")).some((n) => n.texte.includes("Tableau de bord des agences"))).toBe(false);
+    expect((await notifications("myriam.valcin", "projet")).some((n) => n.texte === "Vous êtes chef du projet « Tableau de bord des agences »")).toBe(true);
+    const fdA = await acces("frantz.desrosiers");
+    expect((await G.demandesDeProjet(fdA, await A.idsProjetsVisibles(fdA))).some((d) => d.id === p.id)).toBe(false);
+    expect((await PR.portefeuille(await acces("myriam.valcin"))).some((x) => x.id === p.id)).toBe(true);
+    // Chef externe avec référent : accepté ; statut inconnu → « En cours ».
+    const e = await G.proposerProjet({ ...demande("Audit externe des agences"), chefSuggereId: consultante }, fd, { statut: "finalise", referentId: qui("daphnee.joseph").id });
+    expect(await projet((e as { id: string }).id)).toMatchObject({ statut: "en_cours", referentId: qui("daphnee.joseph").id });
+    // La base reste comme avant pour les autres fichiers de tests.
+    for (const id of [p.id, (e as { id: string }).id]) expect(await G.supprimerProjet(id, fd)).toEqual({ ok: true });
+  });
+
   it("décider : un refus a un motif ; une acceptation nomme le chef, qui retrouve le projet dans son portefeuille", async () => {
     const r = (await G.proposerProjet(demande("Coffre-fort numérique"), qui("wesner.bazile").id)) as { id: string };
     expect(await G.deciderDemande(r.id, { accepte: false, motif: "" }, qui("marc-antoine.louis").id)).toHaveProperty("erreur");

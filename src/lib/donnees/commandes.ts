@@ -104,11 +104,14 @@ export async function executerCommande(u: Utilisateur, a: Acces, o: { saisie: st
   if (c.type === "aller") return { message: r.resume, ok: true, lien: c.lien };
   if (c.type === "nouveau_projet") {
     if (u.externe) return { message: "Proposer un projet est réservé à la division." };
-    const n = await proposerProjet({ titre: c.titre, description: "", justification: c.justification, programme: "", strategique: c.strategique, finSouhaitee: c.fin ?? "", chefSuggereId: c.chefId ?? "", code: c.code ?? "", division: "" }, u.id);
+    // Un exécutif crée le projet directement, sans demande à valider (29 octobre 2026) : il nomme le chef.
+    if (a.toutVoir && !c.chefId) return { message: "Dites qui en sera le chef de projet : « … chef Myriam »." };
+    const demande = { titre: c.titre, description: "", justification: c.justification, programme: "", strategique: c.strategique, finSouhaitee: c.fin ?? "", chefSuggereId: c.chefId ?? "", code: c.code ?? "", division: "" };
+    const n = await proposerProjet(demande, u.id, a.toutVoir ? { statut: "en_cours", dateEntree: jour } : undefined);
     if ("erreur" in n) return { message: n.erreur };
     const [p] = await db.select({ code: schema.projets.code }).from(schema.projets).where(eq(schema.projets.id, n.id));
-    let accepte = false;
-    if (c.chefId && peutDeciderDemande(a, { demandeParId: u.id })) {
+    let accepte = a.toutVoir;
+    if (!accepte && c.chefId && peutDeciderDemande(a, { demandeParId: u.id })) {
       const d = await deciderDemande(n.id, { accepte: true, motif: "", statut: "en_cours", chefProjetId: c.chefId, dateEntree: jour, dateFinPrevue: c.fin ?? "", strategique: c.strategique }, u.id);
       accepte = !("erreur" in d);
     }

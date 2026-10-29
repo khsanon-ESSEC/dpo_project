@@ -107,7 +107,7 @@ export default async function PagePortefeuille({ searchParams }: { searchParams:
           </nav>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             <a href="/projets/nouveau" className="bouton-contour">
-              <Icone nom="ajouter" taille={18} /> Proposer un projet
+              <Icone nom="ajouter" taille={18} /> {a.toutVoir ? "Créer un projet" : "Proposer un projet"}
             </a>
             {a.toutVoir ? (
               <a href="/conseil" className="bouton-ambre">

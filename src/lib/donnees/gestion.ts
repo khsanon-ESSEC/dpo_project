@@ -9,6 +9,7 @@ import { and, asc, count, eq, isNull, max, ne, or } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { idsProjetsVisibles, type Acces } from "@/lib/acces";
 import { noter } from "@/lib/journal";
+import { aujourdhui } from "@/lib/dates";
 import { chargerOrganisation, personneActuelle } from "@/lib/organisation";
 import { codeSuggere, codeValide, motifReport, peutAssigner, reportExigeMotif, projetOuvert, projetSupprimable, STATUTS_ACCEPTES, tacheSupprimable, verifierChefEtReferent, type StatutProjet } from "@/lib/projets";
 import { membresDeLaDirection, nomComplet, resoudreSuperieur } from "@/lib/regles";
@@ -50,11 +51,18 @@ export async function suggestionDeCode(titre: string) {
 
 export type DemandeProjet = { titre: string; description: string; justification: string; programme: string; strategique: boolean; finSouhaitee: string; chefSuggereId: string; code: string; division?: string };
 
+/** Création directe par un exécutif : le statut de départ, le référent DPO, la date d'entrée (aujourd'hui si vide). */
+export type CreationDirecte = { statut?: string; referentId?: string; dateEntree?: string };
+
 /**
  * Proposer un projet : il naît en « Requête ». Les directeurs au-dessus de la personne (et les
  * exécutifs) sont prévenus ; l'un d'eux l'accepte ou la refuse.
+ *
+ * Un exécutif crée le projet directement (décidé le 29 octobre 2026) : avec `direct`, le projet naît accepté,
+ * sans demande à valider ni alerte à la direction. Le chef de projet est alors obligatoire (et un référent DPO si
+ * le chef est hors division), comme pour accepter une demande. L'appelant vérifie que la personne est exécutif.
  */
-export async function proposerProjet(d: DemandeProjet, parId: string): Promise<{ id: string } | { erreur: string }> {
+export async function proposerProjet(d: DemandeProjet, parId: string, direct?: CreationDirecte): Promise<{ id: string } | { erreur: string }> {
   const titre = texte(d.titre, 160);
   if (!titre) return { erreur: "Donnez un titre au projet." };
   const justification = texte(d.justification, 2000);
@@ -69,7 +77,19 @@ export async function proposerProjet(d: DemandeProjet, parId: string): Promise<{
   const division = await valeurDeListe("division", d.division);
   if (division === null) return { erreur: MESSAGE_HORS_LISTE.division };
   const org = await chargerOrganisation();
-  const chefSuggere = d.chefSuggereId && org.personnes.get(d.chefSuggereId)?.actif ? d.chefSuggereId : null;
+  // Un chef hors division tout juste créé (« Quelqu'un d'autre ») n'est pas encore dans l'organisation chargée.
+  const chefP = d.chefSuggereId ? await personneActuelle(d.chefSuggereId) : null;
+  const chefSuggere = chefP?.actif ? chefP.id : null;
+  let statut: StatutProjet = "requete";
+  let referent: string | null = null;
+  if (direct) {
+    if (!chefP?.actif) return { erreur: "Nommez le chef de projet." };
+    const referentP = direct.referentId && direct.referentId !== chefP.id ? await personneActuelle(direct.referentId) : null;
+    referent = referentP?.actif ? referentP.id : null;
+    const incoherence = verifierChefEtReferent(chefP, referent ? referentP : null);
+    if (incoherence) return { erreur: incoherence };
+    statut = STATUTS_ACCEPTES.includes(direct.statut as StatutProjet) && direct.statut !== "finalise" ? (direct.statut as StatutProjet) : "en_cours";
+  }
   const [p] = await db
     .insert(schema.projets)
     .values({
@@ -78,16 +98,25 @@ export async function proposerProjet(d: DemandeProjet, parId: string): Promise<{
       description: texte(d.description, 2000),
       programme,
       strategique: d.strategique,
-      statut: "requete",
+      statut,
       chefProjetId: chefSuggere,
+      referentId: referent,
       dateFinPrevue: date(d.finSouhaitee),
       dateFinInitiale: date(d.finSouhaitee),
       demandeParId: parId,
       demandeLe: new Date(),
       justification,
       division,
+      ...(direct ? { dateEntree: date(direct.dateEntree) ?? aujourdhui(), decisionParId: parId, decisionLe: new Date(), motifDecision: "" } : {}),
     })
     .returning({ id: schema.projets.id });
+  if (direct) {
+    // Créé par un exécutif : le chef (s'il est de la division) et le référent sont prévenus ; personne n'a à décider.
+    if (chefSuggere !== parId && !chefP!.externe) await db.insert(schema.notifications).values({ personneId: chefSuggere!, type: "projet", texte: `Vous êtes chef du projet « ${titre} »`, lien: `/projets/${p.id}` });
+    if (referent && referent !== parId) await db.insert(schema.notifications).values({ personneId: referent, type: "projet", texte: `Vous êtes le référent DPO du projet « ${titre} »`, lien: `/projets/${p.id}` });
+    await noter(parId, "projet_cree", p.id, { titre, code, statut });
+    return { id: p.id };
+  }
   // Les directeurs au-dessus du demandeur, et les exécutifs.
   const auteur = org.personnes.get(parId);
   const destinataires = [...org.personnes.values()].filter((x) => x.actif && x.id !== parId && (x.executif || (x.directeur && membresDeLaDirection(org, x.id).has(parId))));

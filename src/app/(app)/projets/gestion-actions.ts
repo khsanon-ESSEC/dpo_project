@@ -49,6 +49,8 @@ const revalider = (projetId?: string) => {
 
 export async function proposer(form: FormData) {
   const u = await exigerInterne();
+  // Un exécutif crée le projet directement : pas de demande à valider (29 octobre 2026).
+  const executif = (await acces(u)).toutVoir;
   const r = await proposerProjet(
     {
       titre: String(form.get("titre") ?? ""),
@@ -62,11 +64,12 @@ export async function proposer(form: FormData) {
       division: String(form.get("division") ?? ""),
     },
     u.id,
+    executif ? { statut: String(form.get("statut") ?? ""), referentId: String(form.get("referentId") ?? ""), dateEntree: String(form.get("dateEntree") ?? "") } : undefined,
   );
   if ("erreur" in r) redirect(`/projets/nouveau?erreur=${encodeURIComponent(r.erreur)}`);
   await objectifsDeLaDemande(r.id, form.get("objectifs"));
   revalider();
-  redirect(`/projets/${r.id}?propose=1`);
+  redirect(`/projets/${r.id}?${executif ? "cree" : "propose"}=1`);
 }
 
 export async function decider(projetId: string, form: FormData) {
