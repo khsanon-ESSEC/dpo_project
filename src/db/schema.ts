@@ -777,6 +777,11 @@ export const lignesConseil = pgTable(
     source: text().$type<"regles" | "chef" | "direction" | "ia">().notNull().default("regles"),
     sourceParId: uuid("source_par_id").references(() => personnes.id, { onDelete: "set null" }),
     sourceLe: timestamp("source_le", { withTimezone: true }),
+    /**
+     * Ce que le rapport tel qu'il part au conseil montre en plus des dates et de l'état (29 octobre 2026) : santé,
+     * livrables, risque critique. Figé à l'approbation (vide tant que le rapport est un brouillon : on lit l'état du jour).
+     */
+    apercu: jsonb().$type<{ sante: string; livrables: { valides: number; total: number; prochain: { libelle: string; prevuLe: string | null; enRetard: boolean } | null } | null; risqueCritique: string | null; le: string }>(),
   },
   (t) => [unique("ligne_conseil_projet").on(t.rapportId, t.projetId)],
 );

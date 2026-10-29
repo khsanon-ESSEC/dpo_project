@@ -3,7 +3,8 @@ import { objectifsDesProjets } from "@/lib/donnees/objectifs";
 import type { Metadata } from "next";
 import { acces, exigerAccesConseil, idsProjetsVisibles } from "@/lib/acces";
 import { exigerUtilisateur } from "@/lib/auth/session";
-import { aujourdhui, dateLongue, deMois, moisAnnee } from "@/lib/dates";
+import { aujourdhui, dateLocale, dateLongue, deMois, moisAnnee } from "@/lib/dates";
+import type { ApercuConseil } from "@/lib/presentation-conseil";
 import { calendrierConseil, moisDuConseil } from "@/lib/calendrier-conseil";
 import { lignesConseil, moisCourant, moisDesRapports, moisValide, obtenirOuCreerRapportConseil, rapportDuMois } from "@/lib/donnees/conseil";
 import { iaDisponible } from "@/lib/ia";
@@ -12,15 +13,17 @@ import { Icone } from "@/components/Icone";
 import { ONGLETS_CONSEIL, SousOnglets } from "@/components/SousOnglets";
 import { approuver } from "./actions";
 import { EtapesConseil, TableauConseil } from "./TableauConseil";
-import { PresentationConseil, type LivrablesProjet } from "./PresentationConseil";
-import { livrablesDe } from "@/lib/donnees/livrables";
+import { PresentationConseil } from "./PresentationConseil";
+import { apercusDuJour } from "@/lib/donnees/presentation-conseil";
+import { BoutonImprimer } from "../rapports/[id]/Repondre";
 
 export const metadata: Metadata = { title: "Rapport au conseil" };
 
 export default async function PageConseil({ searchParams }: { searchParams: Promise<{ mois?: string; vue?: string }> }) {
   const { mois: moisDemande, vue: vueDemandee } = await searchParams;
-  // Deux présentations des mêmes lignes, à comparer (29 octobre 2026) : le tableau habituel, et la présentation proposée.
-  const vue = vueDemandee === "presentation" ? "presentation" : "tableau";
+  // Deux présentations des mêmes lignes (29 octobre 2026) : le rapport tel qu'il part au conseil (par défaut, identique à
+  // ce qui s'imprime), et le tableau de relecture, où l'on corrige les états d'avancement (et d'où sort le fichier Word).
+  const vue = vueDemandee === "tableau" ? "tableau" : "presentation";
   const u = await exigerUtilisateur();
   const a = await acces(u);
   exigerAccesConseil(a);
@@ -38,13 +41,13 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
   const navigation = (rapportId?: string) => (
     <nav className="bilan-periode__nav" aria-label="Autre mois" style={{ marginBottom: 12 }}>
       {precedent ? (
-        <a href={`/conseil?mois=${precedent}${vue === "presentation" ? "&vue=presentation" : ""}`} className="bouton-icone" aria-label={`Rapport ${deMois(precedent)}`} title={`Rapport ${deMois(precedent)}`}>
+        <a href={`/conseil?mois=${precedent}${vue === "tableau" ? "&vue=tableau" : ""}`} className="bouton-icone" aria-label={`Rapport ${deMois(precedent)}`} title={`Rapport ${deMois(precedent)}`}>
           <Icone nom="chevron-gauche" taille={20} />
         </a>
       ) : null}
       <span>{moisAnnee(mois).replace(/^./, (c) => c.toUpperCase())}</span>
       {suivant ? (
-        <a href={`/conseil?mois=${suivant}${vue === "presentation" ? "&vue=presentation" : ""}`} className="bouton-icone" aria-label={`Rapport ${deMois(suivant)}`} title={`Rapport ${deMois(suivant)}`}>
+        <a href={`/conseil?mois=${suivant}${vue === "tableau" ? "&vue=tableau" : ""}`} className="bouton-icone" aria-label={`Rapport ${deMois(suivant)}`} title={`Rapport ${deMois(suivant)}`}>
           <Icone nom="chevron-droite" taille={20} />
         </a>
       ) : null}
@@ -81,6 +84,8 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
   // Écrits par leur chef de projet (sur la fiche du projet), et le calendrier du mois (29 octobre 2026).
   const parLeChef = lignes.filter((l) => l.ligne.source === "chef").length;
   const cal = calendrierConseil(mois);
+  // L'« aujourd'hui » du rapport tel qu'il est parti : le jour de son approbation (sinon, aujourd'hui).
+  const jourDuRapport = r.approuveLe ? dateLocale(r.approuveLe) : aujourdhui();
 
   return (
     <>
@@ -110,9 +115,13 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
             </div>
           </dl>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-            <a href={`/api/conseil/${mois}/word`} className={brouillon ? "bouton-contour" : "bouton-ambre"}>
-              <Icone nom="telecharger" taille={18} /> Fichier Word
-            </a>
+            {vue === "presentation" ? (
+              <BoutonImprimer />
+            ) : (
+              <a href={`/api/conseil/${mois}/word`} className="bouton-contour">
+                <Icone nom="telecharger" taille={18} /> Fichier Word (tableau)
+              </a>
+            )}
             {brouillon && a.toutVoir ? (
               <form action={approuver.bind(null, r.id)}>
                 <button type="submit" className="bouton-ambre">
@@ -131,21 +140,32 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
           <p className="succes">Approuvé : dates et états sont figés. Ils serviront de « dernier rapport » le mois prochain.</p>
         )}
         <nav className="vues" aria-label="Présentation du rapport">
-          <a href={`/conseil?mois=${mois}`} aria-current={vue === "tableau" ? "page" : undefined}>
-            <Icone nom="liste" taille={16} />
-            Tableau habituel
-          </a>
-          <a href={`/conseil?mois=${mois}&vue=presentation`} aria-current={vue === "presentation" ? "page" : undefined}>
+          <a href={`/conseil?mois=${mois}`} aria-current={vue === "presentation" ? "page" : undefined}>
             <Icone nom="tableau-de-bord" taille={16} />
-            Présentation proposée
+            Rapport pour le conseil
+          </a>
+          <a href={`/conseil?mois=${mois}&vue=tableau`} aria-current={vue === "tableau" ? "page" : undefined}>
+            <Icone nom="liste" taille={16} />
+            Tableau de relecture
           </a>
         </nav>
         {vue === "presentation" ? (
           <>
             <p className="note" style={{ margin: 0 }}>
-              Proposition à comparer avec le tableau habituel : les mêmes lignes, lues d&apos;un coup d&apos;œil. L&apos;état d&apos;avancement se corrige dans le tableau ; le fichier Word garde le format du tableau.
+              Le rapport tel qu&apos;il part au conseil : ce qui s&apos;affiche ici est ce qui s&apos;imprime (A4 à l&apos;italienne). Les projets vont du plus préoccupant au moins préoccupant. Pour corriger un état d&apos;avancement : le{" "}
+              <a href={`/conseil?mois=${mois}&vue=tableau`} className="lien-discret">
+                tableau de relecture
+              </a>
+              .
             </p>
-            <PresentationConseil lignes={lignes} objectifs={await objectifsDesProjets(lignes.map((l) => l.projet.id))} livrables={await livrablesParProjet(lignes.map((l) => l.projet.id))} mois={mois} jour={aujourdhui()} visibles={visibles} />
+            {!brouillon && lignes.some((l) => !l.ligne.apercu) ? (
+              <p className="note" style={{ margin: 0 }}>
+                Ce rapport a été approuvé avant que la santé, les livrables et les risques soient figés avec lui : ils sont montrés tels qu&apos;ils sont aujourd&apos;hui.
+              </p>
+            ) : null}
+            <div className="zone-impression">
+              <PresentationConseil lignes={lignes} objectifs={await objectifsDesProjets(lignes.map((l) => l.projet.id))} apercus={await apercusDuRapport(lignes)} mois={mois} jour={jourDuRapport} />
+            </div>
           </>
         ) : (
         <TableauConseil
@@ -170,15 +190,9 @@ export default async function PageConseil({ searchParams }: { searchParams: Prom
   );
 }
 
-/** Pour la présentation : livrables validés sur le total, et le prochain à venir (le plus proche non validé). */
-async function livrablesParProjet(ids: string[]): Promise<Map<string, LivrablesProjet>> {
-  const { livrables } = await livrablesDe(ids);
-  const m = new Map<string, LivrablesProjet>();
-  for (const id of ids) {
-    const siens = livrables.filter((l) => l.projetId === id);
-    const ouverts = siens.filter((l) => l.etat !== "atteint").sort((a, b) => (a.prevuLe ?? "9999").localeCompare(b.prevuLe ?? "9999"));
-    const p = ouverts[0];
-    m.set(id, { valides: siens.length - ouverts.length, total: siens.length, prochain: p ? { libelle: p.libelle, prevuLe: p.prevuLe, enRetard: p.enRetard } : null });
-  }
-  return m;
+/** Santé, livrables et risque critique de chaque ligne : figés à l'approbation, sinon ceux du jour. */
+async function apercusDuRapport(lignes: { ligne: { projetId: string; apercu: ApercuConseil | null }; projet: { id: string } }[]) {
+  const manquants = lignes.filter((l) => !l.ligne.apercu).map((l) => l.projet.id);
+  const du = await apercusDuJour(manquants);
+  return new Map(lignes.map((l) => [l.projet.id, l.ligne.apercu ?? du.get(l.projet.id)!]).filter((x): x is [string, ApercuConseil] => !!x[1]));
 }

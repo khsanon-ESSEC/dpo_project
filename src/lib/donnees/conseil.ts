@@ -5,6 +5,7 @@
  *   leur objet, les projets choisis, la période couverte. Ils ne changent pas l'historique mensuel.
  */
 import "server-only";
+import { figerApercus } from "./presentation-conseil";
 import { and, asc, desc, eq, inArray, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { aujourdhui, dateCourte, dateLongue, premierDuMois } from "@/lib/dates";
@@ -164,6 +165,8 @@ export async function approuverRapportConseil(rapportId: string, parId: string) 
   const [r] = await db.select().from(schema.rapportsConseil).where(eq(schema.rapportsConseil.id, rapportId));
   if (!r || r.statut !== "brouillon") return;
   const lignes = await lignesConseil(r.id, r.statut);
+  // Santé, livrables et risque critique, tels qu'ils partent au conseil (29 octobre 2026).
+  await figerApercus(r.id);
   if (r.genre === "ponctuel" || !r.mois) {
     await db.update(schema.rapportsConseil).set({ statut: "approuve", approuveParId: parId, approuveLe: new Date() }).where(eq(schema.rapportsConseil.id, r.id));
     await noter(parId, "conseil_ponctuel_approuve", r.id, { titre: r.titre });

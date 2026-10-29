@@ -33,3 +33,19 @@ describe("présentation du rapport au conseil", () => {
     expect(axeCalendrier([], "2026-10-30").debut).toBe("2026-09-01");
   });
 });
+
+describe("l'essentiel d'un projet, en quelques mots", () => {
+  const base = { entree: "2024-06-25", finInitiale: "2025-07-31", finDernier: "2026-10-29", nouvelleFin: "2026-11-26", lancement: "2026-12-10" };
+  it("fin repoussée, livrable en retard, risque critique, lancement proche", async () => {
+    const { essentielDuProjet } = await import("@/lib/presentation-conseil");
+    expect(
+      essentielDuProjet({ dates: base, ceMois: 28, depuisLeDebut: 483, prochainLivrable: { libelle: "Audit passé", prevuLe: "2026-09-18", enRetard: true }, risqueCritique: "Correctifs pas prêts" }, "2026-10-30"),
+    ).toEqual(["Fin repoussée de 4 sem. ce mois, au 26 nov. 2026", "Livrable en retard : « Audit passé », prévu le 18 sept. 2026", "Risque critique : Correctifs pas prêts", "Lancement le 10 déc. 2026"]);
+  });
+  it("fin maintenue (avec le retard sur l'initiale), prochain livrable, lancement lointain non dit", async () => {
+    const { essentielDuProjet } = await import("@/lib/presentation-conseil");
+    expect(
+      essentielDuProjet({ dates: { ...base, finDernier: "2026-11-26", lancement: "2027-02-27" }, ceMois: 0, depuisLeDebut: 483, prochainLivrable: { libelle: "Développement terminé", prevuLe: "2026-11-16", enRetard: false }, risqueCritique: null }, "2026-10-30"),
+    ).toEqual(["Fin prévue le 26 nov. 2026 (+16 mois sur la date initiale)", "Prochain livrable : « Développement terminé » le 16 nov. 2026"]);
+  });
+});

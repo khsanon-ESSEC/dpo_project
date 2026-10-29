@@ -1,0 +1,1 @@
+ALTER TABLE "lignes_conseil" ADD COLUMN "apercu" jsonb;

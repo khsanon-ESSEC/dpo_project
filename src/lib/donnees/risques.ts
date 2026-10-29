@@ -130,6 +130,15 @@ export async function risquesCritiquesOuverts(projetIds: string[]): Promise<Map<
   return m;
 }
 
+/** Pour le rapport au conseil : le risque critique ouvert le plus grave de chaque projet (son titre). */
+export async function risquesCritiquesPrincipaux(projetIds: string[]): Promise<Map<string, string>> {
+  const m = new Map<string, string>();
+  if (!projetIds.length) return m;
+  const l = await db.select().from(schema.risquesProjet).where(and(inArray(schema.risquesProjet.projetId, projetIds), eq(schema.risquesProjet.statut, "ouvert")));
+  for (const r of trierRisques(l)) if (!m.has(r.projetId) && r.probabilite * r.impact >= 6) m.set(r.projetId, r.titre);
+  return m;
+}
+
 // ---------------------------------------------------------------------------
 // Phases
 // ---------------------------------------------------------------------------
