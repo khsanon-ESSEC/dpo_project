@@ -965,7 +965,10 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                             {t.initiales}
                           </span>
                           <span className="rangee__texte">
-                            <span className="rangee__titre">{t.titre}</span>
+                            <span className="rangee__titre">
+                              <PastilleStatut statut={t.statut} retard={t.retard} />
+                              {t.titre}
+                            </span>
                           </span>
                           <span className={`rangee__meta ${t.statut === "bloquee" ? "ton-veille" : t.retard ? "ton-retard" : ""}`}>{t.statut === "bloquee" ? "Bloquée" : e.texte || "Sans échéance"}</span>
                         </a>

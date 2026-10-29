@@ -1,3 +1,4 @@
+import { PastilleStatut } from "./PastilleStatut";
 import { ajouterJours, dateCourte, ecartJours, premierDuMois } from "@/lib/dates";
 import { estJourOuvre } from "@/lib/charge";
 import { DefilerVersAujourdhui } from "./DefilerVersAujourdhui";
@@ -8,7 +9,7 @@ export const LIBELLE_ZOOM: Record<Zoom, string> = { jour: "Jours", semaine: "Sem
 
 export type BarreGantt = { debut: string; fin: string; classe: string; texte?: string; titre: string; lien?: string };
 export type JalonGantt = { date: string; type: "fin" | "initial" | "lancement" | "livrable" | "livrable-valide" | "livrable-retard"; titre: string };
-export type LigneGantt = { id: string; libelle: string; sous?: string; lien?: string; groupe?: boolean; mono?: string; barres: BarreGantt[]; jalons?: JalonGantt[] };
+export type LigneGantt = { id: string; libelle: string; sous?: string; lien?: string; groupe?: boolean; mono?: string; statut?: string; retard?: boolean; barres: BarreGantt[]; jalons?: JalonGantt[] };
 
 const MOIS = new Intl.DateTimeFormat("fr-FR", { timeZone: "UTC", month: "short", year: "numeric" });
 const moisCourt = (iso: string) => MOIS.format(new Date(`${iso}T12:00:00Z`)).replace(".", "");
@@ -64,6 +65,7 @@ export function Gantt({ id, lignes, debut, fin, zoom, aujourdhui, finProjet }: {
                     {l.mono}
                   </i>
                 ) : null}
+                {l.statut ? <PastilleStatut statut={l.statut} retard={l.retard} /> : null}
                 <span>
                   {l.libelle}
                   {l.sous ? <small style={{ display: "block", color: "var(--discret)", fontWeight: 400 }}>{l.sous}</small> : null}
@@ -76,6 +78,7 @@ export function Gantt({ id, lignes, debut, fin, zoom, aujourdhui, finProjet }: {
                     {l.mono}
                   </i>
                 ) : null}
+                {l.statut ? <PastilleStatut statut={l.statut} retard={l.retard} /> : null}
                 <span>
                   {l.libelle}
                   {l.sous ? <small style={{ display: "block", color: "var(--discret)", fontWeight: 400 }}>{l.sous}</small> : null}

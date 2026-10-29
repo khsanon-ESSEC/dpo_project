@@ -180,6 +180,12 @@ describe("page de retour après une action", () => {
     expect(retourValide("/a-faire")).toBe("/a-faire");
     expect(retourValide("/taches")).toBe("/taches");
     expect(retourValide("/taches#mes-taches")).toBe("/taches#mes-taches");
+    // Mes tâches : la vue choisie, et le mois du calendrier (29 octobre 2026).
+    expect(retourValide("/taches?vue=tableau")).toBe("/taches?vue=tableau");
+    expect(retourValide("/taches?vue=calendrier&mois=2026-11-01")).toBe("/taches?vue=calendrier&mois=2026-11-01");
+    expect(retourValide("/taches?vue=autre")).toBeNull();
+    expect(retourValide("/taches?vue=calendrier&mois=2026-11-01&x=1")).toBeNull();
+    expect(retourValide("/taches?voir=retard")).toBeNull();
     expect(retourValide(`/taches/${id}`)).toBeNull();
     expect(retourValide("//exemple.com")).toBeNull();
     expect(retourValide(`/projets/${id}#"><script>`)).toBeNull();

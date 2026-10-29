@@ -1953,6 +1953,10 @@ a.personne-charge:hover .rangee__titre {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.gantt__nom > .pastille-statut {
+  margin-right: 0;
+  overflow: visible;
+}
 a.gantt__nom:hover span {
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -2141,6 +2145,9 @@ a.gantt__barre:focus-visible {
   padding: 0 4px 4px;
 }
 .kanban__carte {
+  /* Le libellé caché du choix d'état (position absolue) reste dans la carte : sinon, sur téléphone, il sort du
+     tableau qui défile et la page entière défile de côté. */
+  position: relative;
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
@@ -6362,6 +6369,24 @@ a.barres__ligne:hover .barres__libelle {
   flex-direction: column;
   gap: 8px;
 }
+/* Mes tâches : la charge au-dessus de la liste, plus serrée que sur la fiche d'une personne. */
+.fiche-jauges--serre {
+  margin: 4px 0 12px;
+  gap: 16px;
+}
+.ma-charge .carte__entete {
+  flex-wrap: wrap;
+}
+/* Sur téléphone, la liste ne doit pas passer sous la ligne de flottaison : les jauges suffisent, le détail est à un toucher. */
+@media (max-width: 599px) {
+  .ma-charge__resume,
+  .ma-charge__signaux {
+    display: none;
+  }
+  .ma-charge .fiche-jauges--serre {
+    margin-bottom: 0;
+  }
+}
 .evolution-personne {
   margin-top: 8px;
   scroll-margin-top: 80px;
@@ -8331,10 +8356,57 @@ a.livrable__lien:focus-visible {
 .pastille-statut--faite {
   border-color: var(--ok-point);
   background: var(--ok-point);
-  color: #ffffff;
+  color: var(--surface);
 }
 .pastille-statut--retard {
   box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--retard-point);
+}
+.pastille-statut--petite {
+  width: 12px;
+  height: 12px;
+  margin-right: 6px;
+  border-width: 1.5px;
+  vertical-align: -2px;
+}
+.pastille-statut--petite.pastille-statut--bloquee {
+  background-size: 6px 1.5px;
+}
+.pastille-statut--petite.pastille-statut--retard {
+  box-shadow: 0 0 0 1.5px var(--surface), 0 0 0 3px var(--retard-point);
+}
+/* Le titre d'une tâche dans une liste, sa pastille devant (le lien étiré couvre toujours la ligne). */
+.titre-tache {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+}
+.titre-tache > .pastille-statut {
+  margin-top: 2px;
+  vertical-align: 0;
+}
+.titre-tache > .rangee__titre {
+  min-width: 0;
+}
+/* La case à cocher de Mes tâches montre l'état, avec les mêmes formes que la pastille. */
+.case-ronde__rond--en_cours {
+  border-color: var(--actif);
+  background: linear-gradient(90deg, var(--actif) 50%, transparent 50%);
+}
+.case-ronde__rond--bloquee {
+  border-color: var(--veille-point);
+  background: linear-gradient(var(--veille-point), var(--veille-point)) center / 10px 2px no-repeat;
+}
+.case-ronde__rond--retard {
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--retard-point);
+}
+.case-ronde[aria-pressed="true"] .case-ronde__rond--faite {
+  background: var(--ok-point);
+  border-color: var(--ok-point);
+  color: var(--surface);
+}
+.case-ronde:hover .case-ronde__rond--a_faire,
+.case-ronde:focus-visible .case-ronde__rond--a_faire {
+  border-color: var(--ok-point);
 }
 .liste-taches td:first-child {
   /* La pastille et le titre restent ensemble. */

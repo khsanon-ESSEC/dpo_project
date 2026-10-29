@@ -86,6 +86,7 @@ export async function rechercher(u: Utilisateur, saisie: string) {
           projetVisible: !!t.projetId && (visibles === "tous" || visibles.has(t.projetId)),
           sous: [t.assigneId === u.id ? "Moi" : p ? nomComplet(p) : null, t.statut === "faite" ? "Faite" : t.statut === "bloquee" ? "Bloquée" : null].filter(Boolean).join(" · "),
           statut: t.statut,
+          echeance: t.echeance,
           r: r === null ? null : r + (t.statut === "faite" ? 3 : 0),
         };
       })

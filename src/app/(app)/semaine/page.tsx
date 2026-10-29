@@ -1,3 +1,4 @@
+import { PastilleStatut } from "@/components/PastilleStatut";
 import type { Metadata } from "next";
 import { exigerUtilisateur } from "@/lib/auth/session";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
@@ -208,9 +209,12 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
                       <div className="rangee rangee--etiree" style={{ minHeight: 48 }}>
                         {t.projetCode ? <CodeProjet id={t.projetId} code={t.projetCode} titre={t.projetTitre} visible={voit(t.projetId)} /> : null}
                         <span className="rangee__texte">
-                          <a href={`/taches/${t.id}`} className="rangee__titre rangee__lien">
-                            {t.titre}
-                          </a>
+                          <span className="titre-tache">
+                            <PastilleStatut statut={t.statut} retard={jourVu < jour} />
+                            <a href={`/taches/${t.id}`} className="rangee__titre rangee__lien">
+                              {t.titre}
+                            </a>
+                          </span>
                         </span>
                         <span className={`rangee__meta ${t.statut === "faite" ? "ton-ok" : t.statut === "bloquee" ? "ton-veille" : jourVu < jour ? "ton-retard" : ""}`}>{t.libelle}</span>
                       </div>

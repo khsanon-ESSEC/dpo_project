@@ -2,6 +2,7 @@
 
 import { useOptimistic, useState, useTransition } from "react";
 import { deplacerTache } from "@/app/(app)/taches/actions";
+import { PastilleStatut } from "@/components/PastilleStatut";
 
 type Statut = "a_faire" | "en_cours" | "bloquee" | "faite";
 export type CarteTableau = {
@@ -10,6 +11,9 @@ export type CarteTableau = {
   statut: Statut;
   personne: string;
   initiales: string;
+  /** Pastille de la carte : les initiales de la personne (tableau d'un projet) ou le code du projet (Mes tâches). */
+  mono?: string | null;
+  monoTitre?: string;
   echeanceTexte: string;
   retard: boolean;
   estimation: number | null;
@@ -85,7 +89,8 @@ export function Tableau({ cartes, retour }: { cartes: CarteTableau[]; retour: st
               }}
             >
               <div className="kanban__entete">
-                <h2 id={`col-${col.id}`} className="carte__titre" style={{ margin: 0 }}>
+                <h2 id={`col-${col.id}`} className="carte__titre" style={{ margin: 0, display: "flex", alignItems: "center" }}>
+                  <PastilleStatut statut={col.id} />
                   {col.libelle} · {liste.length}
                 </h2>
               </div>
@@ -119,9 +124,15 @@ export function Tableau({ cartes, retour }: { cartes: CarteTableau[]; retour: st
                   ) : null}
                   <div className="kanban__pied">
                     <span style={{ display: "inline-flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                      <span className="mono mono--petit" title={c.personne} aria-label={c.personne}>
-                        {c.initiales}
-                      </span>
+                      {c.mono === undefined ? (
+                        <span className="mono mono--petit" title={c.personne} aria-label={c.personne}>
+                          {c.initiales}
+                        </span>
+                      ) : c.mono ? (
+                        <span className="mono mono--petit" title={c.monoTitre} aria-label={c.monoTitre}>
+                          {c.mono}
+                        </span>
+                      ) : null}
                       <span className={c.retard && c.statut !== "faite" ? "ton-retard" : undefined} style={{ whiteSpace: "nowrap" }}>
                         {c.echeanceTexte}
                       </span>

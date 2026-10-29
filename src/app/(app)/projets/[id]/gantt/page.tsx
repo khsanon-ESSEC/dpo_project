@@ -1,3 +1,4 @@
+import { PastilleStatut } from "@/components/PastilleStatut";
 import type { Metadata } from "next";
 import { ajouterJours, aujourdhui, dateCourte, dateLocale, ecartJours } from "@/lib/dates";
 import { debutPrevu, heuresDe, heuresTexte } from "@/lib/charge";
@@ -113,6 +114,8 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
       libelle: t.titre,
       sous: sous || undefined,
       lien: t.ouvrable ? `/taches/${t.id}?retour=${retour}` : undefined,
+      statut: t.statut,
+      retard: t.retard,
       barres: [
         {
           debut: p.debut,
@@ -241,13 +244,16 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
                     {t.initiales}
                   </span>
                   <span className="rangee__texte">
-                    {t.ouvrable ? (
-                      <a href={`/taches/${t.id}?retour=${retour}`} className="rangee__titre" style={{ color: "inherit" }}>
-                        {t.titre}
-                      </a>
-                    ) : (
-                      <span className="rangee__titre">{t.titre}</span>
-                    )}
+                    <span className="titre-tache">
+                      <PastilleStatut statut={t.statut} retard={t.retard} />
+                      {t.ouvrable ? (
+                        <a href={`/taches/${t.id}?retour=${retour}`} className="rangee__titre" style={{ color: "inherit" }}>
+                          {t.titre}
+                        </a>
+                      ) : (
+                        <span className="rangee__titre">{t.titre}</span>
+                      )}
+                    </span>
                   </span>
                   <span className="rangee__meta">{LIBELLE_STATUT[t.statut]}</span>
                 </li>

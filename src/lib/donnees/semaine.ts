@@ -20,6 +20,9 @@ export type TacheListe = {
   assigneId: string;
   priorite?: string;
   recurrenceId?: string | null;
+  debut?: string | null;
+  estimationHeures?: number | null;
+  blocage?: string | null;
 };
 
 export async function tachesDe(personneIds: string[], options: { semaine?: string } = {}) {
@@ -38,6 +41,9 @@ export async function tachesDe(personneIds: string[], options: { semaine?: strin
       projetTitre: schema.projets.titre,
       priorite: schema.taches.priorite,
       recurrenceId: schema.taches.recurrenceId,
+      debut: schema.taches.debut,
+      estimationHeures: schema.taches.estimationHeures,
+      blocage: schema.taches.blocage,
     })
     .from(schema.taches)
     .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
@@ -179,6 +185,28 @@ export async function etatMonRapport(personneId: string) {
   const org = await chargerOrganisation();
   const sup = resoudreSuperieur(org, personneId);
   return { rapport: statuts.get(personneId) ?? null, superieur: sup ? nomComplet(sup) : null };
+}
+
+/**
+ * Les tâches de la personne dont l'échéance tombe entre deux dates (calendrier de Mes tâches) : toutes, faites ou non,
+ * pour qu'un mois passé se relise aussi.
+ */
+export async function echeancesDe(personneId: string, debut: string, fin: string) {
+  return db
+    .select({
+      id: schema.taches.id,
+      titre: schema.taches.titre,
+      statut: schema.taches.statut,
+      echeance: schema.taches.echeance,
+      estimationHeures: schema.taches.estimationHeures,
+      projetId: schema.taches.projetId,
+      projetCode: schema.projets.code,
+      projetTitre: schema.projets.titre,
+    })
+    .from(schema.taches)
+    .leftJoin(schema.projets, eq(schema.projets.id, schema.taches.projetId))
+    .where(and(eq(schema.taches.assigneId, personneId), isNull(schema.taches.annuleeLe), sql`${schema.taches.echeance} >= ${debut}`, sql`${schema.taches.echeance} <= ${fin}`))
+    .orderBy(asc(schema.taches.echeance), asc(schema.taches.titre));
 }
 
 /** Tâches ouvertes que la personne a confiées à quelqu'un hors division : elle les suit pour eux. */

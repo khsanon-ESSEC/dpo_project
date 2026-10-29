@@ -2,6 +2,7 @@
 
 import { useOptimistic, useTransition } from "react";
 import { basculerTache } from "@/app/(app)/taches/actions";
+import { etatEnMots } from "./PastilleStatut";
 
 const Coche = () => (
   <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -9,17 +10,25 @@ const Coche = () => (
   </svg>
 );
 
-/** Case ronde d'une tâche : cocher = faite. La ligne entière se barre aussitôt. */
-export function CaseTache({ id, titre, faite, children }: { id: string; titre: string; faite: boolean; children: React.ReactNode }) {
+/**
+ * Case ronde d'une tâche : cocher = faite. La ligne entière se barre aussitôt. La case montre aussi l'état de la
+ * tâche, comme la pastille d'état ailleurs (29 octobre 2026) : vide à faire, à moitié pleine en cours, barre ambre
+ * bloquée, anneau rouge en retard, coche faite.
+ */
+export function CaseTache({ id, titre, faite, statut, retard = false, children }: { id: string; titre: string; faite: boolean; statut?: string; retard?: boolean; children: React.ReactNode }) {
   const [enCours, demarrer] = useTransition();
   const [coche, setCoche] = useOptimistic(faite);
+  const etat = coche ? "faite" : statut && statut !== "faite" ? statut : "a_faire";
+  const enRetard = !coche && retard && etat !== "bloquee";
+  const mots = etatEnMots(etat, enRetard);
   return (
     <li className={coche ? "fait" : undefined} style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <button
         type="button"
         className="case-ronde"
         aria-pressed={coche}
-        aria-label={`Marquer « ${titre} » comme ${coche ? "non terminée" : "terminée"}`}
+        aria-label={`Marquer « ${titre} » comme ${coche ? "non terminée" : "terminée"} (${mots.toLowerCase()})`}
+        title={`${mots} : cliquer pour marquer ${coche ? "non terminée" : "terminée"}`}
         disabled={enCours}
         onClick={() =>
           demarrer(async () => {
@@ -28,7 +37,7 @@ export function CaseTache({ id, titre, faite, children }: { id: string; titre: s
           })
         }
       >
-        <span className="case-ronde__rond">{coche ? <Coche /> : null}</span>
+        <span className={`case-ronde__rond${statut ? ` case-ronde__rond--${etat}` : ""}${enRetard ? " case-ronde__rond--retard" : ""}`}>{coche ? <Coche /> : null}</span>
       </button>
       {children}
     </li>

@@ -1,3 +1,4 @@
+import { PastilleStatut } from "@/components/PastilleStatut";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { and, desc, eq } from "drizzle-orm";
@@ -114,7 +115,7 @@ export default async function PageTache({ params, searchParams }: { params: Prom
           retour ? (
             <a href={retour} className="retour">
               <Icone nom="chevron-gauche" taille={18} />{" "}
-              {retour.startsWith("/projets/") && projet ? projet.titre : retour === "/charge" ? "Charge de travail" : retour === "/taches" || retour === "/a-faire" ? "Mes tâches" : retour.startsWith("/equipe") ? "Équipe" : "Ma semaine"}
+              {retour.startsWith("/projets/") && projet ? projet.titre : retour === "/charge" ? "Charge de travail" : retour.startsWith("/taches") || retour === "/a-faire" ? "Mes tâches" : retour.startsWith("/equipe") ? "Équipe" : "Ma semaine"}
             </a>
           ) : (
             <a href="/semaine" className="retour">
@@ -313,9 +314,12 @@ export default async function PageTache({ params, searchParams }: { params: Prom
                       {x.initiales}
                     </span>
                     <span className="rangee__texte">
-                      <a href={`/taches/${x.id}`} className="rangee__titre rangee__lien">
-                        {x.titre}
-                      </a>
+                      <span className="titre-tache">
+                        <PastilleStatut statut={x.statut} retard={!!x.echeance && x.echeance < aujourdhui()} />
+                        <a href={`/taches/${x.id}`} className="rangee__titre rangee__lien">
+                          {x.titre}
+                        </a>
+                      </span>
                       <span className="rangee__sous">{x.nom}</span>
                     </span>
                     <span className={`rangee__meta ${x.statut === "faite" ? "ton-ok" : x.statut === "bloquee" ? "ton-veille" : ""}`} style={{ fontSize: 12 }}>
@@ -366,9 +370,12 @@ export default async function PageTache({ params, searchParams }: { params: Prom
                         {x.initiales}
                       </span>
                       <span className="rangee__texte">
-                        <a href={`/taches/${x.id}`} className="rangee__titre rangee__lien">
-                          {x.titre}
-                        </a>
+                        <span className="titre-tache">
+                          <PastilleStatut statut={x.statut} retard={!!x.echeance && x.echeance < aujourdhui()} />
+                          <a href={`/taches/${x.id}`} className="rangee__titre rangee__lien">
+                            {x.titre}
+                          </a>
+                        </span>
                         <span className="rangee__sous">{x.nom}</span>
                       </span>
                       <span className="rangee__meta" style={{ fontSize: 12 }}>

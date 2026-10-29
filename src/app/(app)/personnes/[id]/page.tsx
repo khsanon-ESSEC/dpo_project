@@ -334,9 +334,12 @@ export default async function PageFichePersonne({ params, searchParams }: { para
                               <div className="rangee rangee--etiree">
                                 {t.projetCode ? <CodeProjet id={t.projetId} code={t.projetCode} titre={t.projetTitre} visible={voit(t.projetId)} mono /> : null}
                                 <span className="rangee__texte">
-                                  <a href={`/taches/${t.id}`} className="rangee__titre rangee__lien">
-                                    {t.titre}
-                                  </a>
+                                  <span className="titre-tache">
+                                    <PastilleStatut statut={t.statut} retard={!!t.echeance && t.echeance < jour} />
+                                    <a href={`/taches/${t.id}`} className="rangee__titre rangee__lien">
+                                      {t.titre}
+                                    </a>
+                                  </span>
                                   <span className="rangee__sous">
                                     {t.projetId ? (
                                       <LienProjet id={t.projetId} visible={voit(t.projetId)}>

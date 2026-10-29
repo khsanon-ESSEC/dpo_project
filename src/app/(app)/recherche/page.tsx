@@ -1,3 +1,5 @@
+import { aujourdhui } from "@/lib/dates";
+import { PastilleStatut } from "@/components/PastilleStatut";
 import type { Metadata } from "next";
 import { CodeProjet, LienProjet } from "@/components/Liens";
 import { exigerUtilisateur } from "@/lib/auth/session";
@@ -10,6 +12,7 @@ export const metadata: Metadata = { title: "Rechercher" };
 export default async function PageRecherche({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const u = await exigerUtilisateur();
   const q = String((await searchParams).q ?? "").trim().slice(0, 100);
+  const jour = aujourdhui();
   const r = q ? await rechercher(u, q) : null;
   const total = r ? r.ecrans.total + r.personnes.total + r.projets.total + r.taches.total : 0;
   const groupe = (titre: string, id: string, n: number, contenu: React.ReactNode) =>
@@ -78,9 +81,12 @@ export default async function PageRecherche({ searchParams }: { searchParams: Pr
                   <div className="rangee rangee--etiree">
                     {t.code ? <CodeProjet id={t.projetId} code={t.code} titre={t.projetTitre} visible={t.projetVisible} mono /> : null}
                     <span className="rangee__texte">
-                      <a href={`/taches/${t.id}`} className="rangee__titre rangee__lien" style={t.statut === "faite" ? { textDecoration: "line-through", color: "var(--discret)" } : undefined}>
-                        {t.texte}
-                      </a>
+                      <span className="titre-tache">
+                        <PastilleStatut statut={t.statut} retard={!!t.echeance && t.echeance < jour} />
+                        <a href={`/taches/${t.id}`} className="rangee__titre rangee__lien" style={t.statut === "faite" ? { textDecoration: "line-through", color: "var(--discret)" } : undefined}>
+                          {t.texte}
+                        </a>
+                      </span>
                       <span className="rangee__sous">
                         {t.projetId && t.projetTitre ? (
                           <>

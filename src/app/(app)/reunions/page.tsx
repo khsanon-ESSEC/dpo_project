@@ -1,3 +1,4 @@
+import { PastilleStatut } from "@/components/PastilleStatut";
 import { RYTHMES_REUNION } from "@/lib/recurrence-reunion";
 import type { Metadata } from "next";
 import { acces, idsProjetsVisibles, contactsVisibles, peutVoirTache } from "@/lib/acces";
@@ -229,6 +230,7 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
                               {r.actions.map((t) =>
                                 peutVoirTache(a, t) ? (
                                   <li key={t.id} className={t.statut === "faite" ? "faite" : undefined}>
+                                    <PastilleStatut statut={t.statut} retard={!!t.echeance && t.echeance < jour} />
                                     <a href={`/taches/${t.id}`} className="lien-nom">
                                       {t.titre}
                                     </a>

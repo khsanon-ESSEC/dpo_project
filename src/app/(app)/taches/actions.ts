@@ -349,6 +349,8 @@ export async function deplacerTache(tacheId: string, statut: string): Promise<{ 
   await changerStatut(tacheId, statut, u.id);
   await noter(u.id, "tache_deplacee", tacheId, { statut });
   if (t.projetId) revalidatePath(`/projets/${t.projetId}`, "layout");
+  // Le tableau de Mes tâches.
+  revalidatePath("/taches");
   return { ok: true };
 }
 

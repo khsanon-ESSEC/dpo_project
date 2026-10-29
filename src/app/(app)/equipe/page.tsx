@@ -1,3 +1,4 @@
+import { PastilleStatut } from "@/components/PastilleStatut";
 import type { Metadata } from "next";
 import { acces, idsProjetsVisibles } from "@/lib/acces";
 import { exigerInterne } from "@/lib/auth/session";
@@ -127,9 +128,12 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
                 <li key={t.id} className="rangee rangee--etiree">
                   {t.projetCode && t.projetId ? <CodeProjet id={t.projetId} code={t.projetCode} titre={t.projetTitre ?? ""} visible={voit(t.projetId)} /> : null}
                   <span className="rangee__texte">
-                    <a href={`/taches/${t.id}?retour=${encodeURIComponent("/equipe")}`} className="rangee__titre rangee__lien">
-                      {t.titre}
-                    </a>
+                    <span className="titre-tache">
+                      <PastilleStatut statut={t.statut} retard={liste === "retard"} />
+                      <a href={`/taches/${t.id}?retour=${encodeURIComponent("/equipe")}`} className="rangee__titre rangee__lien">
+                        {t.titre}
+                      </a>
+                    </span>
                     <span className="rangee__sous">
                       <LienPersonne id={t.assigneId}>{t.qui}</LienPersonne>
                       {t.projetId ? (
@@ -198,11 +202,13 @@ export default async function PageEquipe({ searchParams }: { searchParams: Promi
             <ul className="liste">
               {e.blocages.map((b) => (
                 <li key={b.id} className="rangee rangee--etiree">
-                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--veille-point)", flex: "none" }} />
                   <span className="rangee__texte">
-                    <a href={`/taches/${b.id}`} className="rangee__titre rangee__lien">
-                      {b.titre}
-                    </a>
+                    <span className="titre-tache">
+                      <PastilleStatut statut="bloquee" />
+                      <a href={`/taches/${b.id}`} className="rangee__titre rangee__lien">
+                        {b.titre}
+                      </a>
+                    </span>
                     <span className="rangee__sous">
                       <LienPersonne id={b.assigneId}>{b.qui}</LienPersonne> ·{" "}
                       {b.projetId ? (
