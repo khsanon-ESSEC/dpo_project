@@ -216,16 +216,18 @@ describe("dépendances entre tâches", () => {
   });
 });
 
-describe("registre des décisions", () => {
-  it("l'équipe du projet et ceux qui le gèrent notent ; l'auteur ou qui gère corrige", async () => {
-    const { peutNoterDecision, peutModifierDecision } = await import("@/lib/projets");
-    const projet = { chefProjetId: "chef", referentId: null, membres: new Set(["m"]) };
-    expect(peutNoterDecision("m", false, projet)).toBe(true);
-    expect(peutNoterDecision("chef", false, projet)).toBe(true);
-    expect(peutNoterDecision("dir", true, projet)).toBe(true);
-    expect(peutNoterDecision("x", false, projet)).toBe(false);
-    expect(peutModifierDecision("m", false, "m")).toBe(true);
-    expect(peutModifierDecision("m", false, "chef")).toBe(false);
-    expect(peutModifierDecision("chef", true, "m")).toBe(true);
+describe("registres des risques et des décisions", () => {
+  it("le chef, le référent et ceux qui gèrent le projet les tiennent ; un membre les lit seulement (29 octobre 2026)", async () => {
+    const { peutTenirLesRegistres } = await import("@/lib/projets");
+    const projet = { chefProjetId: "chef", referentId: null };
+    expect(peutTenirLesRegistres("chef", false, projet)).toBe(true);
+    expect(peutTenirLesRegistres("dir", true, projet)).toBe(true); // directeur qui suit le chef, ou exécutif
+    expect(peutTenirLesRegistres("m", false, projet)).toBe(false); // membre de l'équipe
+    expect(peutTenirLesRegistres("x", false, projet)).toBe(false);
+    // Chef hors division et référent DPO : les deux tiennent les registres.
+    const externe = { chefProjetId: "consultant", referentId: "ref" };
+    expect(peutTenirLesRegistres("consultant", false, externe)).toBe(true);
+    expect(peutTenirLesRegistres("ref", false, externe)).toBe(true);
+    expect(peutTenirLesRegistres("m", false, { chefProjetId: null, referentId: null })).toBe(false);
   });
 });

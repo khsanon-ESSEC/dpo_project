@@ -63,6 +63,7 @@ export function BarreCommande({
   personnesCommandes = [],
   projetsCommandes,
   geres = [],
+  registres = [],
   droits = { interne: true, redige: true, conseil: false, chef: false },
 }: {
   mode: "tache" | "recherche";
@@ -92,6 +93,8 @@ export function BarreCommande({
   projetsCommandes?: ProjetSaisie[];
   /** Les projets que la personne gère (les actions de gestion y sont permises). */
   geres?: string[];
+  /** Les projets dont la personne tient les registres des risques et des décisions (chef, référent, qui gère). */
+  registres?: string[];
   droits?: { interne: boolean; redige: boolean; conseil: boolean; chef: boolean };
 }) {
   const [etat, action, enCours] = useActionState<EtatBarre, FormData>(executerBarre, { message: null, n: 0 });
@@ -162,8 +165,11 @@ export function BarreCommande({
   if (!tache && genre === "tache" && estQuestionCharge(texte, personnesCommandes, moiId)) genre = "question";
   const GESTION = ["livrable_creer", "livrable_modifier", "membre_ajouter", "membre_retirer", "phase_terminer", "phases_types", "phase_ajouter", "sponsor", "chef", "priorite", "budget", "cloturer", "rouvrir"];
   const c = commande?.commande ?? null;
+  const REGISTRES = ["decision", "risque_creer", "risque_statut"];
   const reserveGestion =
-    !!c && !!commande?.projet && !geres.includes(commande.projet.id) && (GESTION.includes(c.type) || (c.type === "livrable_etat" && c.action !== "pret"));
+    !!c &&
+    !!commande?.projet &&
+    ((!geres.includes(commande.projet.id) && (GESTION.includes(c.type) || (c.type === "livrable_etat" && c.action !== "pret"))) || (REGISTRES.includes(c.type) && !registres.includes(commande.projet.id)));
   const reunion = genre === "reunion";
   // Des mots à la place des touches : « pour Fabienne », « projet Unibank », « avec Fabienne et Daphnée ».
   const mots =
@@ -359,7 +365,7 @@ export function BarreCommande({
     if (genre === "commande" && c?.type === "aller" && pret) return aller(c.lien);
     if (pret) formulaire.current?.requestSubmit();
   };
-  const droitAction = (p: Permission) => (p === "tous" ? true : p === "gere" ? geres.length > 0 : droits[p]);
+  const droitAction = (p: Permission) => (p === "tous" ? true : p === "gere" ? geres.length > 0 : p === "registres" ? registres.length > 0 : droits[p]);
   /** « > » puis une action : son début s'écrit dans la barre (avec, d'abord, le choix du projet si elle en vise un). */
   const choisirEntree = (e: EntreeCatalogue) => {
     setExemple(e.exemple);

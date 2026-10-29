@@ -78,11 +78,14 @@ describe.skipIf(!URL_TEST)("actions de la barre", () => {
     const [plus] = await D.db.select().from(D.schema.membresProjet).where(and(eq(D.schema.membresProjet.projetId, projets.get("UR")!), eq(D.schema.membresProjet.personneId, qui("fabienne.michel").id)));
     expect(plus).toBeUndefined();
 
-    const d = await faire("ricardo.etienne", "UR décision prise : tests de charge sur 5 000 comptes (comité de pilotage)");
+    // Un membre de l'équipe ne tient pas les registres (29 octobre 2026) : la barre le lui dit.
+    expect(await faire("ricardo.etienne", "UR décision prise : tests de charge sur 5 000 comptes (comité de pilotage)")).toMatchObject({ message: expect.stringMatching(/Seuls le chef du projet/) });
+    expect(await faire("ricardo.etienne", "UR nouveau risque : la DTI retire le serveur de test, probable, impact fort")).toMatchObject({ message: expect.stringMatching(/Seuls le chef du projet/) });
+    const d = await faire("myriam.valcin", "UR décision prise : tests de charge sur 5 000 comptes (comité de pilotage)");
     expect(d).toMatchObject({ ok: true, message: "UR · Décision notée au registre : « Tests de charge sur 5 000 comptes » (Comité de pilotage)." });
-    expect(await annuler("ricardo.etienne", d.annulation)).toMatchObject({ ok: true });
+    expect(await annuler("myriam.valcin", d.annulation)).toMatchObject({ ok: true });
 
-    const k = await faire("ricardo.etienne", "UR nouveau risque : la DTI retire le serveur de test, probable, impact fort, suivi par Daphnée");
+    const k = await faire("myriam.valcin", "UR nouveau risque : la DTI retire le serveur de test, probable, impact fort, suivi par Daphnée");
     expect(k).toMatchObject({ ok: true, message: expect.stringMatching(/critique/) });
     const s = await faire("myriam.valcin", "UR risque serveur de test maîtrisé");
     expect(s).toMatchObject({ ok: true });
@@ -91,7 +94,7 @@ describe.skipIf(!URL_TEST)("actions de la barre", () => {
     expect(await annuler("myriam.valcin", s.annulation)).toMatchObject({ ok: true });
     expect((await D.db.select().from(D.schema.risquesProjet).where(eq(D.schema.risquesProjet.id, risque.id)))[0].statut).toBe("ouvert");
     // Son auteur le retire : la base reste comme avant pour les autres tests.
-    expect(await annuler("ricardo.etienne", k.annulation)).toMatchObject({ ok: true });
+    expect(await annuler("myriam.valcin", k.annulation)).toMatchObject({ ok: true });
     expect((await D.db.select().from(D.schema.risquesProjet).where(eq(D.schema.risquesProjet.id, risque.id))).length).toBe(0);
 
     const ph = await faire("myriam.valcin", "UR terminer la phase");

@@ -38,25 +38,33 @@ describe.skipIf(!URL_TEST)("décisions et dépendances", () => {
     await globalThis.__pgClient?.end();
   });
 
-  it("registre : un membre note une décision ; quelqu'un hors de l'équipe, non ; la date ne peut pas être future", async () => {
+  it("registre : la cheffe de projet note une décision ; un membre de l'équipe, non ; la date ne peut pas être future", async () => {
     const ur = projets.get("UR")!;
     const avant = (await DE.decisionsDuProjet(ur)).length;
-    const re = await acces("ricardo.etienne"); // membre de l'équipe d'UR
-    const r = await DE.noterDecision(re, ur, { texte: "  les tests de charge se font sur 2 000 comptes ", decideeLe: "2026-10-29", instance: "Comité de pilotage", contexte: "" });
+    const mv = await acces("myriam.valcin"); // cheffe de projet d'UR
+    const r = await DE.noterDecision(mv, ur, { texte: "  les tests de charge se font sur 2 000 comptes ", decideeLe: "2026-10-29", instance: "Comité de pilotage", contexte: "" });
     expect(r).toMatchObject({ ok: true });
     const l = await DE.decisionsDuProjet(ur);
     expect(l).toHaveLength(avant + 1);
-    expect(l[0]).toMatchObject({ texte: "Les tests de charge se font sur 2 000 comptes", decideeLe: "2026-10-29", auteur: "Ricardo Étienne" });
-    expect(await DE.noterDecision(await acces("sophonie.charles"), ur, { texte: "Hors équipe", decideeLe: "", instance: "", contexte: "" })).toHaveProperty("erreur");
-    expect(await DE.noterDecision(re, ur, { texte: "Plus tard", decideeLe: "2027-01-01", instance: "", contexte: "" })).toEqual({ erreur: "Une décision se note une fois prise : sa date ne peut pas être dans le futur." });
-    expect(await DE.noterDecision(re, ur, { texte: " ", decideeLe: "", instance: "", contexte: "" })).toEqual({ erreur: "Écrivez la décision." });
+    expect(l[0]).toMatchObject({ texte: "Les tests de charge se font sur 2 000 comptes", decideeLe: "2026-10-29", auteur: "Myriam Valcin" });
+    // Membre de l'équipe (29 octobre 2026) : il lit le registre, il n'y note pas.
+    const refus = { erreur: "Seuls le chef du projet, son référent, son directeur et les exécutifs tiennent le registre des décisions." };
+    expect(await DE.noterDecision(await acces("ricardo.etienne"), ur, { texte: "Membre", decideeLe: "", instance: "", contexte: "" })).toEqual(refus);
+    expect(await DE.noterDecision(await acces("sophonie.charles"), ur, { texte: "Hors équipe", decideeLe: "", instance: "", contexte: "" })).toEqual(refus);
+    expect(await DE.noterDecision(mv, ur, { texte: "Plus tard", decideeLe: "2027-01-01", instance: "", contexte: "" })).toEqual({ erreur: "Une décision se note une fois prise : sa date ne peut pas être dans le futur." });
+    expect(await DE.noterDecision(mv, ur, { texte: " ", decideeLe: "", instance: "", contexte: "" })).toEqual({ erreur: "Écrivez la décision." });
   });
 
-  it("registre : l'auteur corrige ; un autre membre, non ; la cheffe de projet retire", async () => {
+  it("registre : un exécutif corrige ; un membre, même auteur d'une ligne, non ; la cheffe de projet retire", async () => {
     const ur = projets.get("UR")!;
-    const [d] = (await DE.decisionsDuProjet(ur)).filter((x) => x.auteur === "Ricardo Étienne");
-    expect(await DE.modifierDecision(await acces("ricardo.etienne"), ur, d.id, { texte: "Les tests de charge se font sur 5 000 comptes", decideeLe: d.decideeLe, instance: d.instance, contexte: "Volume de la première vague" })).toEqual({ ok: true });
-    expect(await DE.modifierDecision(await acces("daphnee.joseph"), ur, d.id, { texte: "Autre", decideeLe: d.decideeLe, instance: "", contexte: "" })).toHaveProperty("erreur");
+    const [d] = (await DE.decisionsDuProjet(ur)).filter((x) => x.texte === "Les tests de charge se font sur 2 000 comptes");
+    expect(await DE.modifierDecision(await acces("frantz.desrosiers"), ur, d.id, { texte: "Les tests de charge se font sur 5 000 comptes", decideeLe: d.decideeLe, instance: d.instance, contexte: "Volume de la première vague" })).toEqual({ ok: true });
+    expect(await DE.modifierDecision(await acces("ricardo.etienne"), ur, d.id, { texte: "Autre", decideeLe: d.decideeLe, instance: "", contexte: "" })).toHaveProperty("erreur");
+    expect(await DE.retirerDecision(await acces("ricardo.etienne"), ur, d.id)).toHaveProperty("erreur");
+    // Une décision notée autrefois par un membre : il ne la corrige plus.
+    const [ancienne] = await D.db.insert(D.schema.decisionsProjet).values({ projetId: ur, texte: "Notée par un membre", decideeLe: "2026-10-20", auteurId: qui("ricardo.etienne").id }).returning();
+    expect(await DE.modifierDecision(await acces("ricardo.etienne"), ur, ancienne.id, { texte: "Corrigée", decideeLe: "2026-10-20", instance: "", contexte: "" })).toHaveProperty("erreur");
+    expect(await DE.retirerDecision(await acces("myriam.valcin"), ur, ancienne.id)).toEqual({ ok: true });
     expect(await DE.retirerDecision(await acces("myriam.valcin"), ur, d.id)).toEqual({ ok: true });
     expect((await DE.decisionsDuProjet(ur)).some((x) => x.id === d.id)).toBe(false);
     expect(await DE.instancesConnues()).toEqual(expect.arrayContaining(["Comité de pilotage", "Direction de la division"]));

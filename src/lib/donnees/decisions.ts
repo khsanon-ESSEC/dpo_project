@@ -1,7 +1,7 @@
 /**
  * Registre des décisions d'un projet (décision du 28 octobre 2026) : ce qui a été décidé, quand, par quelle instance,
- * et pourquoi. Règles : src/lib/projets.ts (peutNoterDecision, peutModifierDecision). Les actions vérifient que la
- * personne voit le projet ; ces fonctions vérifient le reste.
+ * et pourquoi. Règle : src/lib/projets.ts (peutTenirLesRegistres) : le chef, le référent et ceux qui gèrent le projet.
+ * Les actions vérifient que la personne voit le projet ; ces fonctions vérifient le reste.
  */
 import "server-only";
 import { and, desc, eq, ne } from "drizzle-orm";
@@ -10,7 +10,7 @@ import type { Acces } from "@/lib/acces";
 import { aujourdhui } from "@/lib/dates";
 import { noter } from "@/lib/journal";
 import { chargerOrganisation } from "@/lib/organisation";
-import { peutGererProjet, peutModifierDecision, peutNoterDecision } from "@/lib/projets";
+import { peutGererProjet, peutTenirLesRegistres } from "@/lib/projets";
 import { nomComplet } from "@/lib/regles";
 import { acteur, projetPourAssignation } from "./gestion";
 
@@ -41,14 +41,15 @@ export async function instancesConnues(): Promise<string[]> {
 /** Un projet archivé, refusé ou encore en demande : son registre est figé (revue du 29 octobre 2026). */
 const fige = (p: { archiveLe: Date | null; statut: string }) => !!p.archiveLe || p.statut === "requete" || p.statut === "refuse";
 const FIGE = "Ce projet n'est pas en cours (archivé, refusé ou en demande) : son registre est figé.";
+const REFUS = "Seuls le chef du projet, son référent, son directeur et les exécutifs tiennent le registre des décisions.";
 
-/** Le projet, et ce que la personne peut y faire (noter, gérer). */
+/** Le projet, et si la personne tient son registre. */
 async function droits(a: Acces, projetId: string) {
   const projet = await projetPourAssignation(projetId);
   if (!projet) return null;
   const [p] = await db.select().from(schema.projets).where(eq(schema.projets.id, projetId));
   const gere = peutGererProjet(acteur(a), p);
-  return { projet: p, gere, noter: peutNoterDecision(a.moi.id, gere, projet) };
+  return { projet: p, tient: peutTenirLesRegistres(a.moi.id, gere, p) };
 }
 
 function valider(d: DonneesDecision): { valeurs: { texte: string; decideeLe: string; instance: string; contexte: string } } | { erreur: string } {
@@ -63,7 +64,7 @@ export async function noterDecision(a: Acces, projetId: string, d: DonneesDecisi
   const r = await droits(a, projetId);
   if (!r) return { erreur: "Projet introuvable." };
   if (r.projet.archiveLe || r.projet.statut === "requete" || r.projet.statut === "refuse") return { erreur: "Ce projet ne reçoit plus de décisions (demande, refusé ou archivé)." };
-  if (!r.noter) return { erreur: "Seuls l'équipe du projet et ceux qui le gèrent notent ses décisions." };
+  if (!r.tient) return { erreur: REFUS };
   const v = valider(d);
   if ("erreur" in v) return v;
   const [n] = await db.insert(schema.decisionsProjet).values({ projetId, ...v.valeurs, auteurId: a.moi.id }).returning({ id: schema.decisionsProjet.id });
@@ -75,7 +76,7 @@ export async function modifierDecision(a: Acces, projetId: string, decisionId: s
   const r = await droits(a, projetId);
   const [x] = await db.select().from(schema.decisionsProjet).where(and(eq(schema.decisionsProjet.id, decisionId), eq(schema.decisionsProjet.projetId, projetId)));
   if (!r || !x) return { erreur: "Décision introuvable." };
-  if (!peutModifierDecision(a.moi.id, r.gere, x.auteurId)) return { erreur: "Seuls son auteur et ceux qui gèrent le projet corrigent une décision." };
+  if (!r.tient) return { erreur: REFUS };
   if (fige(r.projet)) return { erreur: FIGE };
   const v = valider(d);
   if ("erreur" in v) return v;
@@ -88,7 +89,7 @@ export async function retirerDecision(a: Acces, projetId: string, decisionId: st
   const r = await droits(a, projetId);
   const [x] = await db.select().from(schema.decisionsProjet).where(and(eq(schema.decisionsProjet.id, decisionId), eq(schema.decisionsProjet.projetId, projetId)));
   if (!r || !x) return { erreur: "Décision introuvable." };
-  if (!peutModifierDecision(a.moi.id, r.gere, x.auteurId)) return { erreur: "Seuls son auteur et ceux qui gèrent le projet retirent une décision." };
+  if (!r.tient) return { erreur: REFUS };
   if (fige(r.projet)) return { erreur: FIGE };
   await db.delete(schema.decisionsProjet).where(eq(schema.decisionsProjet.id, decisionId));
   await noter(a.moi.id, "decision_retiree", projetId, { texte: x.texte.slice(0, 200) });

@@ -240,15 +240,13 @@ export function motifReport(m: unknown): string {
 }
 
 /**
- * Registre des décisions d'un projet : l'équipe du projet (chef, référent, membres) et ceux qui le gèrent y notent
- * une décision ; seul son auteur (ou qui gère le projet) la corrige ou la retire.
+ * Registres d'un projet (risques et décisions) : le chef de projet, le référent DPO et ceux qui gèrent le projet
+ * (le directeur qui suit le chef, les exécutifs) y notent, corrigent, changent l'état et retirent. Les membres de
+ * l'équipe les lisent, sans les modifier, même ce qu'ils y avaient noté (décidé le 29 octobre 2026 ; avant, chaque
+ * membre notait et corrigeait ses propres lignes).
  */
-export function peutNoterDecision(moiId: string, gere: boolean, projet: { chefProjetId: string | null; referentId?: string | null; membres: Set<string> }): boolean {
-  return gere || moiId === projet.chefProjetId || moiId === projet.referentId || projet.membres.has(moiId);
-}
-
-export function peutModifierDecision(moiId: string, gere: boolean, auteurId: string | null): boolean {
-  return gere || (!!auteurId && auteurId === moiId);
+export function peutTenirLesRegistres(moiId: string, gere: boolean, projet: { chefProjetId: string | null; referentId?: string | null }): boolean {
+  return gere || moiId === projet.chefProjetId || (!!projet.referentId && moiId === projet.referentId);
 }
 
 /**

@@ -536,7 +536,7 @@ export function estQuestionCharge(saisie: string, personnes: Nomme[], moiId?: st
 // Ce que la barre sait faire : la liste qu'ouvre « > »
 // ---------------------------------------------------------------------------
 
-export type Permission = "tous" | "interne" | "gere" | "redige" | "conseil" | "chef";
+export type Permission = "tous" | "interne" | "gere" | "registres" | "redige" | "conseil" | "chef";
 export type EntreeCatalogue = { cle: string; groupe: string; libelle: string; exemple: string; debut: string; projet: boolean; permis: Permission };
 
 export const CATALOGUE: EntreeCatalogue[] = [
@@ -554,9 +554,9 @@ export const CATALOGUE: EntreeCatalogue[] = [
   { cle: "fin", groupe: "Projets", libelle: "Repousser la fin prévue", exemple: "UR fin prévue 20/12 : la DTI livre le serveur en retard", debut: "fin prévue ", projet: true, permis: "gere" },
   { cle: "lancement", groupe: "Projets", libelle: "Date de lancement", exemple: "UR lancement 15/01", debut: "lancement ", projet: true, permis: "gere" },
   { cle: "budget", groupe: "Projets", libelle: "Budget prévu et engagé", exemple: "UR budget 12,5 M engagé 11,8 M", debut: "budget ", projet: true, permis: "gere" },
-  { cle: "decision", groupe: "Projets", libelle: "Noter une décision prise", exemple: "UR décision prise : mise en ligne en deux vagues (comité de pilotage)", debut: "décision prise : ", projet: true, permis: "tous" },
-  { cle: "risque", groupe: "Risques", libelle: "Ajouter un risque au registre", exemple: "UR nouveau risque : retard du prestataire, probable, impact fort", debut: "nouveau risque : ", projet: true, permis: "tous" },
-  { cle: "risque-maitrise", groupe: "Risques", libelle: "Marquer un risque maîtrisé ou clos", exemple: "UR risque prestataire maîtrisé", debut: "risque ", projet: true, permis: "tous" },
+  { cle: "decision", groupe: "Projets", libelle: "Noter une décision prise", exemple: "UR décision prise : mise en ligne en deux vagues (comité de pilotage)", debut: "décision prise : ", projet: true, permis: "registres" },
+  { cle: "risque", groupe: "Risques", libelle: "Ajouter un risque au registre", exemple: "UR nouveau risque : retard du prestataire, probable, impact fort", debut: "nouveau risque : ", projet: true, permis: "registres" },
+  { cle: "risque-maitrise", groupe: "Risques", libelle: "Marquer un risque maîtrisé ou clos", exemple: "UR risque prestataire maîtrisé", debut: "risque ", projet: true, permis: "registres" },
   { cle: "risque-signal", groupe: "Risques", libelle: "Signaler un risque (santé du projet)", exemple: "UR risque : le prestataire ne livre pas", debut: "risque : ", projet: true, permis: "gere" },
   { cle: "phase", groupe: "Phases", libelle: "Terminer la phase en cours", exemple: "UR terminer la phase", debut: "terminer la phase", projet: true, permis: "gere" },
   { cle: "phases-types", groupe: "Phases", libelle: "Découper un projet en phases types", exemple: "UR phases types", debut: "phases types", projet: true, permis: "gere" },

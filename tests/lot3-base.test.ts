@@ -39,7 +39,7 @@ describe.skipIf(!URL_TEST)("risques, phases et temps passé", () => {
     await globalThis.__pgClient?.end();
   });
 
-  it("risques : un membre note un risque critique, la santé le dit ; maîtrisé, il ne compte plus", async () => {
+  it("risques : le chef de projet note un risque critique, la santé le dit ; maîtrisé, il ne compte plus", async () => {
     const cr = projets.get("CR")!; // Refonte Credos : dans les temps, un risque modéré au registre
     const avant = await sante("CR");
     expect(avant.motif ?? "").not.toMatch(/risque critique/);
@@ -57,17 +57,21 @@ describe.skipIf(!URL_TEST)("risques, phases et temps passé", () => {
     expect((await R.risquesDuProjet(cr)).find((x) => x.id === id)?.statut).toBe("ouvert");
     expect(await R.enregistrerRisque(membre, cr, id, { titre: "La DTI retire le serveur de test", description: "", probabilite: 9, impact: "x", responsableId: null, reponse: "", revueLe: null })).toMatchObject({ ok: true });
     expect((await R.risquesDuProjet(cr)).find((x) => x.id === id)).toMatchObject({ probabilite: 2, impact: 2, responsableId: null });
-    // Retirer : l'auteur ou qui gère le projet.
+    // Retirer : le chef du projet.
     expect(await R.retirerRisque(membre, cr, id)).toEqual({ ok: true });
   });
 
-  it("risques : quelqu'un hors de l'équipe ne tient pas le registre ; un titre vide est refusé", async () => {
+  it("risques : ni un membre de l'équipe ni quelqu'un hors de l'équipe ne tient le registre ; un titre vide est refusé", async () => {
     const ur = projets.get("UR")!;
-    expect(await R.enregistrerRisque(await acces("sophonie.charles"), ur, null, { titre: "Hors équipe", description: "", probabilite: 2, impact: 2, responsableId: null, reponse: "", revueLe: null })).toHaveProperty("erreur");
+    const refus = { erreur: "Seuls le chef du projet, son référent, son directeur et les exécutifs tiennent le registre des risques." };
+    expect(await R.enregistrerRisque(await acces("sophonie.charles"), ur, null, { titre: "Hors équipe", description: "", probabilite: 2, impact: 2, responsableId: null, reponse: "", revueLe: null })).toEqual(refus);
+    expect(await R.enregistrerRisque(await acces("ricardo.etienne"), ur, null, { titre: "Membre", description: "", probabilite: 2, impact: 2, responsableId: null, reponse: "", revueLe: null })).toEqual(refus);
     expect(await R.enregistrerRisque(await acces("myriam.valcin"), ur, null, { titre: " ", description: "", probabilite: 2, impact: 2, responsableId: null, reponse: "", revueLe: null })).toEqual({ erreur: "Décrivez le risque en quelques mots." });
-    // Un membre ne retire pas le risque d'un autre : il le clôt.
+    // Un membre ne retire ni ne clôt un risque : il le lit.
     const [r] = (await R.risquesDuProjet(ur)).filter((x) => x.auteur === "Myriam Valcin");
-    expect(await R.retirerRisque(await acces("ricardo.etienne"), ur, r.id)).toHaveProperty("erreur");
+    expect(await R.retirerRisque(await acces("ricardo.etienne"), ur, r.id)).toEqual(refus);
+    expect(await R.changerStatutRisque(await acces("ricardo.etienne"), ur, r.id, "clos")).toEqual(refus);
+    expect(await R.enregistrerRisque(await acces("ricardo.etienne"), ur, r.id, { titre: "Corrigé", description: "", probabilite: 1, impact: 1, responsableId: null, reponse: "", revueLe: null })).toEqual(refus);
     const critiques = await R.risquesCritiquesOuverts([ur, projets.get("UC")!]);
     expect(critiques.get(ur)).toBe(1);
     expect(critiques.get(projets.get("UC")!)).toBeUndefined();

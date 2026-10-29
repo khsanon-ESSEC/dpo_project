@@ -11,7 +11,7 @@ import type { Utilisateur } from "@/lib/auth/session";
 import { analyserCommande, type ContexteCommande } from "@/lib/commandes";
 import { aujourdhui, dateCourte } from "@/lib/dates";
 import { chargerOrganisation } from "@/lib/organisation";
-import { peutDeciderDemande, peutGererProjet } from "@/lib/projets";
+import { peutDeciderDemande, peutGererProjet, peutTenirLesRegistres } from "@/lib/projets";
 import { nomComplet, redigeUnRapport } from "@/lib/regles";
 import { phaseEnCours } from "@/lib/risques";
 import { LIBELLE_OBJECTIFS, LIBELLE_PRIORITE, montantTexte } from "@/lib/suivi";
@@ -305,6 +305,8 @@ export async function donneesCommandes(u: Utilisateur, a: Acces) {
     personnesCommandes: ctx.personnes,
     projetsCommandes: ctx.projets,
     geres: projets.filter((p) => peutGererProjet(acteur(a), p)).map((p) => p.id),
+    // Les registres des risques et des décisions : le chef, le référent et ceux qui gèrent le projet (29 octobre 2026).
+    registres: projets.filter((p) => peutTenirLesRegistres(a.moi.id, peutGererProjet(acteur(a), p), p)).map((p) => p.id),
     droits: {
       interne: !u.externe,
       redige: redigeUnRapport(u),

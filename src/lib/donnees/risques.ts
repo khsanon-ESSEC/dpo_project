@@ -1,7 +1,7 @@
 /**
  * Registre des risques et phases d'un projet (décision du 28 octobre 2026). Règles : src/lib/risques.ts.
- * Risques : l'équipe du projet et ceux qui le gèrent les notent et les suivent ; seuls l'auteur et ceux qui
- * gèrent le projet les retirent. Phases : ceux qui gèrent le projet. Les actions vérifient que la personne
+ * Risques : le chef, le référent et ceux qui gèrent le projet les notent, les modifient et les retirent ; l'équipe
+ * les lit (src/lib/projets.ts, peutTenirLesRegistres). Phases : ceux qui gèrent le projet. Les actions vérifient que la personne
  * voit le projet ; ces fonctions vérifient le reste.
  */
 import "server-only";
@@ -11,7 +11,7 @@ import type { Acces } from "@/lib/acces";
 import { aujourdhui } from "@/lib/dates";
 import { noter } from "@/lib/journal";
 import { chargerOrganisation, personneActuelle } from "@/lib/organisation";
-import { peutGererProjet, peutModifierDecision, peutNoterDecision } from "@/lib/projets";
+import { peutGererProjet, peutTenirLesRegistres } from "@/lib/projets";
 import { niveau, PHASES_TYPES, statutRisque, trierRisques, type StatutRisque } from "@/lib/risques";
 import { nomComplet } from "@/lib/regles";
 import { acteur, projetPourAssignation } from "./gestion";
@@ -26,11 +26,12 @@ async function droits(a: Acces, projetId: string) {
   const [p] = await db.select().from(schema.projets).where(eq(schema.projets.id, projetId));
   const gere = peutGererProjet(acteur(a), p);
   const ouvert = !p.archiveLe && p.statut !== "requete" && p.statut !== "refuse";
-  return { projet: p, gere, equipe: peutNoterDecision(a.moi.id, gere, projet), ouvert };
+  return { projet: p, gere, tient: peutTenirLesRegistres(a.moi.id, gere, p), ouvert };
 }
 
 /** Un projet archivé, refusé ou encore en demande : ses registres et ses phases sont figés (revue du 29 octobre 2026). */
 const FIGE = "Ce projet n'est pas en cours (archivé, refusé ou en demande) : son registre est figé.";
+const REFUS_RISQUES = "Seuls le chef du projet, son référent, son directeur et les exécutifs tiennent le registre des risques.";
 
 // ---------------------------------------------------------------------------
 // Risques
@@ -49,7 +50,7 @@ export async function enregistrerRisque(a: Acces, projetId: string, risqueId: st
   const r = await droits(a, projetId);
   if (!r) return { erreur: "Projet introuvable." };
   if (!r.ouvert) return { erreur: "Ce projet n'est pas en cours." };
-  if (!r.equipe) return { erreur: "Seuls l'équipe du projet et ceux qui le gèrent tiennent son registre des risques." };
+  if (!r.tient) return { erreur: REFUS_RISQUES };
   const titre = texte(d.titre, 200);
   if (titre.length < 3) return { erreur: "Décrivez le risque en quelques mots." };
   let responsableId: string | null = null;
@@ -97,7 +98,7 @@ export async function changerStatutRisque(a: Acces, projetId: string, risqueId: 
   const r = await droits(a, projetId);
   const [x] = await db.select().from(schema.risquesProjet).where(and(eq(schema.risquesProjet.id, risqueId), eq(schema.risquesProjet.projetId, projetId)));
   if (!r || !x) return { erreur: "Risque introuvable." };
-  if (!r.equipe) return { erreur: "Seuls l'équipe du projet et ceux qui le gèrent tiennent son registre des risques." };
+  if (!r.tient) return { erreur: REFUS_RISQUES };
   if (!r.ouvert) return { erreur: FIGE };
   await db.update(schema.risquesProjet).set({ statut: statutRisque(statut), majLe: new Date() }).where(eq(schema.risquesProjet.id, risqueId));
   await noter(a.moi.id, "risque_statut", risqueId, { statut: statutRisque(statut) });
@@ -109,7 +110,7 @@ export async function retirerRisque(a: Acces, projetId: string, risqueId: string
   const r = await droits(a, projetId);
   const [x] = await db.select().from(schema.risquesProjet).where(and(eq(schema.risquesProjet.id, risqueId), eq(schema.risquesProjet.projetId, projetId)));
   if (!r || !x) return { erreur: "Risque introuvable." };
-  if (!peutModifierDecision(a.moi.id, r.gere, x.auteurId)) return { erreur: "Seuls son auteur et ceux qui gèrent le projet retirent un risque ; vous pouvez le passer à « Clos »." };
+  if (!r.tient) return { erreur: REFUS_RISQUES };
   if (!r.ouvert) return { erreur: FIGE };
   await db.delete(schema.risquesProjet).where(eq(schema.risquesProjet.id, risqueId));
   await noter(a.moi.id, "risque_retire", projetId, { titre: x.titre });

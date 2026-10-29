@@ -11,7 +11,7 @@ import { nomComplet } from "@/lib/regles";
 import { LigneMiseAJour } from "@/components/LigneMiseAJour";
 import { DocumentsProjet } from "./Documents";
 import { documentsDuProjet, peutDeposerDocument, peutLireDocuments } from "@/lib/donnees/documents";
-import { LIBELLE_ETAT_LIVRABLE, LIBELLE_STATUT_PROJET, peutDeciderDemande, peutDeclarerPret, peutGererProjet, peutModifierDecision, peutNoterDecision, STATUTS_ACCEPTES } from "@/lib/projets";
+import { LIBELLE_ETAT_LIVRABLE, LIBELLE_STATUT_PROJET, peutDeciderDemande, peutDeclarerPret, peutGererProjet, peutTenirLesRegistres, STATUTS_ACCEPTES } from "@/lib/projets";
 import { ajouter, archiver, decider, retirer, role as changerRole } from "../gestion-actions";
 import { lignesDuProjetCetteSemaine } from "@/lib/donnees/rapport";
 import { Anneau, Bandeau, LienChiffre } from "@/components/Bandeau";
@@ -96,9 +96,9 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
   const rapports = auteurs ? await lignesDuProjetCetteSemaine(id, auteurs) : null;
   const jour = aujourdhui();
   const lv = await livrablesDuProjet(id, jour);
-  // Registre des décisions : l'équipe du projet et ceux qui le gèrent y notent ; l'auteur (ou qui gère) corrige.
+  // Registres des risques et des décisions : le chef, le référent et ceux qui gèrent le projet les tiennent ; l'équipe les lit.
   const decisions = await decisionsDuProjet(id);
-  const noteDecisions = actif && peutNoterDecision(u.id, peutModifier, { chefProjetId: p.chefProjetId, referentId: p.referentId, membres: new Set(membres.map((m) => m.personneId)) });
+  const noteDecisions = actif && peutTenirLesRegistres(u.id, peutModifier, p);
   const instances = noteDecisions ? await instancesConnues() : [];
   const [phases, risques, temps, objs, rc] = await Promise.all([phasesDuProjet(id), risquesDuProjet(id), tempsDuProjet(id), objectifsDuProjet(id), raciDuProjet(id)]);
   const nomsRaci = await nomsPourRaci(p, rc.raci);
@@ -292,7 +292,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
           {d.instance ? `${d.instance} · ` : ""}noté par {d.auteur ?? "—"}
         </p>
         {d.contexte ? <p className="decision__contexte">{d.contexte}</p> : null}
-        {actif && peutModifierDecision(u.id, peutModifier, d.auteurId) ? (
+        {noteDecisions ? (
           <details className="decision__corriger">
             <summary className="lien-discret">Corriger</summary>
             <form action={corrigerDecision.bind(null, p.id, d.id)} className="decision__form">
@@ -883,7 +883,7 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                             {r.statut !== "ouvert" ? ` · ${LIBELLE_STATUT_RISQUE[r.statut as StatutRisque].toLowerCase()}` : ""}
                           </p>
                           {r.reponse ? <p className="decision__contexte">Réponse : {r.reponse}</p> : null}
-                          {actif && noteDecisions ? (
+                          {noteDecisions ? (
                             <div className="livrable__actions" style={{ marginLeft: 0 }}>
                               {(["ouvert", "maitrise", "clos"] as StatutRisque[])
                                 .filter((st) => st !== r.statut)
@@ -897,13 +897,11 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                               <details className="decision__corriger" style={{ marginTop: 0 }}>
                                 <summary className="bouton-mini">Modifier</summary>
                                 {formulaireRisque(r)}
-                                {peutModifierDecision(u.id, peutModifier, r.auteurId) ? (
-                                  <form action={retirerUnRisque.bind(null, p.id, r.id)} style={{ marginTop: 8 }}>
-                                    <button type="submit" className="bouton-mini" style={{ color: "var(--retard)", borderColor: "var(--retard-point)" }}>
-                                      Retirer du registre
-                                    </button>
-                                  </form>
-                                ) : null}
+                                <form action={retirerUnRisque.bind(null, p.id, r.id)} style={{ marginTop: 8 }}>
+                                  <button type="submit" className="bouton-mini" style={{ color: "var(--retard)", borderColor: "var(--retard-point)" }}>
+                                    Retirer du registre
+                                  </button>
+                                </form>
                               </details>
                             </div>
                           ) : null}
@@ -919,6 +917,8 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                     </summary>
                     {formulaireRisque(null)}
                   </details>
+                ) : actif ? (
+                  <p className="note" style={{ margin: "8px 0 0" }}>Le chef de projet, son directeur et les exécutifs tiennent ce registre.</p>
                 ) : null}
               </section>
 
@@ -970,6 +970,8 @@ export default async function PageProjet({ params, searchParams }: { params: Pro
                       </button>
                     </form>
                   </details>
+                ) : actif ? (
+                  <p className="note" style={{ margin: "8px 0 0" }}>Le chef de projet, son directeur et les exécutifs tiennent ce registre.</p>
                 ) : null}
               </section>
 
