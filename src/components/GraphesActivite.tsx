@@ -12,7 +12,16 @@ import { Courbes, Jauge, valeurTexte, type PointCourbe, type Unite } from "@/com
 const heuresReunion = (m: Mesures) => Math.round((m.minutesReunion / 60) * 10) / 10;
 export const partRapports = (m: Mesures) => (m.rapportsAttendus ? Math.round((m.rapportsEnvoyes / m.rapportsAttendus) * 100) : null);
 
-type Mesure = { id: string; titre: string; unite: Unite; valeur: (m: Mesures) => number | null; ecart: (a: Mesures, b: Mesures) => string | null; sous?: (m: Mesures) => string | null };
+type Mesure = {
+  id: string;
+  titre: string;
+  unite: Unite;
+  valeur: (m: Mesures) => number | null;
+  ecart: (a: Mesures, b: Mesures) => string | null;
+  sous?: (m: Mesures) => string | null;
+  /** « Comment c'est calculé », sous le chiffre (30 octobre 2026 : la charge réalisée n'était pas comprise). */
+  aide?: string;
+};
 
 function mesures(equipe: boolean): Mesure[] {
   return [
@@ -24,7 +33,12 @@ function mesures(equipe: boolean): Mesure[] {
       unite: "pourcent",
       valeur: (m) => m.tauxCharge,
       ecart: (a, b) => ecart(a.tauxCharge, b.tauxCharge, " pts"),
-      sous: (m) => [`${nombre(m.heuresRealisees)} h sur ${nombre(m.capaciteNette)} h disponibles`, m.tauxPrevu !== null ? `prévue : ${m.tauxPrevu} %` : null].filter(Boolean).join(" · "),
+      sous: (m) =>
+        [`${nombre(m.heuresRealisees)} h de tâches terminées sur ${nombre(m.capaciteNette)} h disponibles`, m.tauxPrevu !== null ? `prévue en début de semaine : ${m.tauxPrevu} %` : null]
+          .filter(Boolean)
+          .join(" · "),
+      aide:
+        "Les heures estimées des tâches terminées (4 h pour une tâche sans estimation), réparties de leur début à leur fin sur les jours ouvrés de la période, rapportées aux heures de travail de la période moins les réunions et les absences notées. Ce n'est pas un relevé d'heures : une tâche encore ouverte n'y compte pas, et une estimation trop basse fait baisser le chiffre. La charge prévue est celle que l'application note chaque lundi pour la semaine qui commence.",
     },
     { id: "temps", titre: "Terminées à temps", unite: "pourcent", valeur: (m) => m.aLHeure, ecart: (a, b) => ecart(a.aLHeure, b.aLHeure, " pts"), sous: (m) => (m.avecEcheance ? `sur ${m.avecEcheance} à échéance` : null) },
     equipe
@@ -87,6 +101,12 @@ export function GraphesActivite({
                 {valeurTexte(x.valeur(actuel), x.unite)}
                 <span className="graphe-carte__ecart">{[x.sous?.(actuel), etat.comparer ? `${x.ecart(actuel, avant) ?? "—"} par rapport ${aLa(noms.avantCourt)}` : null].filter(Boolean).join(" · ")}</span>
               </p>
+              {x.aide ? (
+                <details className="graphe-carte__aide">
+                  <summary className="lien-discret">Comment c&apos;est calculé</summary>
+                  <p className="note">{x.aide}</p>
+                </details>
+              ) : null}
             </header>
             <Courbes titre={`${x.titre}, ${pas}`} points={points(x.valeur)} unite={x.unite} nomActuel={noms.actuel} nomAvant={etat.deuxSeries ? noms.avant : undefined} hauteur={100} />
           </article>

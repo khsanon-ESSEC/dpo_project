@@ -89,6 +89,11 @@ export const personnes = pgTable(
     courrielLundi: boolean("courriel_lundi").notNull().default(false),
     /** Carte « Vos trois premiers gestes » de Ma semaine refermée par la personne. */
     accueilFermeLe: timestamp("accueil_ferme_le", { withTimezone: true }),
+    /**
+     * Les gestes proposés, choisis à la première ouverture de la carte parmi ceux pas encore faits (30 octobre 2026) :
+     * la carte ne s'ouvre jamais sur des gestes déjà faits. Vide : rien à proposer. Null : pas encore choisis.
+     */
+    accueilGestes: text("accueil_gestes").array(),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
     majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
   },

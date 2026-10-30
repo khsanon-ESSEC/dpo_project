@@ -5555,6 +5555,19 @@ a.lien-projet:focus-visible {
   font-weight: 400;
   color: var(--discret);
 }
+.graphe-carte__aide {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+.graphe-carte__aide summary {
+  cursor: pointer;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+}
+.graphe-carte__aide p {
+  margin: 4px 0 0;
+}
 .courbes {
   margin: 0;
   display: flex;

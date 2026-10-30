@@ -204,6 +204,13 @@
       "when": 1793321673090,
       "tag": "0028_absences-lundi-accueil",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793369057605,
+      "tag": "0029_accueil-gestes",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,10 @@
 /**
- * « Vos trois premiers gestes » (première connexion guidée, 29 octobre 2026) : trois gestes choisis selon le rôle,
- * chacun avec sa fiche du guide et son « Le faire maintenant ». Cochés d'eux-mêmes une fois faits ; la carte
- * disparaît quand les trois le sont, ou quand on la masque.
+ * « Vos trois premiers gestes » (première connexion guidée, 29 octobre 2026, revu le 30) : trois gestes choisis
+ * selon le rôle parmi ceux pas encore faits, chacun avec sa fiche du guide et son « Le faire maintenant ». Cochés
+ * d'eux-mêmes une fois faits ; la carte disparaît quand ils le sont tous, ou quand on la masque.
  */
 import type { Acces } from "@/lib/acces";
+import { titreAccueil } from "@/lib/accueil";
 import { accueilDe } from "@/lib/donnees/accueil";
 import { ficheParId } from "@/lib/guide";
 import { Icone } from "@/components/Icone";
@@ -18,14 +19,15 @@ export async function CarteAccueil({ a }: { a: Acces }) {
     <section className="carte accueil" aria-labelledby="accueil-titre">
       <div className="carte__entete">
         <h2 id="accueil-titre" className="carte__titre">
-          Vos trois premiers gestes
+          {titreAccueil(gestes.length)}
         </h2>
         <span className="note">
           {faits} sur {gestes.length}
         </span>
       </div>
       <p className="note" style={{ margin: 0 }}>
-        Pour prendre la main en quelques minutes. Chaque geste a sa fiche dans le guide ; il se coche de lui-même une fois fait.
+        Pour prendre la main en quelques minutes. Chaque geste a sa fiche dans le guide ; il se coche de lui-même une fois fait, et la carte disparaît quand
+        tout est fait.
       </p>
       <ol className="accueil__gestes">
         {gestes.map((g, i) => {

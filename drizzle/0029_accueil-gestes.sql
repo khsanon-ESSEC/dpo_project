@@ -1,0 +1,1 @@
+ALTER TABLE "personnes" ADD COLUMN "accueil_gestes" text[];
