@@ -289,7 +289,8 @@ export function BarreCommande({
   }, [texte, question]);
 
   // ---------- Réunion : qui est déjà pris à ce créneau ? ----------
-  const cleCreneau = analyseReunion?.heure ? `${analyseReunion.jour}|${analyseReunion.heure}|${analyseReunion.dureeMinutes}|${invitesEff.map((p) => p.id).join(",")}` : "";
+  // Sans heure, on vérifie quand même les absences du jour.
+  const cleCreneau = analyseReunion?.jour ? `${analyseReunion.jour}|${analyseReunion.heure ?? ""}|${analyseReunion.dureeMinutes}|${invitesEff.map((p) => p.id).join(",")}` : "";
   useEffect(() => {
     if (!cleCreneau) {
       setOccupes([]);

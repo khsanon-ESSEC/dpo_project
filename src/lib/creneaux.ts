@@ -18,10 +18,15 @@ export const texteHeure = (minutes: number) => {
 };
 
 export type Occupation = { debut: number; fin: number; titre: string | null };
-export type Disponibilite = { id: string; nom: string; moi: boolean; occupe: Occupation[] };
+/** `absent` : une absence (congé, formation, mission) est notée ce jour-là ; son motif n'est pas dit. */
+export type Disponibilite = { id: string; nom: string; moi: boolean; occupe: Occupation[]; absent?: boolean };
 
-/** « Vous êtes déjà pris de 10 h à 11 h (« Comité ») », « Fabienne Michel est prise de 10 h à 11 h ». */
+/**
+ * « Vous êtes déjà pris de 10 h à 11 h (« Comité ») », « Fabienne Michel est prise de 10 h à 11 h »,
+ * « Myriam Valcin est absente ce jour-là ».
+ */
 export function phraseOccupe(d: Disponibilite): string {
+  if (d.absent) return d.moi ? "Vous êtes absent(e) ce jour-là" : `${d.nom} est absent(e) ce jour-là`;
   const plages = d.occupe.map((o) => `de ${texteHeure(o.debut)} à ${texteHeure(o.fin)}${o.titre ? ` (« ${o.titre} »)` : ""}`).join(", ");
   return d.moi ? `Vous êtes déjà pris(e) ${plages}` : `${d.nom} est déjà pris(e) ${plages}`;
 }

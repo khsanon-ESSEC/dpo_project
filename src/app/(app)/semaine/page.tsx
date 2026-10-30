@@ -16,6 +16,7 @@ import { Icone } from "@/components/Icone";
 import { ONGLETS_SEMAINE, SousOnglets } from "@/components/SousOnglets";
 import { reunionsDe } from "@/lib/donnees/reunions";
 import { dureeTexte } from "@/lib/projets";
+import { CarteAccueil } from "./CarteAccueil";
 
 export const metadata: Metadata = { title: "Ma semaine" };
 
@@ -96,6 +97,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
       </Bandeau>
       <div className="page">
         <SousOnglets onglets={ONGLETS_SEMAINE} courant="/semaine" label="Ma semaine" />
+        {choisi ? null : <CarteAccueil a={await acces(u)} />}
         <nav className="frise-semaine" aria-label="Semaines">
           <a href={`/semaine?jour=${ajouterJours(semaineVue, -7)}`} className="bouton-icone" aria-label="Semaine précédente" title="Semaine précédente">
             <Icone nom="chevron-gauche" taille={20} />
@@ -256,7 +258,7 @@ export default async function PageSemaine({ searchParams }: { searchParams: Prom
                   {charge.semaines.map((w, i) => (
                     <div key={w.semaine} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       <span className="rangee__sous">{i === 0 ? "Reste de la semaine" : "Semaine prochaine"}</span>
-                      <Jauge heures={w.heures} capacite={w.capacite} niveau={w.niveau} lien={`/personnes/${u.id}?semaine=${w.semaine}#charge`} delai={i * 80} />
+                      <Jauge heures={w.heures} capacite={w.capacite} niveau={w.niveau} absence={w.absence} jours={w.jours} lien={`/personnes/${u.id}?semaine=${w.semaine}#charge`} delai={i * 80} />
                     </div>
                   ))}
                 </div>

@@ -15,6 +15,14 @@ export async function choisirTheme(theme: "clair" | "sombre" | "auto") {
   if (u) await db.update(schema.personnes).set({ theme }).where(eq(schema.personnes.id, u.id));
 }
 
+/** Le courriel du lundi matin (échéances, retards, réunions de la semaine) : seulement si la personne le demande. */
+export async function choisirCourrielLundi(actif: boolean) {
+  const u = await utilisateurCourant();
+  if (!u || typeof actif !== "boolean") return;
+  await db.update(schema.personnes).set({ courrielLundi: actif }).where(eq(schema.personnes.id, u.id));
+  await noter(u.id, actif ? "courriel_lundi_demande" : "courriel_lundi_arrete");
+}
+
 export async function seDeconnecter() {
   const u = await utilisateurCourant();
   await fermerSession();

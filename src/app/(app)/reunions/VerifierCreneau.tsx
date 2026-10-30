@@ -5,7 +5,8 @@ import { phraseOccupe, type Disponibilite } from "@/lib/creneaux";
 
 /**
  * Dans le formulaire d'une réunion : dès que le jour, l'heure, la durée ou les participants changent, on
- * vérifie qui est déjà pris à ce créneau (réunions notées dans l'application). Un avertissement, pas un blocage.
+ * vérifie qui est déjà pris à ce créneau (réunions notées dans l'application) et qui est absent ce jour-là.
+ * Un avertissement, pas un blocage.
  */
 export function VerifierCreneau({ sauf }: { sauf?: string }) {
   const ancre = useRef<HTMLDivElement>(null);
@@ -22,7 +23,8 @@ export function VerifierCreneau({ sauf }: { sauf?: string }) {
         const jour = String(f.get("jour") ?? "");
         const heure = String(f.get("heure") ?? "");
         const duree = String(f.get("duree") ?? "");
-        if (!jour || !/^\d{2}:\d{2}$/.test(heure)) return setOccupes([]);
+        // Sans heure, seules les absences du jour comptent.
+        if (!jour) return setOccupes([]);
         const ids = f.getAll("participants").map(String).join(",");
         ctrl?.abort();
         ctrl = new AbortController();

@@ -167,7 +167,7 @@ export async function noterReunion(a: Acces, d: SaisieReunion, projetsPermis: Se
   const r = creees.find((x) => x.jour === v.jour) ?? creees[0];
   await db.insert(schema.participantsReunion).values(creees.flatMap((c) => v.participants.map((personneId) => ({ reunionId: c.id, personneId }))));
   // Qui était déjà pris à cette heure (autres réunions notées) : la personne qui note est avertie, la personne prise aussi.
-  const occupes = v.heure ? await disponibilites({ moiId: a.moi.id, personneIds: v.participants, jour: v.jour, heure: v.heure, duree: v.dureeMinutes, sauf: r.id }) : [];
+  const occupes = await disponibilites({ moiId: a.moi.id, personneIds: v.participants, jour: v.jour, heure: v.heure ?? "", duree: v.dureeMinutes, sauf: r.id });
   const prise = new Set(occupes.map((o) => o.id));
   const autres = await prevenables(v.participants.filter((id) => id !== a.moi.id));
   if (autres.length)
@@ -206,7 +206,7 @@ export async function modifierReunion(a: Acces, id: string, d: SaisieReunion, pr
   const touchees = [id, ...suivantes];
   await db.delete(schema.participantsReunion).where(inArray(schema.participantsReunion.reunionId, touchees));
   await db.insert(schema.participantsReunion).values(touchees.flatMap((rid) => v.participants.map((personneId) => ({ reunionId: rid, personneId }))));
-  const occupes = v.heure ? await disponibilites({ moiId: a.moi.id, personneIds: v.participants, jour: v.jour, heure: v.heure, duree: v.dureeMinutes, sauf: id }) : [];
+  const occupes = await disponibilites({ moiId: a.moi.id, personneIds: v.participants, jour: v.jour, heure: v.heure ?? "", duree: v.dureeMinutes, sauf: id });
   const prise = new Set(occupes.map((o) => o.id));
   const nouveaux = await prevenables(v.participants.filter((p) => !avant.has(p) && p !== a.moi.id));
   if (nouveaux.length)

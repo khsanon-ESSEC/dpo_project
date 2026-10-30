@@ -11,8 +11,11 @@
  * - rien n'est placé dans le passé : une tâche commencée continue à partir d'aujourd'hui, et une
  *   tâche en retard est à rattraper aujourd'hui ;
  * - cette semaine, les heures disponibles sont celles des jours ouvrés qui restent ;
- * - une tâche sans aucune date n'entre dans aucune semaine : elle est comptée à part.
+ * - une tâche sans aucune date n'entre dans aucune semaine : elle est comptée à part ;
+ * - les jours d'absence (congé, formation, mission) ne comptent pas dans les heures disponibles, et les tâches
+ *   n'y sont pas placées : leurs heures vont sur les autres jours ouvrés (29 octobre 2026).
  */
+import { absentLe, type Plage } from "./absences";
 import { ajouterJours, ecartJours, lundiDe } from "./dates";
 
 export const ESTIMATION_PAR_DEFAUT = 4;
@@ -87,19 +90,38 @@ export function debutPrevu(t: Pick<TacheCharge, "debut" | "echeance" | "estimati
   return reculerJoursOuvres(t.echeance, Math.max(1, Math.ceil(heuresDe(t) / HEURES_PAR_JOUR)) - 1);
 }
 
-/** Heures d'une tâche ouverte, jour ouvré par jour ouvré, à partir d'aujourd'hui. */
-export function repartition(t: TacheCharge, jour: string): { jour: string; heures: number }[] {
+/** Prochain jour ouvré où la personne est là (au plus un an plus loin). */
+function prochainJourPresent(iso: string, absences: Plage[]): string {
+  let d = prochainJourOuvre(iso);
+  for (let i = 0; i < 366 && absentLe(absences, d); i++) d = prochainJourOuvre(ajouterJours(d, 1));
+  return d;
+}
+
+/**
+ * Heures d'une tâche ouverte, jour ouvré par jour ouvré, à partir d'aujourd'hui. Les jours d'absence sont
+ * sautés ; une tâche dont toute la période tombe pendant une absence se fait le dernier jour de présence
+ * avant (à partir d'aujourd'hui), sinon le premier après.
+ */
+export function repartition(t: TacheCharge, jour: string, absences: Plage[] = []): { jour: string; heures: number }[] {
   if (t.statut === "faite" || t.statut === "bloquee") return [];
   const debut0 = debutPrevu(t);
   if (!debut0) return [];
   const h = heuresDe(t);
-  const aujourdhuiOuvre = prochainJourOuvre(jour);
   const fin0 = t.echeance ?? debut0;
-  // En retard : tout est à rattraper au premier jour ouvré.
-  if (fin0 < jour) return [{ jour: aujourdhuiOuvre, heures: h }];
+  // En retard : tout est à rattraper au premier jour ouvré (où la personne est là).
+  if (fin0 < jour) return [{ jour: prochainJourPresent(jour, absences), heures: h }];
   const debut = debut0 < jour ? jour : debut0;
   let jours = joursOuvres(debut, fin0 < debut ? debut : fin0);
   if (!jours.length) jours = [prochainJourOuvre(debut)];
+  if (absences.length) {
+    const presents = jours.filter((d) => !absentLe(absences, d));
+    if (presents.length) jours = presents;
+    else {
+      let avant = reculerJoursOuvres(ajouterJours(jours[0], -1), 0);
+      while (avant >= jour && absentLe(absences, avant)) avant = reculerJoursOuvres(ajouterJours(avant, -1), 0);
+      jours = [avant >= jour ? avant : prochainJourPresent(jours[jours.length - 1], absences)];
+    }
+  }
   return jours.map((d) => ({ jour: d, heures: h / jours.length }));
 }
 
@@ -110,6 +132,10 @@ export type ChargeSemaine = {
   niveau: Niveau;
   /** Heures de réunion notées sur les jours comptés (déjà retirées de la capacité). */
   reunions: number;
+  /** Jours ouvrés d'absence parmi les jours comptés (déjà retirés de la capacité). */
+  absence: number;
+  /** Jours ouvrés comptés : 5, ou ceux qui restent cette semaine. */
+  jours: number;
   /** Heures de chaque tâche dans cette semaine. */
   taches: { id: string; heures: number }[];
 };
@@ -127,12 +153,20 @@ export type ChargePersonne = {
  * Charge d'une personne sur les semaines demandées (lundis AAAA-MM-JJ, la première étant
  * en général la semaine en cours). Les réunions notées (passées ou prévues) réduisent le temps
  * disponible pour les tâches : cette semaine, celles des jours qui restent ; ensuite, toutes.
+ * Les jours d'absence aussi : ils ne comptent pas, et une réunion notée un jour d'absence non plus.
  */
-export function chargeDUnePersonne(taches: TacheCharge[], semaines: string[], capacite: number, jour: string, reunions: { jour: string; heures: number }[] = []): ChargePersonne {
+export function chargeDUnePersonne(
+  taches: TacheCharge[],
+  semaines: string[],
+  capacite: number,
+  jour: string,
+  reunions: { jour: string; heures: number }[] = [],
+  absences: Plage[] = [],
+): ChargePersonne {
   const ouvertes = taches.filter((t) => t.statut !== "faite");
   const parSemaine = new Map(semaines.map((s) => [s, new Map<string, number>()]));
   for (const t of ouvertes) {
-    for (const r of repartition(t, jour)) {
+    for (const r of repartition(t, jour, absences)) {
       const s = parSemaine.get(lundiDe(r.jour));
       if (s) s.set(t.id, (s.get(t.id) ?? 0) + r.heures);
     }
@@ -143,9 +177,12 @@ export function chargeDUnePersonne(taches: TacheCharge[], semaines: string[], ca
       const m = parSemaine.get(semaine)!;
       const heures = arrondir([...m.values()].reduce((x, y) => x + y, 0));
       // Cette semaine : seulement les jours ouvrés qui restent (aujourd'hui compris).
-      const brute =
-        semaine === lundiCourant ? arrondir((capacite * joursOuvres(jour, ajouterJours(semaine, 4)).length) / 5) : semaine < lundiCourant ? 0 : capacite;
-      const enReunion = arrondir(reunions.filter((r) => lundiDe(r.jour) === semaine && r.jour >= jour && estJourOuvre(r.jour)).reduce((x, r) => x + r.heures, 0));
+      const comptes = semaine === lundiCourant ? joursOuvres(jour, ajouterJours(semaine, 4)) : semaine < lundiCourant ? [] : joursOuvres(semaine, ajouterJours(semaine, 4));
+      const presents = comptes.filter((d) => !absentLe(absences, d));
+      const brute = arrondir((capacite * presents.length) / 5);
+      const enReunion = arrondir(
+        reunions.filter((r) => lundiDe(r.jour) === semaine && r.jour >= jour && estJourOuvre(r.jour) && !absentLe(absences, r.jour)).reduce((x, r) => x + r.heures, 0),
+      );
       const cap = arrondir(Math.max(0, brute - enReunion));
       return {
         semaine,
@@ -153,6 +190,8 @@ export function chargeDUnePersonne(taches: TacheCharge[], semaines: string[], ca
         capacite: cap,
         niveau: niveauCharge(heures, cap),
         reunions: Math.min(enReunion, brute),
+        absence: comptes.length - presents.length,
+        jours: comptes.length,
         taches: [...m.entries()].map(([id, h]) => ({ id, heures: arrondir(h) })).sort((x, y) => y.heures - x.heures),
       };
     }),

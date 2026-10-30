@@ -4,6 +4,7 @@
  * fois, et seulement si rien n'a changé depuis (sinon : « annulez depuis la fiche »).
  */
 import "server-only";
+import { retirerAbsence } from "./absences";
 import { and, eq, gte, inArray, isNull, like, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import type { Acces } from "@/lib/acces";
@@ -49,7 +50,8 @@ export type Annulable =
   | { genre: "phase_ajoutee"; projetId: string; phaseId: string }
   | { genre: "phases_types"; projetId: string; phases?: { id: string; nom: string; debut: string | null; fin: string | null }[] }
   | { genre: "projet_champs"; projetId: string; apresMajLe: string; avant: Record<string, unknown> }
-  | { genre: "cloture"; projetId: string; depuis: string };
+  | { genre: "cloture"; projetId: string; depuis: string }
+  | { genre: "absence"; absenceId: string };
 
 export async function enregistrerAnnulation(personneId: string, a: Annulable): Promise<string> {
   const { genre, ...donnees } = a;
@@ -279,6 +281,10 @@ async function defaire(a: Acces, d: Annulable): Promise<{ ok: true; message: str
       if (d.depuis && d.apres.responsableId && d.apres.responsableId !== d.avant.responsableId) await sortirDeLEquipeSiAjoutee(p.id, d.apres.responsableId, a.moi.id, new Date(d.depuis));
       await recalculerSante([p.id]);
       return { ok: true, message: `Livrable « ${l.libelle} » revenu comme avant.` };
+    }
+    case "absence": {
+      const r = await retirerAbsence(a, d.absenceId);
+      return "erreur" in r ? r : { ok: true, message: "Absence retirée." };
     }
     case "membre": {
       const p = await projetGere(a, d.projetId);

@@ -4,10 +4,10 @@
  * « Le faire maintenant » d'une fiche du guide : un écran à ouvrir, ou une phrase commencée dans la barre du haut
  * (la barre écoute l'événement « barre:ecrire », src/components/BarreCommande.tsx).
  */
-export function FaireMaintenant({ libelle, lien, barre }: { libelle: string; lien?: string; barre?: string }) {
+export function FaireMaintenant({ libelle, lien, barre, classe = "bouton-ambre" }: { libelle: string; lien?: string; barre?: string; classe?: string }) {
   if (lien) {
     return (
-      <a href={lien} className="bouton-ambre">
+      <a href={lien} className={classe}>
         {libelle}
       </a>
     );
@@ -15,7 +15,7 @@ export function FaireMaintenant({ libelle, lien, barre }: { libelle: string; lie
   return (
     <button
       type="button"
-      className="bouton-ambre"
+      className={classe}
       onClick={() => {
         window.scrollTo({ top: 0, behavior: "smooth" });
         window.dispatchEvent(new CustomEvent("barre:ecrire", { detail: barre ?? "" }));

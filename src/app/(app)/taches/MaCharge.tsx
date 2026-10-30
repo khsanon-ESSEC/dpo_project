@@ -35,7 +35,7 @@ export function MaCharge({ ligne, semaines }: { ligne: LigneCharge; semaines: st
         {charge.semaines.map((w, i) => (
           <div key={w.semaine} className="fiche-jauges__semaine">
             <span className="rangee__sous">{i === 0 ? "Cette semaine" : i === 1 ? "Semaine prochaine" : `Sem. du ${dateCourte(w.semaine)}`}</span>
-            <Jauge heures={w.heures} capacite={w.capacite} niveau={w.niveau} lien={detail(w.semaine)} delai={i * 60} />
+            <Jauge heures={w.heures} capacite={w.capacite} niveau={w.niveau} absence={w.absence} jours={w.jours} lien={detail(w.semaine)} delai={i * 60} />
           </div>
         ))}
       </div>

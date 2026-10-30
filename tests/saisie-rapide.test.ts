@@ -121,3 +121,17 @@ describe("noter une réunion depuis la barre", () => {
     expect(r("Réunion revue UR mardi à 10h 1h").morceaux.map((m) => m.texte)).toEqual(["UR · Nouvelle version UNIBANKOnline Retail", "Mardi 27 octobre", "à 10 h", "1 h"]);
   });
 });
+
+describe("un jour de la semaine suivi d'une date (29 octobre 2026)", () => {
+  it("la date l'emporte, et les deux mots sortent du titre", () => {
+    const t = analyserSaisie("Relire les maquettes vendredi 6/11 2h", "2026-10-29", []);
+    expect(t).toMatchObject({ titre: "Relire les maquettes", echeance: "2026-11-06", heures: 2 });
+    expect(analyserSaisie("Envoyer le budget lundi 2 novembre", "2026-10-29", [])).toMatchObject({ titre: "Envoyer le budget", echeance: "2026-11-02" });
+    const r = analyserReunion("Réunion point projet mardi 3/11 10h", "2026-10-30", []);
+    expect(r).toMatchObject({ titre: "Point projet", jour: "2026-11-03", heure: "10:00" });
+  });
+  it("un jour seul garde son sens", () => {
+    expect(analyserSaisie("Relire les maquettes vendredi", "2026-10-29", [])).toMatchObject({ titre: "Relire les maquettes", echeance: "2026-10-30" });
+    expect(analyserReunion("Réunion revue mardi à 10h", "2026-10-30", [])).toMatchObject({ jour: "2026-10-27" });
+  });
+});

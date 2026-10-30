@@ -15,6 +15,7 @@ import { peutDeciderDemande, peutGererProjet, peutTenirLesRegistres } from "@/li
 import { nomComplet, redigeUnRapport } from "@/lib/regles";
 import { phaseEnCours } from "@/lib/risques";
 import { LIBELLE_OBJECTIFS, LIBELLE_PRIORITE, montantTexte } from "@/lib/suivi";
+import { noterAbsence } from "./absences";
 import { contenuDecision, contenuRisque, enregistrerAnnulation } from "./annulations";
 import type { ResultatBarre } from "./barre";
 import { cloturerProjet, enregistrerBudget, rouvrirProjet } from "./cloture";
@@ -149,6 +150,18 @@ export async function executerCommande(u: Utilisateur, a: Acces, o: { saisie: st
     const n = await creerRapportPonctuel({ titre: c.titre, objet: c.objet, depuis: "", projetIds: strategiques.map((x) => x.id) }, u.id, visibles);
     if ("erreur" in n) return { message: n.erreur };
     return { message: `Rapport ponctuel « ${c.titre} » préparé sur les projets stratégiques : relisez-le avant de l'envoyer.`, ok: true, lien: `/conseil/ponctuels/${n.id}` };
+  }
+
+  if (c.type === "absence") {
+    const personneId = c.personneId ?? u.id;
+    const n = await noterAbsence(a, { personneId, debut: c.debut, fin: c.fin, motif: c.motif });
+    if ("erreur" in n) return { message: n.erreur };
+    return {
+      message: n.message,
+      ok: true,
+      annulation: n.deja ? undefined : await enregistrerAnnulation(u.id, { genre: "absence", absenceId: n.id }),
+      lien: personneId === u.id ? "/profil#absences" : `/personnes/${personneId}#absences`,
+    };
   }
 
   // Actions sur un projet.

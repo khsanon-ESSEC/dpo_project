@@ -8,6 +8,8 @@ import { livrablesDuProjet } from "@/lib/donnees/livrables";
 import { attentesDuProjet } from "@/lib/donnees/dependances";
 import { phasesDuProjet } from "@/lib/donnees/risques";
 import { phaseDepassee, phaseEnCours } from "@/lib/risques";
+import { texteAbsence } from "@/lib/absences";
+import { absencesDe } from "@/lib/donnees/absences";
 
 export const metadata: Metadata = { title: "Gantt du projet" };
 
@@ -162,6 +164,8 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
   const parPersonne = new Map<string, typeof datees>();
   for (const p of datees) parPersonne.set(p.t.assigneId, [...(parPersonne.get(p.t.assigneId) ?? []), p]);
   const personnes = [...parPersonne.entries()].sort((x, y) => x[1][0].t.personne.localeCompare(y[1][0].t.personne, "fr"));
+  // Leurs absences sur la ligne de la personne (sans le motif : seulement « Absence »).
+  const absences = parLivrable ? new Map() : await absencesDe([...parPersonne.keys()], debut, fin);
   for (const [pid, liste] of parLivrable ? [] : personnes) {
     const ouvertes = liste.filter((p) => p.t.statut !== "faite");
     const heures = ouvertes.reduce((s, p) => s + heuresDe(p.t), 0);
@@ -170,7 +174,12 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
       libelle: liste[0].t.personne,
       mono: liste[0].t.initiales,
       groupe: true,
-      barres: [],
+      barres: (absences.get(pid) ?? []).map((x: { debut: string; fin: string }) => ({
+        debut: x.debut,
+        fin: x.fin,
+        classe: "gantt__barre--absence",
+        titre: `${liste[0].t.personne} : absence ${texteAbsence(x)}`,
+      })),
       sous: `${ouvertes.length} tâche${ouvertes.length > 1 ? "s" : ""} ouverte${ouvertes.length > 1 ? "s" : ""} · ${heuresTexte(heures)}`,
     });
     for (const p of liste.sort((x, y) => x.debut.localeCompare(y.debut))) lignes.push(ligneTache(p, false));
@@ -224,7 +233,11 @@ export default async function PageGantt({ params, searchParams }: { params: Prom
               <span>
                 <i className="gantt__cle-livrable" /> Date du livrable
               </span>
-            ) : null}
+            ) : (
+              <span>
+                <i className="gantt__cle-absence" /> Absence
+              </span>
+            )}
           </div>
         </div>
         {datees.length ? (

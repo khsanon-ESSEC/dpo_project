@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { and, eq, sql } from "drizzle-orm";
+import { db, schema } from "@/db";
 import { exigerInterne } from "@/lib/auth/session";
 import { aujourdhui, dateCourte } from "@/lib/dates";
 import { piloteParPeriode, suiviPilote } from "@/lib/donnees/pilote";
@@ -38,6 +40,10 @@ export default async function PagePilote({ searchParams }: { searchParams: Promi
   const comparer = Object.values(valeurs[1]).some((v) => v !== null);
   const deuxSeries = !!plan.serieAvant && comparer;
   const courriel = courrielActif() ? await bilanCourriels(semaineCourante()) : null;
+  const [{ n: inscritsLundi }] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(schema.personnes)
+    .where(and(eq(schema.personnes.actif, true), eq(schema.personnes.courrielLundi, true)));
   const derniere = [...s.semaines].reverse().find((w) => w.attendu);
 
   const Barre = ({ valeur, total, etiquette }: { valeur: number; total: number; etiquette: string }) => {
@@ -170,7 +176,7 @@ export default async function PagePilote({ searchParams }: { searchParams: Promi
           </h2>
           {courriel ? (
             <p style={{ margin: "4px 0 0" }}>
-              {courriel.envoyes} courriel{courriel.envoyes > 1 ? "s" : ""} envoyé{courriel.envoyes > 1 ? "s" : ""} (« prêt à relire » et rappels)
+              {courriel.envoyes} courriel{courriel.envoyes > 1 ? "s" : ""} envoyé{courriel.envoyes > 1 ? "s" : ""} (« prêt à relire », rappels et courriel du lundi)
               {courriel.erreurs ? (
                 <span className="ton-retard">
                   {" "}
@@ -183,6 +189,9 @@ export default async function PagePilote({ searchParams }: { searchParams: Promi
               Pas de courriel : le serveur de courriel n&apos;est pas configuré (SMTP_HOTE, SMTP_EXPEDITEUR, APP_URL). Les alertes dans l&apos;application restent.
             </p>
           )}
+          <p className="note" style={{ margin: "6px 0 0" }}>
+            Courriel du lundi : {inscritsLundi} personne{inscritsLundi > 1 ? "s l'ont demandé" : " l'a demandé"} dans {inscritsLundi > 1 ? "leur" : "son"} profil.
+          </p>
         </section>
 
         <section className="carte carte--liste" aria-labelledby="p-ecrans">

@@ -69,6 +69,10 @@ describe("les fiches trouvées", () => {
       ["comment approuver le rapport au conseil ?", "relire-et-approuver-le-rapport-au-conseil"],
       ["pourquoi je ne vois pas le projet UC ?", "pourquoi-je-ne-vois-pas"],
       ["comment faire revenir une tâche chaque lundi ?", "repeter-une-tache"],
+      ["comment noter mon congé ?", "noter-une-absence"],
+      ["où noter mes vacances ?", "noter-une-absence"],
+      ["comment ajouter une réunion à mon agenda outlook ?", "ajouter-une-reunion-a-mon-agenda"],
+      ["comment recevoir mes échéances par courriel ?", "recevoir-le-courriel-du-lundi"],
     ];
     for (const [q, id] of cas) expect(premiere(q), q).toBe(id);
   });

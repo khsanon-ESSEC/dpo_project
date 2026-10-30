@@ -5,7 +5,8 @@ import { exigerInterne } from "@/lib/auth/session";
 import { dateCourte } from "@/lib/dates";
 import { capacites, chargeDesPersonnes, noterChargesPrevues, type LigneCharge } from "@/lib/donnees/charge";
 import { planBilan, vueValide } from "@/lib/bilan";
-import { aujourdhui } from "@/lib/dates";
+import { ajouterJours, aujourdhui } from "@/lib/dates";
+import { LIBELLE_MOTIF, texteAbsence } from "@/lib/absences";
 import { initiales, nomComplet } from "@/lib/regles";
 import { ChoixPeriode } from "@/components/ChoixPeriode";
 import { ChargePassee } from "./ChargePassee";
@@ -74,6 +75,10 @@ export default async function PageCharge({ searchParams }: { searchParams: Promi
     }))
     .filter((g) => g.lignes.length);
 
+  const finVue = ajouterJours(semaines.at(-1)!, 6);
+  const absencesVues = lignes
+    .flatMap((l) => l.absences.filter((x) => x.debut <= finVue).map((x) => ({ ...x, nom: l.id === u.id ? `${l.nom} (vous)` : l.nom })))
+    .sort((x, y) => x.debut.localeCompare(y.debut) || x.nom.localeCompare(y.nom, "fr"));
   const surCetteSemaine = lignes.filter((l) => l.charge.semaines[0].niveau === "surchargee").length;
   const surProchaine = lignes.filter((l) => l.charge.semaines[1]?.niveau === "surchargee").length;
   const chargees = lignes.filter((l) => l.charge.semaines[1]?.niveau === "chargee").length;
@@ -243,7 +248,7 @@ export default async function PageCharge({ searchParams }: { searchParams: Promi
                         </th>
                         {l.charge.semaines.map((w, i) => (
                           <td key={w.semaine}>
-                            <Jauge heures={w.heures} capacite={w.capacite} niveau={w.niveau} lien={`/personnes/${l.id}?semaine=${w.semaine}#charge`} delai={Math.min(n * 40 + i * 30, 500)} />
+                            <Jauge heures={w.heures} capacite={w.capacite} niveau={w.niveau} absence={w.absence} jours={w.jours} lien={`/personnes/${l.id}?semaine=${w.semaine}#charge`} delai={Math.min(n * 40 + i * 30, 500)} />
                           </td>
                         ))}
                         <td className="note" style={{ whiteSpace: "nowrap" }}>
@@ -263,10 +268,31 @@ export default async function PageCharge({ searchParams }: { searchParams: Promi
             </table>
           </section>
         ) : null}
+        {absencesVues.length ? (
+          <section className="carte carte--liste" aria-labelledby="charge-absences">
+            <h2 id="charge-absences" className="carte__titre">
+              Absences · {semaines.length} prochaines semaines
+            </h2>
+            <ul className="liste">
+              {absencesVues.map((x) => (
+                <li key={x.id} className="rangee rangee--etiree">
+                  <span className="rangee__texte">
+                    <a href={`/personnes/${x.personneId}#absences`} className="rangee__titre rangee__lien">
+                      {x.nom}
+                    </a>
+                    <span className="rangee__sous">
+                      {LIBELLE_MOTIF[x.motif]} {texteAbsence(x)}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
         <p className="note">
           Les heures viennent du temps estimé de chaque tâche, réparti entre son début et son échéance (jours ouvrés). Une tâche sans estimation compte pour 4 h
           {sansEstimation ? ` (${sansEstimation} tâche${sansEstimation > 1 ? "s" : ""} ici)` : ""}. Les tâches bloquées ne comptent pas tant qu&apos;elles le restent. Les heures disponibles par
-          semaine se règlent dans l&apos;écran Organisation.
+          semaine se règlent dans l&apos;écran Organisation ; les jours d&apos;absence notés (profil ou fiche de la personne, ou « absent du … au … » dans la barre) en sont retirés.
         </p>
       </div>
     </>

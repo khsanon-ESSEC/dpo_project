@@ -1904,6 +1904,19 @@ a.personne-charge:hover .rangee__titre {
   outline: 2px solid #f4b22d;
   outline-offset: 4px;
 }
+/* Absence : les jours sont dits sous la jauge ; une semaine entière, la piste est hachurée. */
+.jauge__absence {
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--discret);
+  white-space: nowrap;
+}
+.jauge--absence .jauge__piste {
+  background: repeating-linear-gradient(135deg, var(--piste) 0 4px, transparent 4px 8px);
+}
+.jauge--absence .jauge__chiffre {
+  color: var(--discret);
+}
 @keyframes remplir-jauge {
   from {
     transform: scaleX(0);
@@ -5939,6 +5952,22 @@ a.chaleur__case:focus-visible {
   background: color-mix(in srgb, var(--retard-point) 46%, var(--surface));
   font-weight: 600;
 }
+.chaleur__case--absence {
+  background: repeating-linear-gradient(135deg, var(--piste) 0 4px, transparent 4px 8px);
+  border: 1px solid var(--filet);
+  color: var(--discret);
+  font-size: 12px;
+}
+.chaleur__case--avec-marque {
+  flex-direction: column;
+  gap: 0;
+}
+.chaleur__marque {
+  font-size: 10px;
+  line-height: 12px;
+  font-weight: 400;
+  color: var(--encre-2);
+}
 
 /* ---------- Reports de la date de fin (fiche projet) ---------- */
 .reports-fin {
@@ -7324,6 +7353,18 @@ a.pastille-rapport:hover {
   padding: 0;
   background: var(--arc-2);
   opacity: 0.7;
+}
+/* Absence d'une personne (vue « par personne ») : une bande hachurée sur sa ligne. */
+.gantt__barre--absence,
+.gantt__cle-absence {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--discret) 45%, transparent) 0 3px, transparent 3px 7px);
+  border: 1px solid color-mix(in srgb, var(--discret) 55%, transparent);
+}
+.gantt__barre--absence {
+  top: 12px;
+  height: 16px;
+  padding: 0;
+  z-index: 0;
 }
 .gantt__barre--livrable-depasse {
   background: linear-gradient(90deg, var(--arc-2) 0 70%, var(--veille-point));
@@ -10244,4 +10285,60 @@ a.livrable__lien:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+
+/* ---------- Vos trois premiers gestes (Ma semaine, première connexion) ---------- */
+.accueil {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-left: 3px solid #f4b22d;
+}
+.accueil__gestes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.accueil__geste {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--filet);
+  flex-wrap: wrap;
+}
+/* Le titre est un lien étiré sur la ligne : « Le faire maintenant » reste au-dessus. */
+.accueil__geste a:not(.rangee__lien),
+.accueil__geste button {
+  position: relative;
+  z-index: 1;
+}
+.accueil__geste .rangee__texte {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.accueil__rond {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--controle);
+  color: var(--encre);
+}
+.accueil__geste--fait .accueil__rond {
+  background: var(--ok-point);
+  border-color: var(--ok-point);
+  color: #fff;
+}
+.accueil__geste--fait .rangee__titre {
+  color: var(--discret);
 }

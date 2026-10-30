@@ -252,6 +252,25 @@ export default async function PageReunions({ searchParams }: { searchParams: Pro
                         </div>
                         <span className="reunion__duree">{dureeTexte(r.dureeMinutes)}</span>
                         <span className="reunion__actions">
+                          {r.serie ? (
+                            <details className="livrable__renvoi">
+                              <summary className="bouton-mini" title="Un fichier qu'Outlook, Google Agenda ou le téléphone savent ouvrir">
+                                Ajouter à mon agenda
+                              </summary>
+                              <span className="livrable__renvoi-form">
+                                <a href={`/api/reunions/${r.id}/agenda`} className="bouton-contour" download>
+                                  Celle-ci
+                                </a>
+                                <a href={`/api/reunions/${r.id}/agenda?serie=1`} className="bouton-contour" download>
+                                  Toute la série à venir
+                                </a>
+                              </span>
+                            </details>
+                          ) : (
+                            <a href={`/api/reunions/${r.id}/agenda`} className="bouton-mini" download title="Un fichier qu'Outlook, Google Agenda ou le téléphone savent ouvrir" aria-label={`Ajouter « ${r.titre} » à mon agenda`}>
+                              Ajouter à mon agenda
+                            </a>
+                          )}
                           {moi ? (
                             <>
                               <a href={`/reunions?semaine=${semaine}&modifier=${r.id}#noter`} className="bouton-mini">

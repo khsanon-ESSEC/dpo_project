@@ -5,13 +5,19 @@ import { libellesRoles } from "@/lib/regles";
 import { seDeconnecter } from "@/app/actions-communes";
 import { Bandeau } from "@/components/Bandeau";
 import { Icone } from "@/components/Icone";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/db";
+import { courrielActif } from "@/lib/courriel";
 import { ChoixTheme } from "./ChoixTheme";
+import { ChoixCourrielLundi } from "./ChoixCourrielLundi";
+import { CarteAbsences } from "../absences/CarteAbsences";
 
 export const metadata: Metadata = { title: "Profil" };
 
 export default async function PageProfil() {
   const u = await exigerUtilisateur();
   const a = await acces(u);
+  const [moi] = await db.select({ courriel: schema.personnes.courriel, courrielLundi: schema.personnes.courrielLundi }).from(schema.personnes).where(eq(schema.personnes.id, u.id));
   const roles = libellesRoles({ ...u, nbRapports: a.equipeDirecte.length, nbProjetsDiriges: a.projetsDiriges.size });
   const portee = a.toutVoir
     ? "Exécutif : vous voyez tous les projets, toutes les tâches et tous les rapports."
@@ -37,6 +43,25 @@ export default async function PageProfil() {
           </h2>
           <ChoixTheme actuel={u.theme} />
         </section>
+        <section className="carte" aria-labelledby="pr-lundi" id="courriel-lundi" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <h2 id="pr-lundi" className="carte__titre" style={{ margin: 0 }}>
+            Courriel du lundi
+          </h2>
+          {moi?.courriel ? (
+            <>
+              <ChoixCourrielLundi actuel={!!moi.courrielLundi} />
+              {courrielActif() ? null : (
+                <p className="note" style={{ margin: 0 }}>
+                  Le serveur de courriel de la banque n&apos;est pas encore relié à l&apos;application : votre choix est gardé pour ce moment-là.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="note" style={{ margin: 0 }}>
+              Aucune adresse de courriel n&apos;est enregistrée pour vous : demandez-la à l&apos;administrateur de l&apos;application.
+            </p>
+          )}
+        </section>
         <section className="carte" aria-labelledby="pr-acces" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <h2 id="pr-acces" className="carte__titre" style={{ margin: 0 }}>
             Ce que vous voyez
@@ -44,6 +69,7 @@ export default async function PageProfil() {
           <p style={{ margin: 0, fontSize: 14 }}>{portee}</p>
           {u.administrateur ? <p className="note" style={{ margin: 0 }}>Administrateur : vous gérez les personnes, les équipes et les accès.</p> : null}
         </section>
+        {u.externe ? null : <CarteAbsences a={a} personneId={u.id} prenom={u.prenom} />}
         <section className="carte" aria-labelledby="pr-mdp" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           <h2 id="pr-mdp" className="carte__titre" style={{ margin: 0 }}>
             Sécurité

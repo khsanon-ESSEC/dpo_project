@@ -5,6 +5,7 @@
  * Ces chiffres décrivent l'activité enregistrée, pas la qualité du travail ni tout ce qui a été fait :
  * ils servent à une conversation, pas à un classement.
  */
+import { joursOuvresAbsents, type Plage } from "./absences";
 import { ajouterJours, lundiDe, premierDuMois } from "./dates";
 import { arrondir, ESTIMATION_PAR_DEFAUT, joursOuvres } from "./charge";
 
@@ -55,6 +56,8 @@ export function mesurer(
     reparties?: { jour: string; heures: number }[];
     /** Charges prévues notées chaque lundi. */
     prevues?: ChargePrevue[];
+    /** Absences : leurs jours ouvrés ne comptent pas dans les heures de travail. */
+    absences?: Plage[];
   },
   jusqua: string,
 ): Mesures {
@@ -62,7 +65,7 @@ export function mesurer(
   const avecEcheance = dans.filter((t) => t.echeance);
   const aTemps = avecEcheance.filter((t) => t.termineeLe <= t.echeance!).length;
   const fin = p.fin < jusqua ? p.fin : jusqua;
-  const jours = fin < p.debut ? 0 : joursOuvres(p.debut, fin).length;
+  const jours = fin < p.debut ? 0 : joursOuvres(p.debut, fin).length - joursOuvresAbsents(d.absences ?? [], p.debut, fin);
   const capaciteHeures = arrondir((d.capaciteHebdo * jours) / 5);
   const heuresRealisees = arrondir((d.reparties ?? []).filter((r) => r.jour >= p.debut && r.jour <= fin).reduce((s, r) => s + r.heures, 0));
   const capaciteNette = arrondir(Math.max(0, capaciteHeures - d.minutesReunion / 60));

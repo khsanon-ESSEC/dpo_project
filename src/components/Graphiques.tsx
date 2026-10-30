@@ -31,6 +31,9 @@ export type CaseChaleur = {
   /** Texte de la case et étiquette au survol, quand ce n'est pas la charge prévue (charge réalisée). */
   texte?: string;
   etiquette?: string;
+  /** Jours ouvrés d'absence parmi les jours comptés (déjà retirés des heures disponibles). */
+  absence?: number;
+  jours?: number;
 };
 export type LigneChaleur = {
   id: string;
@@ -80,17 +83,28 @@ export function Chaleur({ semaines, groupes }: { semaines: { cle: string; libell
                 </th>
                 {l.cases.map((c, i) => {
                   const taux = c.capacite > 0 ? Math.round((c.heures / c.capacite) * 100) : null;
-                  const etiquette = c.etiquette ?? `${l.nom}, ${semaines[i]?.libelle.toLowerCase() ?? ""} : ${heuresTexte(c.heures)} prévues sur ${heuresTexte(c.capacite)} disponibles (${LIBELLE_NIVEAU[c.niveau].toLowerCase()})`;
-                  const contenu = c.texte ?? (c.heures > 0 ? `${taux ?? "—"} %` : "—");
+                  const absence = c.absence ?? 0;
+                  const toute = !c.texte && (c.jours ?? 0) > 0 && absence >= (c.jours ?? 0) && c.heures <= 0;
+                  const enPlus = absence ? ` ; ${absence} jour${absence > 1 ? "s" : ""} d'absence` : "";
+                  const etiquette =
+                    c.etiquette ??
+                    (toute
+                      ? `${l.nom}, ${semaines[i]?.libelle.toLowerCase() ?? ""} : absence`
+                      : `${l.nom}, ${semaines[i]?.libelle.toLowerCase() ?? ""} : ${heuresTexte(c.heures)} prévues sur ${heuresTexte(c.capacite)} disponibles (${LIBELLE_NIVEAU[c.niveau].toLowerCase()})${enPlus}`);
+                  const contenu = c.texte ?? (toute ? "Absence" : c.heures > 0 ? `${taux ?? "—"} %` : "—");
+                  const marque = !c.texte && absence && !toute ? <small className="chaleur__marque">abs. {absence} j</small> : null;
+                  const classe = `chaleur__case chaleur__case--${toute ? "absence" : c.niveau}${marque ? " chaleur__case--avec-marque" : ""}`;
                   return (
                     <td key={c.semaine}>
                       {c.lien ? (
-                        <a className={`chaleur__case chaleur__case--${c.niveau}`} href={c.lien} title={etiquette} aria-label={etiquette}>
+                        <a className={classe} href={c.lien} title={etiquette} aria-label={etiquette}>
                           {contenu}
+                          {marque}
                         </a>
                       ) : (
-                        <span className={`chaleur__case chaleur__case--${c.niveau}`} title={etiquette} role="img" aria-label={etiquette}>
+                        <span className={classe} title={etiquette} role="img" aria-label={etiquette}>
                           {contenu}
+                          {marque}
                         </span>
                       )}
                     </td>

@@ -3,6 +3,7 @@ import { and, eq, gte, inArray, isNull, lte, ne } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { ajouterJours, aujourdhui, lundiDe } from "@/lib/dates";
 import { reunionsParJour } from "./reunions";
+import { absencesDe, plages, type Absence } from "./absences";
 import { chargerOrganisation } from "@/lib/organisation";
 import { chargeDUnePersonne, CAPACITE_PAR_DEFAUT, estJourOuvre, joursOuvres, semainesAVenir, type ChargePersonne, type TacheCharge } from "@/lib/charge";
 import { initiales, nomComplet } from "@/lib/regles";
@@ -49,6 +50,8 @@ export type LigneCharge = {
   charge: ChargePersonne;
   /** Réunions notées à partir d'aujourd'hui (heures par jour). */
   reunions: { jour: string; heures: number }[];
+  /** Absences à partir d'aujourd'hui (jusqu'à un an). */
+  absences: Absence[];
   taches: Map<string, TacheOuverte>;
 };
 
@@ -59,7 +62,14 @@ export async function chargeDesPersonnes(ids: string[], nbSemaines = NB_SEMAINES
   const org = await chargerOrganisation();
   // La charge n'est mesurée que pour la division : les personnes hors division n'y figurent pas.
   const actifs = ids.filter((id) => org.personnes.get(id)?.actif && !org.personnes.get(id)?.externe);
-  const [taches, caps, reunions] = await Promise.all([tachesOuvertesDe(actifs), capacites(actifs), reunionsParJour(actifs, jour, ajouterJours(semaines.at(-1)!, 6))]);
+  const finPeriode = ajouterJours(semaines.at(-1)!, 6);
+  // Les absences jusqu'à un an plus loin : une tâche dont toute la période tombe pendant une absence se fait après.
+  const [taches, caps, reunions, absences] = await Promise.all([
+    tachesOuvertesDe(actifs),
+    capacites(actifs),
+    reunionsParJour(actifs, jour, finPeriode),
+    absencesDe(actifs, jour, ajouterJours(jour, 400)),
+  ]);
   const lignes: LigneCharge[] = actifs.map((id) => {
     const p = org.personnes.get(id)!;
     const siennes = taches.filter((t) => t.assigneId === id);
@@ -72,8 +82,9 @@ export async function chargeDesPersonnes(ids: string[], nbSemaines = NB_SEMAINES
       equipeId: p.equipeId,
       equipe: p.equipeId ? (org.equipes.get(p.equipeId)?.nom ?? "") : "Sans équipe",
       capacite,
-      charge: chargeDUnePersonne(siennes, semaines, capacite, jour, reunions.get(id) ?? []),
+      charge: chargeDUnePersonne(siennes, semaines, capacite, jour, reunions.get(id) ?? [], plages(absences.get(id))),
       reunions: reunions.get(id) ?? [],
+      absences: absences.get(id) ?? [],
       taches: new Map(siennes.map((t) => [t.id, t])),
     };
   });
@@ -99,7 +110,7 @@ export async function chargeDuProjet(projetId: string, chefProjetId: string | nu
       return {
         ...l,
         chefDeProjet: l.id === chefProjetId,
-        projet: chargeDUnePersonne(surProjet, semaines, l.capacite, jour, l.reunions),
+        projet: chargeDUnePersonne(surProjet, semaines, l.capacite, jour, l.reunions, plages(l.absences)),
         nbTachesProjet: surProjet.length,
       };
     }),

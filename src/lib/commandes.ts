@@ -8,6 +8,7 @@
  * « projet Credos ». Une phrase sans projet reste une tâche, sauf quand le verbe est sans ambiguïté et que le
  * livrable, le risque ou la phase nommés n'existent que dans un seul projet.
  */
+import { analyserAbsence, LIBELLE_MOTIF, texteAbsence, type MotifAbsence } from "@/lib/absences";
 import { personneNommee, projetNomme, type Nomme } from "@/lib/barre";
 import { jourComplet, premierDuMois } from "@/lib/dates";
 import { cleNom } from "@/lib/projets";
@@ -52,6 +53,8 @@ export type Commande =
   | { type: "rouvrir" }
   | { type: "envoyer_rapport" }
   | { type: "rapport_ponctuel"; titre: string; objet: string }
+  /** Une absence (congé, formation, mission) ; personneId vide : la personne qui écrit. */
+  | { type: "absence"; personneId: string | null; debut: string; fin: string; motif: MotifAbsence }
   /** Ouvrir un écran (un formulaire à compléter, un document à télécharger). */
   | { type: "aller"; lien: string };
 
@@ -182,6 +185,16 @@ function nouveauProjet(t: string, ctx: ContexteCommande): AnalyseCommande | null
   if (!titre) return { commande: null, projet: null, resume, manque: "Écrivez son titre : « Nouveau projet : Refonte du site : l'actuel ne s'affiche pas sur téléphone »." };
   if (!justification) return { commande: null, projet: null, resume, manque: "Dites pourquoi après un deux-points : « Nouveau projet : Refonte du site : l'actuel ne s'affiche pas sur téléphone »." };
   return { commande: { type: "nouveau_projet", titre, justification, chefId, fin, code, strategique }, projet: null, resume };
+}
+
+/** « absent du 2/11 au 6/11 », « Myriam en congé la semaine prochaine » (src/lib/absences.ts). */
+function absence(t: string, ctx: ContexteCommande): AnalyseCommande | null {
+  const a = analyserAbsence(t, ctx.aujourdhui, { personnes: ctx.personnes, moiId: ctx.moiId });
+  if (!a) return null;
+  const qui = a.personne ? a.personne.nom : "vous";
+  const resume = a.plage ? `Noter une absence pour ${qui} : ${LIBELLE_MOTIF[a.motif].toLowerCase()} ${texteAbsence(a.plage)}` : `Noter une absence pour ${qui}`;
+  if (a.manque || !a.plage) return { commande: null, projet: null, resume, manque: a.manque ?? "Dites quand." };
+  return { commande: { type: "absence", personneId: a.personne?.id ?? null, debut: a.plage.debut, fin: a.plage.fin, motif: a.motif }, projet: null, resume };
 }
 
 /** Les rapports qu'on peut demander à la barre (« générer un rapport »). */
@@ -516,7 +529,7 @@ export function analyserCommande(saisie: string, ctx: ContexteCommande, choisi: 
   const np = nouveauProjet(brut, ctx);
   if (np) return np;
   if (!choisi) {
-    const r = rapports(brut, ctx);
+    const r = rapports(brut, ctx) ?? absence(brut, ctx);
     if (r) return r;
   }
   const { projet, reste } = projetDeLaPhrase(brut, ctx, choisi);
@@ -566,6 +579,7 @@ export const CATALOGUE: EntreeCatalogue[] = [
   { cle: "tache", groupe: "Tâches", libelle: "Créer une tâche", exemple: "Relire les maquettes UR pour Fabienne vendredi 2h priorité haute", debut: "", projet: false, permis: "tous" },
   { cle: "tache-maj", groupe: "Tâches", libelle: "Mettre une tâche à jour", exemple: "# puis : faite · bloquée … · 15/11 · priorité haute · passé 1h30 · répéter chaque lundi · annuler : …", debut: "#", projet: false, permis: "tous" },
   { cle: "reunion", groupe: "Tâches", libelle: "Noter une réunion", exemple: "Réunion comité de pilotage UR jeudi 10h avec Myriam", debut: "Réunion ", projet: false, permis: "tous" },
+  { cle: "absence", groupe: "Tâches", libelle: "Noter une absence ou un congé", exemple: "absent du 2/11 au 6/11 · en formation jeudi · Myriam en congé la semaine prochaine", debut: "absent du ", projet: false, permis: "interne" },
   { cle: "note", groupe: "Rapports", libelle: "Ajouter une note au rapport du vendredi", exemple: "Décision : valider le budget DTI UR", debut: "Décision : ", projet: false, permis: "redige" },
   { cle: "rapport-envoyer", groupe: "Rapports", libelle: "Envoyer mon rapport de la semaine", exemple: "envoyer mon rapport", debut: "envoyer mon rapport", projet: false, permis: "redige" },
   { cle: "rapport-generer", groupe: "Rapports", libelle: "Générer un rapport", exemple: "générer un rapport", debut: "générer un rapport", projet: false, permis: "tous" },

@@ -6,11 +6,13 @@ import "server-only";
 import { and, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { additionner, mesurer, semainesDeRapport, type Mesures, type Periode, type PlanBilan, type TacheTerminee } from "@/lib/bilan";
-import { aujourdhui, dateLocale } from "@/lib/dates";
+import { joursOuvresAbsents } from "@/lib/absences";
+import { ajouterJours, aujourdhui, dateLocale } from "@/lib/dates";
 import { chargerOrganisation } from "@/lib/organisation";
 import { capacites, chargesPrevuesDe } from "./charge";
 import { repartitionRealisee } from "@/lib/charge";
 import { minutesDeReunion } from "./reunions";
+import { absencesDe, plages } from "./absences";
 
 /**
  * Début des données de l'application : premier jour où quelque chose est enregistré (tâche faite, réunion,
@@ -41,7 +43,7 @@ export async function bilans(personneIds: string[], periodes: Periode[]): Promis
   // jusqu'à 120 jours après sa fin.
   const finLarge = new Date(`${fin}T23:59:59Z`);
   finLarge.setUTCDate(finLarge.getUTCDate() + 121);
-  const [debuts, faites, caps, rapports, prevues, ...reunions] = await Promise.all([
+  const [debuts, faites, caps, rapports, prevues, absences, ...reunions] = await Promise.all([
     debutDesDonnees(),
     db
       .select({ assigneId: schema.taches.assigneId, estimationHeures: schema.taches.estimationHeures, echeance: schema.taches.echeance, debut: schema.taches.debut, termineeLe: schema.taches.termineeLe })
@@ -53,6 +55,7 @@ export async function bilans(personneIds: string[], periodes: Periode[]): Promis
       .from(schema.rapportsHebdo)
       .where(and(inArray(schema.rapportsHebdo.auteurId, personneIds), eq(schema.rapportsHebdo.statut, "envoye"), gte(schema.rapportsHebdo.semaine, debut), lte(schema.rapportsHebdo.semaine, fin))),
     chargesPrevuesDe(personneIds, debut, fin),
+    absencesDe(personneIds, debut, fin),
     ...periodes.map((p) => minutesDeReunion(personneIds, p.debut, p.fin)),
   ]);
   for (const id of personneIds) {
@@ -64,11 +67,14 @@ export async function bilans(personneIds: string[], periodes: Periode[]): Promis
     const reparties = siennes.flatMap((t) => repartitionRealisee(t));
     const sesPrevues = prevues.filter((x) => x.personneId === id);
     const envoyes = new Set(rapports.filter((x) => x.auteurId === id).map((x) => x.semaine));
+    const sesAbsences = plages(absences.get(id));
     r.set(
       id,
       periodes.map((per, i) => {
-        // Aucun rapport attendu avant que l'application ait servi (premier rapport envoyé).
-        const attendues = redige && debuts.rapports ? semainesDeRapport(per, jour).filter((l) => l >= debuts.rapports!) : [];
+        // Aucun rapport attendu avant que l'application ait servi (premier rapport envoyé), ni d'une semaine
+        // d'absence entière.
+        const attendues =
+          redige && debuts.rapports ? semainesDeRapport(per, jour).filter((l) => l >= debuts.rapports! && joursOuvresAbsents(sesAbsences, l, ajouterJours(l, 4)) < 5) : [];
         return mesurer(
           per,
           {
@@ -79,6 +85,7 @@ export async function bilans(personneIds: string[], periodes: Periode[]): Promis
             rapportsAttendus: attendues.length,
             reparties,
             prevues: sesPrevues,
+            absences: sesAbsences,
           },
           jour,
         );

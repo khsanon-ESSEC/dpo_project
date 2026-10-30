@@ -1,7 +1,7 @@
 /**
  * Au démarrage du serveur : la charge prévue de la semaine, notée chaque heure si elle manque, les occurrences des
  * tâches récurrentes et la santé des projets ; et la tournée des
- * rappels du vendredi par courriel, toutes les cinq minutes, si le
+ * rappels du vendredi (et du courriel du lundi) par courriel, toutes les cinq minutes, si le
  * courriel est configuré (SMTP_HOTE, SMTP_EXPEDITEUR, APP_URL). Rien à installer chez l'informatique : pas de
  * tâche planifiée séparée. Plusieurs copies de l'application peuvent tourner : chaque envoi est réservé en base.
  */
@@ -26,7 +26,7 @@ export async function register() {
 
   const { courrielActif } = await import("@/lib/courriel");
   if (!courrielActif()) return;
-  const { tourneeRappels } = await import("@/lib/donnees/courriels");
+  const { tourneeLundi, tourneeRappels } = await import("@/lib/donnees/courriels");
   let enCours = false;
   const tournee = async () => {
     if (enCours) return;
@@ -35,6 +35,12 @@ export async function register() {
       await tourneeRappels();
     } catch (e) {
       console.error("courriel : tournée des rappels :", (e as Error).message);
+    }
+    try {
+      // Le lundi matin, pour qui l'a demandé dans son profil (29 octobre 2026).
+      await tourneeLundi();
+    } catch (e) {
+      console.error("courriel : courriel du lundi :", (e as Error).message);
     } finally {
       enCours = false;
     }
@@ -42,5 +48,5 @@ export async function register() {
   const minutes = Math.min(60, Math.max(1, Number(process.env.RAPPELS_INTERVALLE_MINUTES) || 5));
   setTimeout(tournee, 30_000).unref();
   setInterval(tournee, minutes * 60_000).unref();
-  console.log(`courriel : rappels du vendredi actifs (toutes les ${minutes} min)`);
+  console.log(`courriel : rappels du vendredi et courriel du lundi actifs (toutes les ${minutes} min)`);
 }

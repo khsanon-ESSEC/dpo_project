@@ -94,8 +94,31 @@ function sans(texte: string, m: RegExpExecArray): string {
   return `${texte.slice(0, m.index)} ${texte.slice(m.index + m[0].length)}`;
 }
 
+/**
+ * « mardi 3/11 », « vendredi 6 novembre » : un jour de la semaine suivi d'une date. La date l'emporte, et les deux
+ * mots sortent du texte (sans quoi « mardi » donnait le mardi de cette semaine et « 3/11 » restait dans le titre).
+ */
+const JOUR_PUIS_DATE = new RegExp(
+  `${D}(?:le\\s+)?(?:${JOURS.join("|")})\\s+(?:le\\s+)?((?:\\d{1,2}[/.]\\d{1,2}(?:[/.](?:\\d{4}|\\d{2}))?)|(?:(?:1er|\\d{1,2})\\s+(?:${NOMS_MOIS})\\.?(?:\\s+\\d{4})?))${F}`,
+  "i",
+);
+
+function jourPuisDate(texte: string, aujourdhui: string, regles: Regle[]): { date: string; reste: string } | null {
+  const m = JOUR_PUIS_DATE.exec(texte);
+  if (!m) return null;
+  const seule = ` ${m[1]} `;
+  for (const r of regles) {
+    const x = r.motif.exec(seule);
+    const d = x ? r.date(x, aujourdhui) : null;
+    if (x && d) return { date: d, reste: sans(texte, m) };
+  }
+  return null;
+}
+
 /** Première échéance reconnue dans le texte : la date et le texte sans elle. */
 export function extraireEcheance(texte: string, aujourdhui: string): { echeance: string | null; reste: string } {
+  const jd = jourPuisDate(texte, aujourdhui, REGLES);
+  if (jd) return { echeance: jd.date, reste: jd.reste };
   for (const r of REGLES) {
     const m = r.motif.exec(texte);
     const d = m ? r.date(m, aujourdhui) : null;
@@ -406,17 +429,22 @@ export function analyserReunion(saisie: string, aujourdhui: string, projets: Pro
     texte = sans(texte, m);
   }
 
-  // Jour : aujourd'hui sauf mention.
+  // Jour : aujourd'hui sauf mention ; « mardi 3/11 » : la date l'emporte.
   let jour = aujourdhui;
-  for (const r of REGLES_JOUR) {
-    const m = r.motif.exec(texte);
-    const d = m ? r.date(m, aujourdhui) : null;
-    if (m && d) {
-      jour = d;
-      texte = sans(texte, m);
-      break;
+  const jd = jourPuisDate(texte, aujourdhui, REGLES_JOUR);
+  if (jd) {
+    jour = jd.date;
+    texte = jd.reste;
+  } else
+    for (const r of REGLES_JOUR) {
+      const m = r.motif.exec(texte);
+      const d = m ? r.date(m, aujourdhui) : null;
+      if (m && d) {
+        jour = d;
+        texte = sans(texte, m);
+        break;
+      }
     }
-  }
   morceaux.push({ type: "jour", texte: jourComplet(jour) });
   if (heure) morceaux.push({ type: "heure", texte: `à ${heure.replace(":", " h ").replace(" h 00", " h")}` });
   const dureeMinutes = duree !== null && duree >= 5 && duree <= 600 ? duree : DUREE_PAR_DEFAUT;

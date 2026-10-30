@@ -85,6 +85,10 @@ export const personnes = pgTable(
     theme: text().notNull().default("auto"),
     /** Heures disponibles par semaine pour les tâches (charge de travail). */
     capaciteHeures: integer("capacite_heures").notNull().default(40),
+    /** Courriel du lundi matin (échéances, retards, réunions de la semaine) : seulement si la personne le demande. */
+    courrielLundi: boolean("courriel_lundi").notNull().default(false),
+    /** Carte « Vos trois premiers gestes » de Ma semaine refermée par la personne. */
+    accueilFermeLe: timestamp("accueil_ferme_le", { withTimezone: true }),
     creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
     majLe: timestamp("maj_le", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -915,8 +919,30 @@ export const envoisCourriel = pgTable(
 );
 
 /**
+ * Absences et congés (demandé le 29 octobre 2026) : des journées entières, de debut à fin incluses. Les jours
+ * ouvrés d'absence sont retirés des heures disponibles de la charge, les tâches n'y sont pas placées, et qui
+ * note une réunion apprend qu'un participant est absent ce jour-là. Le motif n'est lu que par la personne et
+ * ceux qui la suivent ; les autres ne voient que « absent(e) ». Jamais de motif médical : « Absence » suffit.
+ */
+export const absences = pgTable(
+  "absences",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    personneId: uuid("personne_id").notNull().references(() => personnes.id, { onDelete: "cascade" }),
+    debut: date().notNull(),
+    fin: date().notNull(),
+    /** « conge », « formation », « mission » ou « absence ». */
+    motif: text().notNull().default("conge"),
+    creeParId: uuid("cree_par_id").references(() => personnes.id, { onDelete: "set null" }),
+    creeLe: timestamp("cree_le", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("absences_personne_idx").on(t.personneId, t.fin)],
+);
+
+/**
  * Écrans ouverts, pour le suivi du pilote : une ligne par jour, écran et personne (« a ouvert cet écran ce
- * jour-là »). Ne s'affiche qu'en nombres agrégés (personnes distinctes par écran), jamais par personne.
+ * jour-là »). Ne s'affiche qu'en nombres agrégés (personnes distinctes par écran), jamais par personne ; seule
+ * la personne elle-même s'en sert pour les siennes (gestes cochés de « Vos trois premiers gestes », 29 octobre 2026).
  */
 export const consultations = pgTable(
   "consultations",

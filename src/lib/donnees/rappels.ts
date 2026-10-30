@@ -9,7 +9,9 @@
 import "server-only";
 import { and, eq, inArray, like } from "drizzle-orm";
 import { db, schema } from "@/db";
-import { maintenantLocal } from "@/lib/dates";
+import { joursOuvresAbsents } from "@/lib/absences";
+import { ajouterJours, maintenantLocal } from "@/lib/dates";
+import { absencesDe, plages } from "@/lib/donnees/absences";
 import { formulairePour, horairesDuRapport } from "@/lib/donnees/modeles";
 import { chargerOrganisation } from "@/lib/organisation";
 import { etapeRapport, HORAIRES_PAR_DEFAUT, texteMoment, type EtapeRapport } from "@/lib/modeles";
@@ -59,7 +61,13 @@ export async function rappelsDuMoment(personneId: string, redige = true) {
             .where(and(inArray(schema.rapportsHebdo.auteurId, equipe.map((p) => p.id)), eq(schema.rapportsHebdo.semaine, semaine), eq(schema.rapportsHebdo.statut, "envoye")))
         ).map((x) => x.auteurId),
       );
-      const manquent = equipe.filter((p) => !recus.has(p.id));
+      // Absent(e) toute la semaine : aucun rapport n'est attendu.
+      const absences = await absencesDe(
+        equipe.map((p) => p.id),
+        semaine,
+        ajouterJours(semaine, 4),
+      );
+      const manquent = equipe.filter((p) => !recus.has(p.id) && joursOuvresAbsents(plages(absences.get(p.id)), semaine, ajouterJours(semaine, 4)) < 5);
       if (manquent.length) {
         nouvelles.push({
           personneId,

@@ -275,19 +275,27 @@ type Personne = Awaited<ReturnType<typeof monEquipe>>["personnes"][number];
 type Semaines = Awaited<ReturnType<typeof chargeDesPersonnes>>["lignes"][number]["charge"]["semaines"];
 
 /** Une jauge de charge : le remplissage jusqu'aux heures prévues, un trait aux heures disponibles. */
-function Jauge({ heures, capacite, niveau, libelle }: { heures: number; capacite: number; niveau: Semaines[number]["niveau"]; libelle: string }) {
+function Jauge({ heures, capacite, niveau, libelle, absence = 0, jours = 0 }: { heures: number; capacite: number; niveau: Semaines[number]["niveau"]; libelle: string; absence?: number; jours?: number }) {
   const max = Math.max(heures, capacite, 1);
   const taux = capacite > 0 ? Math.round((heures / capacite) * 100) : null;
+  const toute = jours > 0 && absence >= jours && heures <= 0;
+  const abs = absence ? ` · abs. ${absence} j` : "";
   return (
     <span className="jauge-charge">
       <span className="jauge-charge__libelle">{libelle}</span>
-      <span className="jauge-charge__piste" role="img" aria-label={`${libelle} : ${nombre(heures)} h prévues sur ${nombre(capacite)} h disponibles${taux !== null ? `, ${taux} %` : ""} (${LIBELLE_NIVEAU[niveau].toLowerCase()})`}>
+      <span
+        className="jauge-charge__piste"
+        role="img"
+        aria-label={
+          toute
+            ? `${libelle} : absence`
+            : `${libelle} : ${nombre(heures)} h prévues sur ${nombre(capacite)} h disponibles${taux !== null ? `, ${taux} %` : ""} (${LIBELLE_NIVEAU[niveau].toLowerCase()})${absence ? `, ${absence} jour${absence > 1 ? "s" : ""} d'absence` : ""}`
+        }
+      >
         <span className={`jauge-charge__rempli jauge-charge__rempli--${niveau}`} style={{ width: `${(heures / max) * 100}%` }} />
         {heures > capacite && capacite > 0 ? <span className="jauge-charge__capacite" style={{ left: `${(capacite / max) * 100}%` }} /> : null}
       </span>
-      <span className={`jauge-charge__chiffre niveau--${niveau}`}>
-        {nombre(heures)} / {nombre(capacite)} h
-      </span>
+      <span className={`jauge-charge__chiffre niveau--${toute ? "libre" : niveau}`}>{toute ? "Absence" : `${nombre(heures)} / ${nombre(capacite)} h${abs}`}</span>
     </span>
   );
 }
@@ -448,7 +456,7 @@ function CartePersonne({ p, semaines, jour, voit }: { p: Personne; semaines: Sem
           <span className="carte-personne__etiquette">Charge</span>
           <span className="carte-personne__valeur carte-personne__jauges">
             {semaines.map((w, i) => (
-              <Jauge key={w.semaine} heures={w.heures} capacite={w.capacite} niveau={w.niveau} libelle={i === 0 ? "Cette sem." : "Sem. proch."} />
+              <Jauge key={w.semaine} heures={w.heures} capacite={w.capacite} niveau={w.niveau} absence={w.absence} jours={w.jours} libelle={i === 0 ? "Cette sem." : "Sem. proch."} />
             ))}
           </span>
         </div>

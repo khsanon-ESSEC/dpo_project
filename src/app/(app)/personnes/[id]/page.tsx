@@ -23,6 +23,8 @@ import { CodeProjet, LienPersonne, LienProjet } from "@/components/Liens";
 import { PastilleStatut } from "@/components/PastilleStatut";
 import { JOURS_PAR_PROJET, travailParProjet } from "@/lib/donnees/par-projet";
 
+import { CarteAbsences } from "../../absences/CarteAbsences";
+
 export const metadata: Metadata = { title: "Fiche personne" };
 
 const JOUR = /^\d{4}-\d{2}-\d{2}$/;
@@ -316,7 +318,7 @@ export default async function PageFichePersonne({ params, searchParams }: { para
                       {charge.semaines.map((w, i) => (
                         <div key={w.semaine} className="fiche-jauges__semaine">
                           <span className="rangee__sous">{i === 0 ? "Cette semaine" : i === 1 ? "Semaine prochaine" : `Sem. du ${dateCourte(w.semaine)}`}</span>
-                          <Jauge heures={w.heures} capacite={w.capacite} niveau={w.niveau} lien={adresse({ semaine: w.semaine }, "charge")} choisie={w.semaine === choisie} delai={i * 60} />
+                          <Jauge heures={w.heures} capacite={w.capacite} niveau={w.niveau} absence={w.absence} jours={w.jours} lien={adresse({ semaine: w.semaine }, "charge")} choisie={w.semaine === choisie} delai={i * 60} />
                         </div>
                       ))}
                     </div>
@@ -554,6 +556,7 @@ export default async function PageFichePersonne({ params, searchParams }: { para
               </div>
               <div className="colonne-etroite">
                 {identite}
+                <CarteAbsences a={a} personneId={id} prenom={p.prenom} />
                 {listeProjets}
                 {sonEquipe}
               </div>
