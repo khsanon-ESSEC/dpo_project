@@ -4,6 +4,7 @@
  * (« pour Fabienne » = @, « projet Unibank » = /, « avec Fabienne et Daphnée »). Pur (sans base) : il sert à
  * l'aperçu dans la page et, à nouveau, au serveur. Testé dans tests/barre.test.ts.
  */
+import { estQuestionGuide } from "./guide";
 import { cleNom } from "@/lib/projets";
 import { analyserMiseAJour, estReunion, extraireCodeProjet, extraireEcheance, extraireHeures, nettoyer, type ProjetSaisie } from "@/lib/saisie-rapide";
 import { ajouterJours, jourComplet, lundiDe } from "@/lib/dates";
@@ -329,9 +330,11 @@ export function analyserLigne<P extends Nomme>(
 // De quoi parle la ligne
 // ---------------------------------------------------------------------------
 
-export type Genre = "question" | "reunion" | "note" | "projet" | "tache";
+export type Genre = "guide" | "question" | "reunion" | "note" | "projet" | "tache";
 
 export function genreDe(saisie: string, o: { projetChoisi: boolean; projets: ProjetSaisie[]; aujourdhui: string }): Genre {
+  // « comment… ? », « où… ? », « aide » : le guide (src/lib/guide.ts), avant les questions sur les données.
+  if (estQuestionGuide(saisie)) return "guide";
   if (estQuestion(saisie)) return "question";
   if (estReunion(saisie)) return "reunion";
   if (rubriqueDeNote(saisie)) return "note";

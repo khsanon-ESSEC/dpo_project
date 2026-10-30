@@ -10,6 +10,7 @@ import { dateCourte } from "@/lib/dates";
 import { cleNom } from "@/lib/projets";
 import { Icone } from "@/components/Icone";
 import { CLE_PROJETS_RECENTS } from "@/components/Consultation";
+import { ecranDuChemin, trouverFiches } from "@/lib/guide";
 
 export type PersonneBarre = { id: string; nom: string; externe?: boolean; organisation?: string };
 export type TacheBarre = { id: string; titre: string; code: string | null; echeance: string | null; projetId: string | null; statut: StatutTache; pour: string | null };
@@ -37,6 +38,7 @@ const aller = (lien: string) => (window.location.href = lien);
  * - « Décision : … », « Risque : … », « Fait marquant : … » vont dans le rapport du vendredi ;
  * - « /UR à surveiller : … », « /UR livrable validation métier 15/11 » mettent le projet à jour (chef de projet) ;
  * - une question (« en retard sur UR ? ») répond tout de suite ;
+ * - « comment… ? », « où… ? », « pourquoi… ? », « aide » : les fiches du guide (src/lib/guide.ts) ;
  * - en mode recherche : projets, tâches, personnes et écrans (« Gantt UR », « charge de Myriam ») ;
  * - les actions (src/lib/commandes.ts) : « Nouveau projet : … », « UR assigner le livrable audit à Daphnée »,
  *   « UR budget 12,5 M », « charge de Myriam », « générer un rapport »… ; « > » en donne la liste ;
@@ -185,6 +187,7 @@ export function BarreCommande({
   const projetMaj = genre === "projet" ? (projet ?? enTete?.projet ?? motsProjet?.projet ?? null) : null;
   const majProjet = genre === "projet" ? analyserMajProjet(enTete ? enTete.reste : motsProjet?.projet && !projet ? motsProjet.texte : texte, aujourdhui) : null;
   const question = genre === "question";
+  const guide = genre === "guide";
 
   const personneEff = personne ?? mots?.personne ?? null;
   const invitesEff = [...invites, ...(mots?.invites ?? []).filter((p) => !invites.some((i) => i.id === p.id))];
@@ -214,7 +217,7 @@ export function BarreCommande({
           ? !!note?.texte
           : genre === "projet"
             ? !!projetMaj && !!majProjet
-            : genre === "question"
+            : genre === "question" || genre === "guide"
               ? false
               : !!analyse?.titre;
 
@@ -313,7 +316,7 @@ export function BarreCommande({
     if (!m) return setListe(null);
     const g = genreDe(valeur, { projetChoisi: !!projet, projets, aujourdhui });
     // Dans une réunion ou une note, « # » (une tâche) n'a pas de sens ; dans une question, aucune liste.
-    if ((m[2] === "#" && (g === "reunion" || g === "note")) || g === "question") return setListe(null);
+    if ((m[2] === "#" && (g === "reunion" || g === "note")) || g === "question" || g === "guide") return setListe(null);
     const requete = m[3];
     const type = m[2] === "/" ? "projet" : m[2] === "#" ? "tache" : "personne";
     setListe({ type, debut: avant.length - requete.length - 1, requete });
@@ -394,6 +397,27 @@ export function BarreCommande({
     setAnnulable(false);
   };
 
+  // ---------- Une fiche du guide écrit dans la barre du haut (« Le faire maintenant ») ----------
+  useEffect(() => {
+    if (idChamp !== "barre-globale") return;
+    const ecrire = (e: Event) => {
+      const valeur = String((e as CustomEvent<string>).detail ?? "");
+      setTexte(valeur);
+      setTache(null);
+      setErreur(null);
+      setVide(!valeur);
+      setActif(true);
+      setSurligne(-1);
+      if (valeur === "#") setListe({ type: "tache", debut: 0, requete: "" });
+      requestAnimationFrame(() => {
+        champ.current?.focus();
+        champ.current?.setSelectionRange(valeur.length, valeur.length);
+      });
+    };
+    window.addEventListener("barre:ecrire", ecrire);
+    return () => window.removeEventListener("barre:ecrire", ecrire);
+  }, [idChamp]);
+
   // ---------- Barre vide : ce qui compte aujourd'hui ----------
   useEffect(() => {
     try {
@@ -428,6 +452,7 @@ export function BarreCommande({
             ...(l.length ? l : [{ cle: "rien", libelle: "Rien d'urgent aujourd'hui", titre: true }]),
             { cle: "aide", libelle: "Écrivez une tâche, « Réunion … », « Décision : … », une action ou une question ?", sous: "/ un projet · @ une personne · # une tâche à mettre à jour · > toutes les actions · sinon, Entrée cherche", titre: true },
             { cle: "actions", libelle: "Toutes les actions de la barre", sous: "Créer un projet, assigner un livrable, charge d'une personne, générer un rapport…", code: ">", action: () => setTexte(">") },
+            { cle: "guide", libelle: "Le guide de l'application", sous: "Une question qui commence par « comment », « où » ou « pourquoi » ouvre ses fiches", code: "?", action: () => aller("/aide") },
             { cle: "formulaire", libelle: "Nouvelle tâche (formulaire complet)", code: "+", action: () => aller(`/taches/nouvelle?retour=${encodeURIComponent(retour)}`) },
           ];
         })()
@@ -435,6 +460,10 @@ export function BarreCommande({
 
   // ---------- Lignes de la liste déroulante (hors « / », « @ », « # ») ----------
   const entrees = palette ? chercherCatalogue(texte.replace(/^\s*>\s*/, ""), droitAction) : [];
+  // « comment… ? » : les fiches du guide, selon l'écran ouvert et les droits (comme les actions de « > »).
+  const fiches = guide ? trouverFiches(texte, { ecran: ecranDuChemin(retour), permis: droitAction }) : [];
+  const versGuide = () => aller(`/aide${texte.trim() ? `?q=${encodeURIComponent(texte.trim())}` : ""}`);
+  const ouvrirGuide = () => (fiches[0] ? aller(`/aide/${fiches[0].fiche.id}`) : versGuide());
   const lignes: Ligne[] = suggestions.length
     ? suggestions
     : palette
@@ -442,6 +471,14 @@ export function BarreCommande({
           { cle: "titre-actions", libelle: entrees.length ? "Ce que la barre sait faire" : "Aucune action ne correspond", sous: entrees.length ? "Choisissez : la phrase se commence pour vous, l'exemple reste affiché." : "Essayez « livrable », « projet », « rapport », « charge »…", titre: true },
           ...entrees.map((e) => ({ cle: `a-${e.cle}`, libelle: e.libelle, sous: `${e.groupe} · ${e.exemple}`, code: ">", action: () => choisirEntree(e) })),
         ]
+      : guide
+        ? [
+            fiches.length
+              ? { cle: "titre-guide", libelle: fiches.every((f) => !f.score) ? "Guide · pour cet écran" : "Guide · les fiches qui répondent", titre: true }
+              : { cle: "titre-guide", libelle: "Aucune fiche ne répond encore à cette question", sous: "Entrée : chercher dans tout le guide. La question y est gardée, sans votre nom, pour enrichir le guide.", titre: true },
+            ...fiches.map((f) => ({ cle: `g-${f.fiche.id}`, libelle: f.fiche.titre, sous: f.fiche.resume, code: "?", action: () => aller(`/aide/${f.fiche.id}`) })),
+            { cle: "guide-tout", libelle: fiches.length ? "Tout le guide" : "Chercher dans tout le guide", code: "→", action: versGuide },
+          ]
       : commande?.choix
         ? [
             { cle: "titre-choix", libelle: commande.resume, titre: true },
@@ -535,6 +572,7 @@ export function BarreCommande({
       if (surligne >= 0 && lignes[surligne]?.action) return lignes[surligne].action!();
       if (palette) return entrees[0] ? choisirEntree(entrees[0]) : undefined;
       if (commande?.choix) return;
+      if (guide) return ouvrirGuide();
       if (question) return;
       if (agir) return envoyer();
       return chercher();
@@ -560,7 +598,9 @@ export function BarreCommande({
       ? rienAChanger
         ? "Ouvrir"
         : "Mettre à jour"
-      : question
+      : guide
+        ? "Ouvrir"
+        : question
         ? "Demander"
         : genre === "commande"
           ? c?.type === "aller"
@@ -580,7 +620,7 @@ export function BarreCommande({
                 ? "Ajouter"
                 : "Chercher";
   const annuleIci = annule && etat.annulation && annule.pour === etat.annulation ? annule : null;
-  const icone = question ? "loupe" : reunion ? "reunion" : genre === "note" ? "document" : genre === "commande" || palette ? "eclair" : mode === "recherche" ? "loupe" : "ajouter";
+  const icone = question || guide ? "loupe" : reunion ? "reunion" : genre === "note" ? "document" : genre === "commande" || palette ? "eclair" : mode === "recherche" ? "loupe" : "ajouter";
 
   return (
     <form ref={formulaire} action={action} className="saisie-rapide" role={mode === "recherche" ? "search" : undefined} onSubmit={(e) => !(tache ? !rienAChanger : pret) && e.preventDefault()}>
@@ -627,7 +667,7 @@ export function BarreCommande({
             maxLength={300}
             autoComplete="off"
             autoFocus={focus}
-            enterKeyHint={question || !agir ? "search" : "done"}
+            enterKeyHint={question || guide || !agir ? "search" : "done"}
             placeholder={
               tache
                 ? "faite · en cours · bloquée … · une date · relancer · @ confier"
@@ -644,8 +684,8 @@ export function BarreCommande({
           <button
             type="button"
             className="bouton-ambre"
-            disabled={enCours || (tache ? false : palette ? true : question ? !texte.trim() : genre !== "tache" ? !pret : mode === "tache" ? !analyse?.titre : !texte.trim())}
-            onClick={() => (question ? champ.current?.focus() : agir ? envoyer() : chercher())}
+            disabled={enCours || (tache ? false : palette ? true : guide ? false : question ? !texte.trim() : genre !== "tache" ? !pret : mode === "tache" ? !analyse?.titre : !texte.trim())}
+            onClick={() => (guide ? ouvrirGuide() : question ? champ.current?.focus() : agir ? envoyer() : chercher())}
           >
             {bouton}
           </button>
@@ -655,7 +695,7 @@ export function BarreCommande({
             id={`${idListe}-liste`}
             role="listbox"
             className="commande__liste"
-            aria-label={liste ? (liste.type === "projet" ? "Projets" : liste.type === "tache" ? "Tâches" : reunion ? "Participants" : "Personnes") : question ? "Réponse" : suggestions.length ? "Suggestions" : "Résultats"}
+            aria-label={liste ? (liste.type === "projet" ? "Projets" : liste.type === "tache" ? "Tâches" : reunion ? "Participants" : "Personnes") : guide ? "Guide" : question ? "Réponse" : suggestions.length ? "Suggestions" : "Résultats"}
           >
             {liste
               ? choix.map((c, i) => (
@@ -766,6 +806,8 @@ export function BarreCommande({
             <span className="saisie-rapide__titre">{projetMaj ? `Mettre à jour ${projetMaj.code} · ${projetMaj.titre}` : "Quel projet ?"}</span>
             {majProjet ? puce(texteMajProjet(majProjet), null, "saisie-rapide__morceau--echeance") : null}
           </>
+        ) : guide ? (
+          <span className="ton-discret">Guide : les fiches qui répondent s&apos;affichent ; Entrée ouvre la première. Rien n&apos;est modifié.</span>
         ) : question ? (
           <span className="ton-discret">Question : la réponse s&apos;affiche au fur et à mesure. Rien n&apos;est modifié.</span>
         ) : analyse && agir ? (

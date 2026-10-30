@@ -63,6 +63,8 @@ const L: Record<string, string> = {
     "/pilote": "Suivi du pilote",
     "/plus": "Plus (téléphone)",
     "/profil": "Profil",
+    "/aide": "Guide",
+    "/aide/[fiche]": "Une fiche du guide",
 };
 
 /** Nom lisible d'un écran noté dans les consultations. */
@@ -137,7 +139,11 @@ export async function suiviPilote(semaines: number | string = 12) {
 
 /** Écran noté : le chemin sans paramètres, les identifiants remplacés par [id]. */
 export function ecranDe(chemin: string): string | null {
-  const c = String(chemin ?? "").split(/[?#]/)[0].replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "/[id]").replace(/\/$/, "");
+  const c = String(chemin ?? "")
+    .split(/[?#]/)[0]
+    .replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "/[id]")
+    .replace(/^\/aide\/[a-z0-9-]+$/, "/aide/[fiche]")
+    .replace(/\/$/, "");
   // Seulement les écrans connus : rien d'inventé ne s'affiche dans le suivi du pilote.
   return Object.hasOwn(L, c) ? c : null;
 }

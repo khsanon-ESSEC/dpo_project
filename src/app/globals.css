@@ -10180,3 +10180,68 @@ a.livrable__lien:focus-visible {
     break-after: auto;
   }
 }
+
+/* ---------- Guide de l'application (29 octobre 2026) ----------
+   Une fiche : les étapes numérotées dans des carrés (angles vifs), « À savoir », « Le faire maintenant ». */
+.guide-recherche {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: 760px;
+}
+.guide-recherche .champ {
+  flex: 1 1 320px;
+}
+.guide-etapes {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: etape;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 760px;
+}
+.guide-etapes li {
+  counter-increment: etape;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  font-size: 15px;
+  line-height: 23px;
+}
+.guide-etapes li::before {
+  content: counter(etape);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--relief);
+  color: var(--relief-encre);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.guide-astuce {
+  margin: 24px 0 0;
+  max-width: 760px;
+  padding: 12px 14px;
+  background: var(--choisi);
+  color: var(--encre-2);
+  font-size: 14px;
+  line-height: 21px;
+}
+.guide-astuce strong {
+  font-weight: 600;
+  color: var(--encre);
+}
+.guide-faire {
+  margin-top: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}

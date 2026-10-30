@@ -44,6 +44,7 @@ const traces: Record<string, string> = {
   personnes: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 4.5a3.5 3.5 0 0 1 0 6.5M18 14.5c1.8.8 3 2.8 3 5.5",
   reunion: "M3.5 5.5h17v10h-9l-4.5 3.5v-3.5H3.5zM8 9.5h8M8 12.5h5",
   bilan: "M4 4v16.5h16.5M8 16v-4M12 16V8M16 16v-6",
+  aide: "M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17zM9.6 9.6a2.5 2.5 0 0 1 4.85.85c0 1.7-2.45 2.05-2.45 3.6M12 16.9v.1",
 };
 
 export type NomIcone = keyof typeof traces;

@@ -15,6 +15,7 @@ import { ecart, moisDebutExercice, planBilan } from "@/lib/bilan";
 import { aLa, etiquettesAxe, nomsDesPeriodes } from "@/lib/bilan-libelles";
 import { periodePreferee } from "@/lib/periode-preferee";
 import { ChoixPeriode } from "@/components/ChoixPeriode";
+import { suiviDuGuide } from "@/lib/donnees/guide";
 
 export const metadata: Metadata = { title: "Suivi du pilote" };
 
@@ -30,7 +31,7 @@ export default async function PagePilote({ searchParams }: { searchParams: Promi
   const { vue, p: periode } = await searchParams;
   const debutExercice = moisDebutExercice(process.env.EXERCICE_DEBUT_MOIS);
   const plan = planBilan(vue ?? (await periodePreferee("semaine")), periode, aujourdhui(), debutExercice);
-  const [s, debuts] = await Promise.all([suiviPilote(), debutDesDonnees()]);
+  const [s, debuts, guide] = await Promise.all([suiviPilote(), debutDesDonnees(), suiviDuGuide(new Date(Date.now() - 30 * 86400000))]);
   const valeurs = await piloteParPeriode([plan.actuel, plan.precedent, ...plan.serie, ...(plan.serieAvant ?? [])], debuts.rapports);
   const nomsPeriode = nomsDesPeriodes(plan, debutExercice);
   const etiquettes = etiquettesAxe(plan);
@@ -207,6 +208,47 @@ export default async function PagePilote({ searchParams }: { searchParams: Promi
               ))}
             </ul>
           )}
+        </section>
+        <section className="carte carte--liste" aria-labelledby="p-guide">
+          <h2 id="p-guide" className="carte__titre">
+            Guide · questions restées sans réponse · 30 derniers jours
+          </h2>
+          <p className="note" style={{ margin: "4px 0 8px" }}>
+            Les questions posées au guide auxquelles aucune fiche n&apos;a répondu : des fiches à écrire, ou des écrans à rendre plus clairs. Sans le nom de qui les a posées ; les noms de personnes, courriels et numéros y sont retirés.
+          </p>
+          {guide.sansReponse.length === 0 ? (
+            <p className="vide">Aucune pour le moment.</p>
+          ) : (
+            <ul className="liste">
+              {guide.sansReponse.map((q) => (
+                <li key={q.texte} className="rangee" style={{ minHeight: 48 }}>
+                  <span className="rangee__texte">
+                    <span className="rangee__titre">« {q.texte} »</span>
+                  </span>
+                  <span className="rangee__meta">{q.fois > 1 ? `${q.fois} fois` : "1 fois"}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {guide.fiches.length ? (
+            <>
+              <h3 className="carte__titre" style={{ marginTop: 20 }}>
+                Fiches les plus ouvertes
+              </h3>
+              <ul className="liste">
+                {guide.fiches.map((f) => (
+                  <li key={f.id}>
+                    <a href={`/aide/${f.id}`} className="rangee" style={{ minHeight: 48 }}>
+                      <span className="rangee__texte">
+                        <span className="rangee__titre">{f.titre}</span>
+                      </span>
+                      <span className="rangee__meta">{f.fois} fois</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
         </section>
         <p className="note">
           Les écrans sont notés « telle personne a ouvert tel écran tel jour », sans durée ni contenu, et ne s&apos;affichent ici qu&apos;en nombres. Les rapports en retard de chacun restent dans Équipe, pour son chef.

@@ -47,6 +47,8 @@ export async function commandeRapide(etat: EtatBarre, form: FormData): Promise<E
 
 export async function executerBarre(etat: EtatBarre, form: FormData): Promise<EtatBarre> {
   const genre = String(form.get("genre") ?? "tache");
+  // Une question (sur les données ou pour le guide) ne modifie rien : elle ne devient jamais une tâche.
+  if (genre === "question" || genre === "guide") return { message: null, n: etat.n };
   if (genre === "commande") return commandeRapide(etat, form);
   if (genre === "note") return noterPourRapport(etat, form);
   if (genre === "projet") return majProjetRapide(etat, form);

@@ -28,6 +28,9 @@ export function Rail({ elements, initiales, nom }: { elements: ElementNav[]; ini
         </a>
       ))}
       <div className="rail__pied">
+        <a href="/aide" className="bouton-icone" aria-label="Guide de l'application" title="Guide" aria-current={pathname === "/aide" || pathname.startsWith("/aide/") ? "page" : undefined}>
+          <Icone nom="aide" />
+        </a>
         <BoutonTheme />
         <a
           href="/profil"

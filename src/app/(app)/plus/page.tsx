@@ -30,6 +30,7 @@ export default async function PagePlus() {
         { href: "/alertes", libelle: "Alertes", sous: Number(n) ? `${n} non lue${Number(n) > 1 ? "s" : ""}` : "Rien de nouveau", icone: "notification", compte: Number(n) },
         { href: "/reunions", libelle: "Réunions", sous: "Noter une réunion, voir le temps passé en réunion", icone: "reunion" },
         { href: "/bilan", libelle: "Mon bilan", sous: "Cette semaine comparée aux précédentes", icone: "bilan" },
+        { href: "/aide", libelle: "Guide", sous: "Comment faire : une fiche par question", icone: "aide" },
         ...(redigeUnRapport(u) ? [{ href: "/rapports", libelle: "Mes rapports", sous: "Tous les rapports du vendredi que vous avez envoyés", icone: "historique" }] : []),
         ...(equipe && redigeUnRapport(u) ? [{ href: "/projets", libelle: "Projets", sous: "Portefeuille, liste, tableau", icone: "tableau-de-bord" }] : []),
       ],
